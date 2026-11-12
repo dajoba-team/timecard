@@ -1,8 +1,9 @@
+require('./clock')('2026-11-11T11:00:00+09:00');   // 시험이 2026-11-11(수) 기록을 씀
 const el={innerHTML:'',textContent:'',prepend(){},hidden:true,checked:true,value:'',scrollIntoView(){}};
 let lastView='';
 global.document={addEventListener(){},querySelector:s=>s==='#view'?{set innerHTML(v){lastView=v},get innerHTML(){return lastView}}:el,createElement:()=>({...el,remove(){}})};
 const calls=[], dbw={}, ups=[];
-global.window={claude:{use:async n=>n==='mcp'?{callTool:async(s,t,i)=>{calls.push(i);return {}}}:n==='assets'?{upload:async(b,o)=>{ups.push(o);if(ups.length===2)throw {code:'quota_or_state'};return {id:'a'.repeat(32),url:'/_blob/x'}}}:null}};
+global.window={tcStore:{use:async n=>n==='mcp'?{callTool:async(s,t,i)=>{calls.push(i);return {}}}:n==='assets'?{upload:async(b,o)=>{ups.push(o);if(ups.length===2)throw {code:'quota_or_state'};return {id:'a'.repeat(32),url:'/_blob/x'}}}:null}};
 global.navigator={};global.URL={createObjectURL:()=>'blob:fake',revokeObjectURL(){}};
 global.FileReader=class{readAsDataURL(){this.result='data:image/jpeg;base64,QUJD';setTimeout(()=>this.onload(),0)}};
 global.location={hash:''};global.localStorage={getItem:()=>null,setItem(){}};global.scrollTo=()=>{};global.setInterval=()=>0;

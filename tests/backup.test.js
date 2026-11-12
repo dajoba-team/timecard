@@ -1,7 +1,7 @@
 const el={innerHTML:'',textContent:'',prepend(){},hidden:true,checked:false,value:''};
 let last='', saved=[], toasts=[];
 global.document={addEventListener(){},querySelector:s=>s==='#view'?{set innerHTML(v){last=v}}:s==='#toasts'?{prepend(){}}:el,createElement:()=>({...el,remove(){}})};
-global.window={claude:{use:async n=>n==='downloads'?{save:async o=>{saved.push(o);return {status:'saved'}}}:null}};
+global.window={tcStore:{use:async n=>n==='downloads'?{save:async o=>{saved.push(o);return {status:'saved'}}}:null}};
 global.location={hash:''};global.localStorage={getItem:()=>null,setItem(){}};global.scrollTo=()=>{};global.setInterval=()=>0;
 let src=require('fs').readFileSync('chk.js','utf8').replace(/\nboot\(\);\s*$/,'\n');
 src+=`
@@ -16,6 +16,14 @@ S.ready.staff=true;S.months['2026-11']=new Map();S.monthLoaded['2026-11']=true;
 toast=(a,b)=>toasts.push(a+' / '+(b||''));
 (async()=>{
   S.mode='owner';S.unlocked=true;S.tab='staff';render(true);console.log('panel', /전체 백업 파일 받기/.test(last), /아직 백업한 적이 없어요/.test(last));
+  const A=require('assert');
+  A.ok(/이 기기에서 로그아웃/.test(last),'계정 패널');
+  window.tcStore.userEmail=()=>'owner@example.com'; S.pending=3; render(true);
+  A.ok(last.includes('owner@example.com') && /보내지 못한 기록이 3건/.test(last),'계정·대기 표시');
+  let loggedOut=0; window.tcStore.logout=async()=>{loggedOut++};
+  await ACT.logout(); A.strictEqual(loggedOut,0,'첫 누름은 확인만'); A.ok(/정말 로그아웃할까요/.test(last));
+  await ACT.logout(); A.strictEqual(loggedOut,1,'두 번째 누름에 로그아웃');
+  S.pending=0; console.log('account panel ok');
   await ACT.bkAll(); console.log('months read', reads.join(','));
   const j=JSON.parse(saved[0].data); console.log(saved[0].filename, j.counts, Object.keys(j));
   console.log('status', docs['status/backup']);

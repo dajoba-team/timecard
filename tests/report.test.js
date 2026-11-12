@@ -1,7 +1,7 @@
 const el={innerHTML:'',textContent:'',prepend(){},hidden:true,checked:false,value:''};
 let last='', vals={}, toasts=[], calls=[];
 global.document={addEventListener(){},querySelector:s=>s==='#view'?{set innerHTML(v){last=v}}:s==='#toasts'?{prepend(){}}:({...el,value:vals[s]??'',checked:vals[s]===true}),createElement:()=>({...el,remove(){}})};
-global.window={claude:{use:async n=>n==='mcp'?{callTool:async(s,t,i)=>{calls.push(i);return {}}}:null}};
+global.window={tcStore:{use:async n=>n==='mcp'?{callTool:async(s,t,i)=>{calls.push(i);return {}}}:null}};
 global.FileReader=class{readAsDataURL(b){this.result='data:text/csv;base64,QUJD';setTimeout(()=>this.onload(),0)}};
 global.location={hash:''};global.localStorage={getItem:()=>null,setItem(){}};global.scrollTo=()=>{};global.setInterval=()=>0;
 let src=require('fs').readFileSync('chk.js','utf8').replace(/\nboot\(\);\s*$/,'\n');

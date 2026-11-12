@@ -1,5 +1,15 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="타임카드">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F0F2F5">
 <title>가게 타임카드</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="storage.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
@@ -324,6 +334,8 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 #modal .box{background:var(--card);border-radius:12px;padding:18px;width:min(520px,100%)}
 #modal textarea{width:100%;min-height:140px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:8px;font-family:var(--f-mono);font-size:13px}
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header class="top" id="top"></header>
@@ -386,7 +398,7 @@ const S = {
   recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
   sound: store.get('sound') === '1', audio:null, confirmClear:false,
   mailStatus:null, mailed:new Set(), mailBusy:false,
-  photoUse:null, confirmPhotoClean:false
+  photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0
 };
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
@@ -562,7 +574,7 @@ function errMsg(e){
   return '잠시 후 다시 시도해 주세요.';
 }
 async function write(fn){
-  if (!S.db){ toast('저장소에 연결되지 않았어요', 'claude.ai에 로그인한 상태로 열어 주세요.', 'warn'); throw new Error('nodb'); }
+  if (!S.db){ toast('저장소에 연결되지 않았어요', '인터넷 연결을 확인하고 새로고침해 주세요.', 'warn'); throw new Error('nodb'); }
   try { return await fn(); }
   catch (e){
     if (e?.code === 'unavailable'){ await new Promise(r => setTimeout(r, 600 + Math.random()*600)); try { return await fn(); } catch (e2){ e = e2; } }
@@ -652,7 +664,7 @@ function loadNotified(){ try { const o = JSON.parse(store.get('notified') || 'nu
 /* ===================== 휴대폰 메일 알림 =====================
    가게 태블릿(출퇴근 화면)이 사장님 Gmail로 보내요. 사장님 화면을 닫아 둬도 태블릿만 켜져 있으면 돼요. */
 let mcpP = null;
-const getMcp = () => mcpP || (mcpP = window.claude?.use ? window.claude.use('mcp') : Promise.resolve(null));
+const getMcp = () => mcpP || (mcpP = window.tcStore?.use ? window.tcStore.use('mcp') : Promise.resolve(null));
 const mailAddrs = to => String(to || '').split(/[\s,;]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
 function mailErrText(e){
   switch (e?.code){
@@ -663,7 +675,7 @@ function mailErrText(e){
     case 'blocked_by_policy': return '계정 정책 때문에 Gmail로 보낼 수 없어요.';
     case 'tool_error': return 'Gmail이 보내기를 거절했어요. 받는 주소를 확인해 주세요.';
     case 'server_unavailable': case 'upstream_error': case 'rate_limited': return 'Gmail에 잠시 연결되지 않았어요. 인터넷을 확인해 주세요.';
-    case 'not_granted': case 'capability_disabled': case 'capability_removed': return '이 화면에서는 메일을 보낼 수 없어요. claude.ai에서 링크를 열어 주세요.';
+    case 'not_granted': case 'capability_disabled': case 'capability_removed': return '메일 보내기는 아직 준비 중이에요.';
     default: return e?.message || '알 수 없는 문제로 보내지 못했어요.';
   }
 }
@@ -720,7 +732,7 @@ async function checkNotyetMail(){
 /* ===================== 사진 인증 =====================
    태블릿 카메라로 찍고, 사진 아래에 가게·이름·시각을 새겨서 assets 저장소에 올려요. 기록에는 사진 id만 남겨요. */
 let assetsP = null, camStream = null;
-const getAssets = () => assetsP || (assetsP = window.claude?.use ? window.claude.use('assets') : Promise.resolve(null));
+const getAssets = () => assetsP || (assetsP = window.tcStore?.use ? window.tcStore.use('assets') : Promise.resolve(null));
 const mb = b => `${((b || 0) / 1048576).toFixed(1)}MB`;
 function stopCam(){ if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; } }
 function attachCam(){ const v = $('#camv'); if (v && camStream && v.srcObject !== camStream){ v.srcObject = camStream; v.play?.()?.catch?.(() => {}); } }
@@ -789,11 +801,13 @@ async function fileShot(file){
     await kioskPunch(k.kind, { blob, t, note: old ? `방금 찍은 사진이 아닐 수 있어요 (파일 시각 ${fmtT(file.lastModified)})` : '' });
   } catch { k.camErr = '사진을 읽지 못했어요. 다시 찍어 주세요.'; render(true); }
 }
+// 사진은 비공개 저장소라 임시 URL로 보여 줘요. 아직 URL이 없으면 storage.js가 받아서 넣어 줘요.
+function photoSrcAttr(id){ const u = window.tcStore?.photoUrl?.(id); return u ? ` src="${esc(u)}"` : ''; }
 function photoBits(p, kind){
   if (!p) return '';
   const id = p[kind + 'Photo'], note = p[kind + 'PhotoNote'];
   const cap = `${p.name || ''} · ${fmtMD(p.date)} ${kind === 'in' ? '출근' : '퇴근'} ${fmtT(p[kind])}${note ? ` · ${note}` : ''}`;
-  if (id) return `<button class="thumbbtn" data-act="photo" data-id="${esc(id)}" data-cap="${esc(cap)}" aria-label="${esc(cap)} 사진 보기"><img src="/_blob/${esc(id)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('gone')"></button>${note ? ` <span class="chip amber" title="${esc(note)}">확인 필요</span>` : ''}`;
+  if (id) return `<button class="thumbbtn" data-act="photo" data-id="${esc(id)}" data-cap="${esc(cap)}" aria-label="${esc(cap)} 사진 보기"><img data-photo="${esc(id)}"${photoSrcAttr(id)} alt="" loading="lazy" onerror="this.parentNode.classList.add('gone')"></button>${note ? ` <span class="chip amber" title="${esc(note)}">확인 필요</span>` : ''}`;
   if (id === null) return ` <span class="chip red" title="${esc(note || '')}">사진 없음</span>`;
   return '';
 }
@@ -830,8 +844,9 @@ function renderTop(){
 }
 function renderBanner(){
   let msg = '';
-  if (S.noDb) msg = '저장소에 연결되지 않았어요. claude.ai에 사장님 계정으로 로그인한 상태에서 이 페이지를 열어야 출퇴근 기록이 저장돼요.';
+  if (S.noDb) msg = '저장소에 연결되지 않았어요. 인터넷 연결을 확인하고 새로고침해 주세요. 계속 이러면 사장님께 알려 주세요.';
   else if (S.connNote) msg = S.connNote;
+  else if (S.pending) msg = `인터넷이 끊겨 아직 서버에 보내지 못한 기록이 ${S.pending}건 있어요. 연결되면 자동으로 보내요. 이 기기를 끄거나 로그아웃하지 마세요.`;
   $('#banner').textContent = msg;
 }
 const loadingNote = () => `<div class="empty">기록을 불러오는 중이에요…</div>`;
@@ -873,7 +888,7 @@ function mySummary(st){
 function kioskView(){
   const k = S.kiosk, now = Date.now(), today = todayStr();
   const clock = `<div class="kclock"><div class="kdate" id="kdate">${fmtDateLong(today)}</div><div class="ktime mono" id="ktime">${fmtClock(now)}</div></div>`;
-  if (S.noDb) return clock + `<div class="empty"><b>기록을 저장할 수 없어요</b>위 안내처럼 claude.ai에 로그인한 상태에서 열어 주세요.</div>`;
+  if (S.noDb) return clock + `<div class="empty"><b>기록을 저장할 수 없어요</b>위 안내처럼 인터넷 연결을 확인하고 새로고침해 주세요.</div>`;
   if (!S.ready.staff) return clock + loadingNote();
   const list = activeStaff();
   if (k.step === 'list'){
@@ -1380,8 +1395,18 @@ function staffView(){
             <button class="linkbtn" style="margin:0" data-act="photoUsage">저장 공간 확인</button>
             ${S.photoUse?.old.length ? `<button class="btn sm danger" data-act="photoClean">${S.confirmPhotoClean ? '정말 지울까요? 한 번 더 누르기' : `3개월 지난 사진 ${S.photoUse.old.length}장 지우기`}</button>` : ''}</div></dd>
       </dl>
-      <p class="hint">가게 태블릿은 ‘출퇴근 화면’으로 켜 두고, 사장님 휴대폰에서는 같은 링크를 열어 ‘사장님 화면’으로 보세요. 두 기기 모두 사장님 claude.ai 계정으로 로그인해 있어야 기록이 함께 보여요.</p>
-    </section></div>${backupPanel()}`;
+      <p class="hint">가게 태블릿은 ‘출퇴근 화면’으로 켜 두고, 사장님 휴대폰에서는 같은 링크를 열어 ‘사장님 화면’으로 보세요. 두 기기 모두 사장님 계정으로 로그인해 있어야 기록이 함께 보여요.</p>
+    </section></div>${backupPanel()}${accountPanel()}`;
+}
+function accountPanel(){
+  const email = window.tcStore?.userEmail?.() || '';
+  const pend = S.pending;
+  return `<section class="panel" style="margin-top:16px" id="accountSec"><h3>계정 <small>이 기기의 로그인</small></h3>
+    <p class="small" style="margin:0 0 10px">${email ? `로그인한 계정: <b>${esc(email)}</b>` : '로그인 정보를 읽지 못했어요.'}</p>
+    ${pend ? `<p class="small" style="margin:0 0 10px;color:var(--amber)">아직 서버에 보내지 못한 기록이 ${num(pend)}건 있어요. 인터넷이 연결되면 자동으로 보내요. 보내기 전에 로그아웃하면 이 기록은 사라져요.</p>` : ''}
+    <div class="row"><button class="btn sm danger" data-act="logout">${S.confirmLogout ? '정말 로그아웃할까요? 한 번 더 누르기' : '이 기기에서 로그아웃'}</button></div>
+    <p class="hint">가게 태블릿은 로그아웃하지 않고 켜 두세요. 잠깐 쓴 PC나 다른 사람 기기, 바꾸거나 처분할 태블릿에서만 로그아웃하세요. 로그아웃하면 이 기기의 ‘사장님 화면 기억하기’도 함께 풀려요.</p>
+  </section>`;
 }
 
 /* ===================== 전자 근로계약서 =====================
@@ -1943,8 +1968,8 @@ const BACT = {
         note:'사진 파일은 포함되지 않았어요 (기록의 inPhoto/outPhoto는 사진 번호).'
       };
       if (note) note.textContent = '파일 만드는 중…';
-      const dl = window.claude?.use ? await window.claude.use('downloads') : null;
-      if (!dl){ toast('이 화면에서는 파일 저장을 쓸 수 없어요', 'claude.ai에서 링크를 열어 주세요.', 'warn'); return; }
+      const dl = window.tcStore?.use ? await window.tcStore.use('downloads') : null;
+      if (!dl){ toast('이 화면에서는 파일 저장을 쓸 수 없어요', '새로고침한 뒤 다시 눌러 주세요.', 'warn'); return; }
       try {
         await dl.save({ filename:`타임카드_백업_${backupStamp()}.json`, data: JSON.stringify(data, null, 1) });
         await backupMark('json');
@@ -2032,10 +2057,17 @@ const ACT = {
     toast('지난 사진을 지웠어요', `${n}장 · 출퇴근 기록은 그대로 남아요`, 'ok');
     await ACT.photoUsage();
   },
+  async logout(){
+    if (!S.confirmLogout){ S.confirmLogout = true; render(true); setTimeout(() => { S.confirmLogout = false; scheduleRender(); }, 5000); return; }
+    S.confirmLogout = false;
+    store.set('ownerDevice', '0'); store.set('mode', 'kiosk');
+    if (window.tcStore?.logout) await window.tcStore.logout();
+    else location.reload();
+  },
   photo(d){
     if (!/^[\w-]+$/.test(d.id || '')) return;
     const m = $('#modal');
-    m.innerHTML = `<div class="box"><img class="big" src="/_blob/${d.id}" alt="${esc(d.cap)} 사진"><p class="small muted" style="margin-top:8px">${esc(d.cap)}</p><div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" id="closeModal">닫기</button></div></div>`;
+    m.innerHTML = `<div class="box"><img class="big" data-photo="${d.id}"${photoSrcAttr(d.id)} alt="${esc(d.cap)} 사진"><p class="small muted" style="margin-top:8px">${esc(d.cap)}</p><div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" id="closeModal">닫기</button></div></div>`;
     m.hidden = false; $('#closeModal').onclick = () => { m.hidden = true; };
   },
   mailSet(){ S.tab = 'staff'; S.editing = 'config'; store.set('tab', 'staff'); render(true); $('#mailSec')?.scrollIntoView({ block:'start' }); },
@@ -2228,7 +2260,7 @@ async function clearSamples(){
   render(true);
 }
 async function saveFile(filename, data){
-  const dl = window.claude?.use ? await window.claude.use('downloads') : null;
+  const dl = window.tcStore?.use ? await window.tcStore.use('downloads') : null;
   if (!dl){ toast('이 화면에서는 파일 저장을 쓸 수 없어요', '대신 ‘표 복사’로 엑셀에 붙여 넣어 주세요.', 'warn'); return; }
   try { await dl.save({ filename, data }); toast('파일을 저장했어요', filename, 'ok'); return true; }
   catch (e){ if (e?.code !== 'declined') toast('저장하지 못했어요', e?.message || '', 'warn'); }
@@ -2277,11 +2309,13 @@ async function boot(){
   S.tab = TABS.some(t => t[0] === h) ? h : (store.get('tab') || 'now');
   S.unlocked = S.mode === 'owner' && store.get('ownerDevice') === '1';
   loadNotified(); loadMailed();
+  S.pending = window.tcStore?.pendingCount?.() || 0;
+  window.addEventListener?.('tc-pending', e => { S.pending = e.detail || 0; renderBanner(); if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); });
   render(true);
   setInterval(tick1, 1000);
   setInterval(tick30, 30000);
   connTimer = setTimeout(() => { if (!S.connected && !S.noDb){ S.connNote = '저장소 응답을 기다리고 있어요. 인터넷 연결을 확인해 주세요.'; renderBanner(); } }, 10000);
-  const db = window.claude?.use ? await window.claude.use('db') : null;
+  const db = window.tcStore?.use ? await window.tcStore.use('db') : null;
   if (!db){ clearTimeout(connTimer); S.noDb = true; S.ready.staff = true; render(true); return; }
   S.db = db;
   db.doc('config/main').onSnapshot(s => { S.config = s.exists ? s.data() : {}; S.ready.config = true; if (!s.metadata.fromCache) markConnected(); scheduleRender(); }, e => console.warn('config', e));
@@ -2298,3 +2332,5 @@ async function boot(){
 }
 boot();
 </script>
+</body>
+</html>

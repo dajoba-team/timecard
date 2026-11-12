@@ -1,13 +1,13 @@
 // 모든 시험을 한 번에 돌려요: node tests/run-all.js  (또는 npm test)
-// src/timecard.html 안의 <script>를 꺼내 tests/chk.js로 만든 뒤, 각 시험을 tests 폴더에서 실행해요.
+// public/index.html 안의 <script>를 꺼내 tests/chk.js로 만든 뒤, 각 시험을 tests 폴더에서 실행해요.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
 const root = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'src', 'timecard.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const m = html.match(/<script>([\s\S]*)<\/script>/);
-if (!m) { console.error('src/timecard.html에서 <script>를 찾지 못했어요'); process.exit(1); }
+if (!m) { console.error('public/index.html에서 <script>를 찾지 못했어요'); process.exit(1); }
 fs.writeFileSync(path.join(__dirname, 'chk.js'), m[1]);
 
 const check = spawnSync(process.execPath, ['--check', 'chk.js'], { cwd: __dirname, encoding: 'utf8' });

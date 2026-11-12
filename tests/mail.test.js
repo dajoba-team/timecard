@@ -1,7 +1,7 @@
 const el={innerHTML:'',textContent:'',prepend(){},hidden:true,checked:true,value:'',scrollIntoView(){}};
 global.document={addEventListener(){},querySelector:()=>el,createElement:()=>({...el,remove(){}})};
 const calls=[], dbw={};
-global.window={claude:{use:async n=>n==='mcp'?{callTool:async(s,t,i,o)=>{calls.push({s,t,i,o});if(i.to.includes('bad@x.com')){throw {code:'needs_reauth'}}return {payload:{id:'1'}}}}:null}};
+global.window={tcStore:{use:async n=>n==='mcp'?{callTool:async(s,t,i,o)=>{calls.push({s,t,i,o});if(i.to.includes('bad@x.com')){throw {code:'needs_reauth'}}return {payload:{id:'1'}}}}:null}};
 global.location={hash:''};global.localStorage={getItem:()=>null,setItem(){}};global.scrollTo=()=>{};global.setInterval=()=>0;
 let src=require('fs').readFileSync('chk.js','utf8').replace(/\nboot\(\);\s*$/,'\n');
 src+=`

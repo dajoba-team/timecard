@@ -1,3 +1,4 @@
+require('./clock')('2026-11-11T11:00:00+09:00');   // 시험이 2026-11-11(수) 기록을 씀
 const el={innerHTML:'',textContent:'',prepend(){},hidden:true,checked:false,value:''};
 let last='', toasts=[], vals={};
 global.document={addEventListener(){},querySelector:s=>s==='#view'?{set innerHTML(v){last=v}}:s==='#toasts'?{prepend(){}}:({...el,value:vals[s]??'',checked:false}),createElement:()=>({...el,remove(){}})};

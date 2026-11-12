@@ -1,5 +1,11 @@
+# 비밀 키 (Supabase secret key 등) - 절대 커밋 금지
+.env
+.env.*
+!.env.example
+
 # 시험할 때 자동으로 만들어지는 파일
 tests/chk.js
+tests/tmp-import-backup.json
 node_modules/
 
 # 개인정보가 들어 있는 백업·내보내기 파일은 저장소에 올리지 않기
@@ -11,5 +17,9 @@ backups/
 임금대장_*
 근로계약서_*
 
+# IDE / OS
+.idea/
+*.iml
+.vscode/
 .DS_Store
 Thumbs.db
