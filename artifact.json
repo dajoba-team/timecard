@@ -1,0 +1,15 @@
+{
+  "title": "가게 타임카드",
+  "url": "https://claude.ai/artifact/6n5eNiJTa4CfLhzssb7V6m",
+  "file": "src/timecard.html",
+  "visibility": "private (사장님 claude.ai 계정 전용)",
+  "runtimeContract": "0.2.96",
+  "publishedVersion": 11,
+  "capabilities": {
+    "db": {},
+    "downloads": true,
+    "assets": {},
+    "mcp": { "servers": [{ "server": "Gmail", "tools": ["send_message"] }] }
+  },
+  "note": "다시 올릴 때 capabilities를 바꾸려면 위 4가지를 모두 함께 적어야 해요 (일부만 적으면 나머지가 꺼져요)."
+}

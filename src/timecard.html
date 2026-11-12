@@ -1,0 +1,2300 @@
+<title>가게 타임카드</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 한 페이지에 두 모드 — 가게 태블릿용 '출퇴근 화면'(큰 시계 + 이름 버튼 + 번호 패드)과 사장님용 관리 화면(탭).
+   타임카드 펀치 잉크(파랑 = 정상, 빨강 = 지각)를 상태색의 기본으로 삼는다. */
+:root{
+  --paper:#F0F2F5; --card:#FFFFFF; --ink:#151B24; --muted:#5E6774; --line:#DADFE7; --soft:#E8ECF1;
+  --stamp:#2A3FC7; --stamp-soft:#E3E7FB; --red:#C4302A; --red-soft:#FBE5E3;
+  --green:#1D7A4E; --green-soft:#E0F2E8; --amber:#A05D00; --amber-soft:#FBEED6;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#0E1217; --card:#161B22; --ink:#E7EBF1; --muted:#97A1AF; --line:#2A313B; --soft:#1E242D;
+  --stamp:#8391FF; --stamp-soft:#1E2444; --red:#FF6E64; --red-soft:#3A1D1B;
+  --green:#4FC48B; --green-soft:#132E20; --amber:#F2A73D; --amber-soft:#33260F; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --paper:#0E1217; --card:#161B22; --ink:#E7EBF1; --muted:#97A1AF; --line:#2A313B; --soft:#1E242D;
+  --stamp:#8391FF; --stamp-soft:#1E2444; --red:#FF6E64; --red-soft:#3A1D1B;
+  --green:#4FC48B; --green-soft:#132E20; --amber:#F2A73D; --amber-soft:#33260F; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--stamp);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+h1,h2,h3{text-wrap:balance;margin:0}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:12px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+.mark{width:36px;height:36px;border-radius:8px;border:2px solid var(--stamp);color:var(--stamp);display:grid;place-items:center;font-family:var(--f-mono);font-weight:600;font-size:13px;transform:rotate(-6deg)}
+.brand b{display:block;font-size:16px}
+.brand small{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:4px;overflow-x:auto;order:3;width:100%;scrollbar-width:none}
+.tabs button{border:0;background:transparent;padding:8px 12px;border-radius:8px;color:var(--muted);font-weight:500;white-space:nowrap;position:relative}
+.tabs button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 0 var(--line),0 0 0 1px var(--line)}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-style:normal;margin-left:6px;font-weight:600}
+@media (min-width:900px){.tabs{order:0;width:auto}}
+
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--stamp);border-color:var(--stamp);color:#fff}
+.btn.danger{color:var(--red);border-color:var(--red)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:8px;padding:7px 12px;font-weight:500}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.spacer{flex:1}
+
+#banner:not(:empty){margin-top:12px;padding:10px 14px;border-radius:var(--r);background:var(--amber-soft);color:var(--amber);font-size:14px}
+main{padding-top:18px}
+
+/* panels */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.panel h3{font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.panel h3 small{color:var(--muted);font-weight:400;font-size:13px}
+.cols{display:grid;gap:16px;grid-template-columns:1fr}
+@media (min-width:900px){.cols{grid-template-columns:3fr 2fr}}
+.stack{display:grid;gap:16px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.sec-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.sec-head h2{font-size:20px;margin-right:auto}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.stat small{display:block;color:var(--muted);font-size:12px;letter-spacing:.02em}
+.stat b{font-size:22px;font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:600}
+.stat em{font-style:normal;font-size:12px;color:var(--muted)}
+.stat.red b{color:var(--red)} .stat.amber b{color:var(--amber)} .stat.blue b{color:var(--stamp)}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--soft);color:var(--muted)}
+.chip.ok{background:var(--green-soft);color:var(--green)}
+.chip.red{background:var(--red-soft);color:var(--red)}
+.chip.amber{background:var(--amber-soft);color:var(--amber)}
+.chip.blue{background:var(--stamp-soft);color:var(--stamp)}
+.chip.faint{background:transparent;color:var(--muted);border:1px dashed var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block;flex:none}
+.dot.working{background:var(--stamp)} .dot.done{background:var(--green)} .dot.late{background:var(--red)} .dot.wait{background:var(--amber)}
+
+/* tables */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+.t th{font-size:12px;color:var(--muted);font-weight:500;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:9px 8px;border-bottom:1px solid var(--soft);vertical-align:middle}
+.t td.r,.t th.r{text-align:right}
+.t tr.edit td{background:var(--soft)}
+.t .late{color:var(--red);font-weight:600}
+.t tfoot td{font-weight:700;border-top:2px solid var(--line)}
+
+/* month grid */
+.mgrid{border-collapse:separate;border-spacing:2px;font-size:12px}
+.mgrid th{font-weight:500;color:var(--muted);padding:2px;text-align:center;min-width:34px}
+.mgrid th.name{text-align:left;min-width:84px;position:sticky;left:0;background:var(--card);z-index:1}
+.mgrid th.we{color:var(--red)}
+.mgrid td{text-align:center;height:34px;border-radius:6px;background:var(--soft);font-family:var(--f-mono);font-variant-numeric:tabular-nums;padding:0 2px}
+.mgrid td.name{text-align:left;background:var(--card);font-family:var(--f-body);font-weight:600;position:sticky;left:0;z-index:1;padding-right:8px;white-space:nowrap}
+.mgrid td.tot{background:transparent;font-weight:600;white-space:nowrap;padding:0 8px}
+.mgrid td button{all:unset;cursor:pointer;display:block;width:100%;height:100%;line-height:34px}
+.c-done{background:var(--green-soft)!important;color:var(--green)}
+.c-late{background:var(--red-soft)!important;color:var(--red);font-weight:600}
+.c-absent{background:var(--red)!important;color:#fff;font-weight:600}
+.c-wait{background:var(--amber-soft)!important;color:var(--amber)}
+.c-extra{background:var(--stamp-soft)!important;color:var(--stamp)}
+.c-leave{color:var(--muted)}
+.c-sched{color:var(--muted);background:transparent!important;border:1px dashed var(--line)}
+.c-off{background:transparent!important}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:transparent;padding:6px 14px;color:var(--muted);font-weight:500}
+.seg button.on{background:var(--stamp);color:#fff}
+.nav{display:inline-flex;align-items:center;gap:6px}
+.nav b{min-width:120px;text-align:center}
+.nav button{border:1px solid var(--line);background:var(--card);border-radius:8px;width:34px;height:34px}
+
+/* kiosk */
+.kclock{text-align:center;padding-block:18px 8px}
+.kdate{color:var(--muted);font-size:16px}
+.ktime{font-size:clamp(48px,11vw,96px);font-weight:600;letter-spacing:.02em;line-height:1.1}
+.khint{text-align:center;color:var(--muted);margin:6px 0 18px}
+.kgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));max-width:960px;margin:0 auto}
+.kname{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:10px;text-align:left;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-height:110px}
+.kname:hover{border-color:var(--stamp)}
+.kname b{font-size:20px}
+.kname small{grid-column:2;color:var(--muted);font-size:13px}
+.kname em{grid-column:1/3;font-style:normal;font-size:13px;margin-top:8px;font-family:var(--f-mono);color:var(--muted)}
+.kpanel{max-width:420px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;text-align:center}
+.kpanel h2{font-size:24px}
+.kpanel p{color:var(--muted);margin:6px 0 0}
+.pindots{display:flex;justify-content:center;gap:14px;margin:18px 0 8px}
+.pindots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted)}
+.pindots i.on{background:var(--ink);border-color:var(--ink)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.pad button{height:64px;border-radius:12px;border:1px solid var(--line);background:var(--paper);font-size:24px;font-family:var(--f-mono);font-weight:600}
+.pad button.fn{font-size:15px;font-family:var(--f-body);color:var(--muted)}
+.pad button:active{background:var(--stamp-soft)}
+.err{color:var(--red)!important;font-weight:600}
+.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.bigbtn{width:100%;height:84px;border-radius:14px;border:0;font-size:26px;font-weight:700;color:#fff;background:var(--stamp);margin-top:18px}
+.bigbtn.out{background:var(--ink);color:var(--card)}
+.bigbtn:disabled{opacity:.5}
+.linkbtn{background:none;border:0;color:var(--muted);text-decoration:underline;margin-top:14px;padding:6px}
+.cam{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:3/4;margin-top:14px}
+.cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.camstamp{position:absolute;left:0;right:0;bottom:0;padding:24px 14px 12px;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;text-align:left;font-size:13px}
+.camstamp b{display:block;font-family:var(--f-mono);font-size:32px;line-height:1.1}
+.cammsg{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:15px}
+.filebtn{display:flex;align-items:center;justify-content:center;cursor:pointer}
+.filebtn input{display:none}
+.taxtext{white-space:pre-wrap;font-family:var(--f-body);font-size:14px;line-height:1.65;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:8px 0 0;max-height:420px;overflow:auto}
+.taxset{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.taxset label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.taxset label.check{display:flex;align-items:center;gap:6px}
+.taxset input[type=text],.taxset input:not([type]){border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:7px 10px;color:var(--ink);min-width:240px}
+.inlnum{width:130px;text-align:right;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 8px;color:var(--ink);font-family:var(--f-mono)}
+.form.pt-m .pt-hour{display:none}
+.form:not(.pt-m) .pt-month{display:none}
+.kpanel.wide{max-width:780px;text-align:left}
+.kpanel.wide h2,.kpanel.wide > p{text-align:center}
+.contract{font-size:14px;line-height:1.7;color:var(--ink)}
+.contract h1{font-size:20px;text-align:center;letter-spacing:.15em;margin:4px 0 14px}
+.contract .terms{padding-left:20px;margin:8px 0}
+.contract .terms li{margin:6px 0}
+.contract .terms ul{padding-left:18px;margin:2px 0}
+.contract table.ct{border-collapse:collapse;margin:6px 0;width:100%;font-size:13px}
+.contract table.ct th,.contract table.ct td{border:1px solid var(--line);padding:3px 6px;text-align:center}
+.contract table.ct thead th{background:var(--soft)}
+.contract .cdate{text-align:center;margin:14px 0}
+.contract .parties{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.contract .parties h4{margin:0 0 4px}
+.contract .parties p{margin:2px 0}
+.contract .meta{margin-top:16px;padding-top:8px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+@media (max-width:560px){.contract .parties{grid-template-columns:1fr}}
+.cbox{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--paper);margin:14px 0}
+.ksign{margin-top:6px}
+.sigline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sig{height:48px;max-width:170px;background:#fff;border-radius:4px}
+.sig.sigsm{height:36px;vertical-align:middle}
+.sigph{color:var(--muted)}
+.sigwrap{position:relative;margin-top:14px}
+.sigpad{display:block;width:100%;height:170px;touch-action:none;background:#fff;border:2px dashed var(--line);border-radius:10px;cursor:crosshair}
+.sighint{position:absolute;left:0;right:0;top:72px;text-align:center;color:#999;pointer-events:none;font-size:15px}
+.sigwrap.signed .sighint{display:none}
+.sigclr{position:absolute;right:8px;top:8px}
+.kphoto{display:block;width:100%;max-width:260px;margin:14px auto 0;border-radius:10px}
+.thumbbtn{border:0;padding:0;background:none;margin-left:6px;vertical-align:middle;cursor:zoom-in}
+.thumbbtn img{width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--line);display:block;background:var(--soft)}
+.thumbbtn.gone img{display:none}
+.thumbbtn.gone::after{content:'사진 지움';font-size:11px;color:var(--muted)}
+#modal img.big{max-width:100%;max-height:72vh;display:block;margin:0 auto;border-radius:8px}
+.mysum{margin-top:18px;padding:12px;border-radius:10px;background:var(--soft);font-size:13px;text-align:left}
+.mysum b{font-family:var(--f-mono)}
+.stamp{display:inline-block;margin:18px auto 6px;padding:10px 22px;border:4px double var(--stamp);color:var(--stamp);border-radius:8px;transform:rotate(-4deg);font-family:var(--f-mono);font-weight:600;font-size:20px}
+.stamp b{display:block;font-size:44px;line-height:1.1}
+.stamp.red{border-color:var(--red);color:var(--red)}
+@media (prefers-reduced-motion:no-preference){.stamp{animation:thump .35s ease-out}}
+@keyframes thump{0%{transform:scale(1.6) rotate(-4deg);opacity:0}100%{transform:scale(1) rotate(-4deg);opacity:1}}
+.empty{max-width:520px;margin:20px auto;text-align:center;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:var(--r);padding:24px}
+.empty b{color:var(--ink);display:block;font-size:17px;margin-bottom:6px}
+
+/* board & feed */
+.board{display:grid;gap:8px}
+.bitem{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--soft);border-radius:10px}
+.bitem b{font-size:15px}
+.bitem .sub{font-size:12px;color:var(--muted);font-family:var(--f-mono)}
+.feed{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.feed li{display:grid;grid-template-columns:52px 1fr;gap:8px;padding:8px 4px;border-bottom:1px solid var(--soft);font-size:14px}
+.feed time{font-family:var(--f-mono);color:var(--muted);font-size:13px}
+.feed li.late{color:var(--red)} .feed li.wait{color:var(--amber)}
+.alertbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:var(--r);background:var(--stamp-soft);margin-bottom:16px;font-size:14px}
+.alertbar b{color:var(--stamp)}
+.mailbar{background:var(--soft)}
+.mailbar.on{background:var(--green-soft)}
+.mailbar.on b{color:var(--green)}
+.mailst{display:block;margin-top:4px;font-size:12px;color:var(--muted)}
+
+/* timecard */
+.tcs{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+.tc{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
+.tc header{display:flex;align-items:baseline;gap:8px;padding:14px 16px 0}
+.tc header b{font-size:17px}
+.tc header small{color:var(--muted)}
+.tcline{margin:12px 16px;padding:12px;border:1.5px solid var(--ink);border-radius:6px;font-family:var(--f-mono);font-size:14px;line-height:1.9}
+.tcline span{white-space:nowrap}
+.tcline b{font-weight:600}
+.tcmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px;font-size:13px}
+.tcmeta div{background:var(--soft);border-radius:8px;padding:6px 8px}
+.tcmeta small{display:block;color:var(--muted);font-size:11px}
+.tcmeta b{font-family:var(--f-mono)}
+.tc details{border-top:1px solid var(--soft)}
+.tc summary{padding:10px 16px;cursor:pointer;color:var(--muted);font-size:13px}
+.tc .tcfoot{display:flex;gap:8px;padding:0 16px 14px;flex-wrap:wrap}
+.cardtab{width:100%;border-collapse:collapse;font-family:var(--f-mono);font-size:12.5px}
+.cardtab td,.cardtab th{padding:4px 8px;border-bottom:1px solid var(--soft);text-align:right}
+.cardtab th{font-family:var(--f-body);font-weight:500;color:var(--muted)}
+.cardtab td:first-child,.cardtab th:first-child{text-align:left}
+.cardtab .late{color:var(--red);font-weight:600}
+.cardtab .ot{color:var(--stamp);font-weight:600}
+.cardtab tr.we td:first-child{color:var(--red)}
+
+/* payroll */
+.chart svg{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font-size:11px;font-family:var(--f-mono)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .act{stroke:var(--stamp);stroke-width:2.5;fill:none}
+.chart .area{fill:var(--stamp);opacity:.12}
+.chart .proj{stroke:var(--muted);stroke-width:2;fill:none;stroke-dasharray:5 5}
+.chart .today{stroke:var(--amber);stroke-width:1.5;stroke-dasharray:3 3}
+.chart .mk{fill:var(--card);stroke:var(--stamp);stroke-width:2.5}
+.chart .mk.p{stroke:var(--muted)}
+.chart .lab{fill:var(--ink);font-weight:600}
+.ledger{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:22px}
+.ledger h1{text-align:center;font-size:20px;letter-spacing:.35em;margin-bottom:2px}
+.ledger .meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:12px;margin:12px 0}
+.ledger table{border-collapse:collapse;font-size:12px;min-width:1100px;width:100%}
+.ledger th,.ledger td{border:1px solid var(--muted);padding:5px 6px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ledger th{background:var(--soft);text-align:center;font-weight:600}
+.ledger td.l{text-align:left}
+.ledger tfoot td{font-weight:700;background:var(--soft)}
+.ledger .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7}
+.ledger .sign{display:flex;justify-content:flex-end;margin-top:14px}
+.ledger .sign div{border:1px solid var(--muted);width:84px;text-align:center;font-size:12px}
+.ledger .sign div+div{border-left:0}
+.ledger .sign b{display:block;border-bottom:1px solid var(--muted);padding:3px;background:var(--soft)}
+.ledger .sign span{display:block;height:44px}
+
+/* forms */
+.form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.form label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.form input,.form select,.inl input{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 10px;color:var(--ink);min-width:0;width:100%}
+.form .full{grid-column:1/-1}
+.check{display:flex!important;grid-template-columns:none;align-items:center;gap:8px;color:var(--ink)!important;font-size:14px!important}
+.check input{width:18px!important;height:18px}
+.schedt{width:100%;border-collapse:collapse;font-size:14px}
+.schedt td{padding:4px 6px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--paper)}
+.seg label{position:relative;cursor:pointer}
+.seg input{position:absolute;opacity:0;width:1px;height:1px}
+.seg span{display:block;padding:6px 12px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.seg label + label span{border-left:1px solid var(--line)}
+.seg input:checked + span{background:var(--stamp);color:#fff}
+.seg input.off:checked + span{background:var(--muted);color:var(--card)}
+.seg input:focus-visible + span{outline:2px solid var(--stamp);outline-offset:-2px}
+.schedt .restlbl{display:none;padding:5px 10px;border-radius:6px;background:var(--soft);color:var(--muted);font-weight:600;font-size:13px;white-space:nowrap}
+.schedt tr.rest .restlbl{display:inline-block}
+.schedt tr.rest input[type=time],.schedt tr.rest input[type=number]{display:none}
+.schedt tr.rest td b{color:var(--muted)}
+.c-rest{color:var(--muted);background:transparent!important;font-family:var(--f-body)!important;font-size:11px}
+.schedt input[type=time],.schedt input[type=number]{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:5px 6px;color:var(--ink);width:100%;min-width:84px}
+.inl{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.inl label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.slist{display:grid;gap:8px}
+.sitem{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--soft);border-radius:10px}
+.sitem b{font-size:15px}
+.sitem .sub{font-size:13px;color:var(--muted)}
+.sitem.off{opacity:.55}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+
+/* toast & modal */
+#toasts{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);right:max(12px,env(safe-area-inset-right,0px));z-index:50;display:grid;gap:8px;width:min(360px,calc(100vw - 24px))}
+.toast{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--stamp);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);cursor:pointer}
+.toast b{display:block}
+.toast span{font-size:13px;color:var(--muted)}
+.toast.late{border-left-color:var(--red)} .toast.warn{border-left-color:var(--amber)} .toast.ok{border-left-color:var(--green)}
+@media (prefers-reduced-motion:no-preference){.toast{animation:tin .25s ease-out}}
+@keyframes tin{from{transform:translateY(-10px);opacity:0}}
+#modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px}
+#modal[hidden]{display:none}
+#modal .box{background:var(--card);border-radius:12px;padding:18px;width:min(520px,100%)}
+#modal textarea{width:100%;min-height:140px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:8px;font-family:var(--f-mono);font-size:13px}
+</style>
+
+<div class="wrap">
+  <header class="top" id="top"></header>
+  <div id="banner"></div>
+  <main id="view"></main>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="modal" hidden></div>
+
+<script>
+/* ===================== 기본 도구 ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const ymOf = ds => ds.slice(0, 7);
+const parseDate = ds => { const [y, m, d] = ds.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (ds, n) => { const d = parseDate(ds); d.setDate(d.getDate()+n); return ymd(d); };
+const hm2min = s => { const [h, m] = String(s||'0:0').split(':').map(Number); return (h||0)*60 + (m||0); };
+const at = (ds, hhmm) => { const d = parseDate(ds); d.setHours(0, hm2min(hhmm), 0, 0); return d.getTime(); };
+const todayStr = () => ymd(new Date());
+const daysIn = ym => { const [y, m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); };
+const shiftYM = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m-1+n, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; };
+const DAYS = ['일','월','화','수','목','금','토'];
+const WEEK_ORDER = [1,2,3,4,5,6,0];
+const fmtT = (ms, ds) => { if (!ms) return '—'; const d = new Date(ms); const s = `${pad(d.getHours())}:${pad(d.getMinutes())}`; return ds && ymd(d) !== ds ? s + '⁺¹' : s; };
+const fmtClock = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const fmtHM = min => { min = Math.max(0, Math.round(min||0)); return `${Math.floor(min/60)}:${pad(min%60)}`; };
+const fmtH = min => { min = Math.max(0, Math.round(min||0)); const h = Math.floor(min/60), m = min%60; return m ? `${h}시간 ${m}분` : `${h}시간`; };
+const num = n => Math.floor(n||0).toLocaleString('ko-KR');
+const won = n => num(n) + '원';
+const fmtDateLong = ds => { const d = parseDate(ds); return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DAYS[d.getDay()]})`; };
+const fmtMD = ds => { const d = parseDate(ds); return `${d.getMonth()+1}/${d.getDate()}`; };
+const fmtYM = ym => { const [y, m] = ym.split('-'); return `${y}년 ${+m}월`; };
+const MIN_WAGE = 10320;
+const otDaysText = o => o.otDays.length ? o.otDays.map(x => `${fmtMD(x.ds)}(${fmtHM(x.min)})`).join(', ') : '없음';
+const store = {
+  get(k){ try { return localStorage.getItem('tc.' + k); } catch { return null; } },
+  set(k, v){ try { localStorage.setItem('tc.' + k, v); } catch {} },
+  del(k){ try { localStorage.removeItem('tc.' + k); } catch {} }
+};
+
+/* ===================== 상태 ===================== */
+const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'', graceMin:5, otUnit:10, earlyClamp:true, otPremium:false, weeklyHoliday:true,
+  rates:{ np:4.75, hi:3.595, ltc:13.14, ei:0.9 },
+  mail:{ on:false, to:'', ev:{ in:true, late:true, out:false, notyet:true } },
+  photo:{ on:false },
+  biz:{ name:'', ceo:'', addr:'', phone:'' },
+  contract:{ on:false, autoOwnerSign:true, payDay:10, payMethod:'근로자 명의 예금통장에 입금', special:'' },
+  tax:{ email:'', auto:false } };
+const TABS = [['now','현황'],['records','출퇴근 기록'],['timecard','근무 집계'],['payroll','인건비·급여'],['contract','근로계약'],['staff','직원·설정']];
+const S = {
+  db:null, noDb:false, connected:false, connNote:'',
+  config:{}, staff:[], ready:{config:false, staff:false, contracts:false, reports:false}, reports:{}, backupStatus:null, contracts:[], ownerSign:'', cDraft:null,
+  months:{}, monthSubs:{}, monthLoaded:{},
+  seen:new Map(), primed:false, notified:new Set(),
+  mode:'kiosk', unlocked:false, tab:'now', editing:null,
+  lockPin:'', lockErr:'', remember:false,
+  kiosk:{ step:'list', staffId:null, pin:'', err:'', at:0, result:null, busy:false },
+  recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
+  sound: store.get('sound') === '1', audio:null, confirmClear:false,
+  mailStatus:null, mailed:new Set(), mailBusy:false,
+  photoUse:null, confirmPhotoClean:false
+};
+const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
+  mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
+  photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) },
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) } });
+const staffById = id => S.staff.find(s => s.id === id);
+const activeStaff = () => S.staff.filter(s => s.active !== false);
+
+/* ===================== 근무 계산 ===================== */
+const WORKED = new Set(['done','working','extra']);
+function getPunch(staffId, ds){ return S.months[ymOf(ds)]?.get(`${staffId}_${ds}`); }
+function monthHasPunch(id, ym){ const m = S.months[ym]; if (!m) return false; for (const p of m.values()) if (p.staffId === id) return true; return false; }
+function staffForMonth(ym){ return S.staff.filter(s => s.active !== false || monthHasPunch(s.id, ym)); }
+function staffForDay(ds){ return S.staff.filter(s => s.active !== false || getPunch(s.id, ds)); }
+
+function schedFor(st, ds, p){
+  if (p && p.sched !== undefined) return p.sched;
+  if (st.hireDate && ds < st.hireDate) return null;
+  if (st.endDate && ds > st.endDate) return null;
+  const s = st.sched?.[parseDate(ds).getDay()];
+  return s && s.on ? { start:s.start, end:s.end, brk:+s.brk||0 } : null;
+}
+function isRegularOff(st, ds){   // 근무 기간 안인데 근무표에서 체크 안 한 요일 = 정기 휴무
+  if (st.hireDate && ds < st.hireDate) return false;
+  if (st.endDate && ds > st.endDate) return false;
+  const s = st.sched?.[parseDate(ds).getDay()];
+  return !(s && s.on);
+}
+function shiftMin(sc){ let a = hm2min(sc.start), b = hm2min(sc.end); if (b <= a) b += 1440; return Math.max(0, b - a - (+sc.brk||0)); }
+function weeklySchedMin(st){ return (st.sched||[]).reduce((t, s) => t + (s && s.on ? shiftMin(s) : 0), 0); }
+
+function dayCalc(st, ds, now = Date.now()){
+  const C = cfg(), p = getPunch(st.id, ds), sc = schedFor(st, ds, p);
+  const r = { ds, p, sc, status:'off', worked:0, paid:0, ot:0, late:0, early:0, running:false, schedMin:0, regOff: !sc && isRegularOff(st, ds) };
+  const grace = (+C.graceMin||0) * 60000;
+  if (sc){
+    r.sStart = at(ds, sc.start); r.sEnd = at(ds, sc.end);
+    if (r.sEnd <= r.sStart) r.sEnd += 86400000;
+    r.schedMin = shiftMin(sc);
+  }
+  if (p && p.kind === 'leave'){ r.status = 'leave'; return r; }
+  if (p && p.in){
+    if (sc && p.in > r.sStart + grace) r.late = Math.round((p.in - r.sStart)/60000);
+    let out = p.out;
+    if (!out){
+      if (now - p.in < 20*3600000){ out = now; r.running = true; }
+      else { r.status = 'noout'; return r; }
+    }
+    if (sc && p.out && p.out < r.sEnd - grace) r.early = Math.round((r.sEnd - p.out)/60000);
+    const effIn = (C.earlyClamp && sc && p.in < r.sStart) ? r.sStart : p.in;
+    const gross = Math.max(0, (out - effIn)/60000);
+    const brk = sc ? (gross >= 240 ? sc.brk : 0) : (gross >= 480 ? 60 : gross >= 240 ? 30 : 0);
+    r.worked = Math.max(0, Math.floor(gross - brk));
+    if (sc){
+      const unit = Math.max(1, +C.otUnit||1);
+      r.ot = r.running ? 0 : Math.floor(Math.max(0, r.worked - r.schedMin)/unit)*unit;
+      r.paid = Math.min(r.worked, r.schedMin) + r.ot;
+    } else { r.ot = r.worked; r.paid = r.worked; }
+    r.status = r.running ? 'working' : (sc ? 'done' : 'extra');
+    return r;
+  }
+  if (sc){
+    const today = todayStr();
+    if (ds < today) r.status = 'absent';
+    else if (ds === today) r.status = now > r.sEnd ? 'absent' : now > r.sStart + grace ? 'notyet' : 'upcoming';
+    else r.status = 'upcoming';
+  }
+  return r;
+}
+
+const isMonthly = st => st.payType === 'month';
+const isEmployed = (st, ds) => (!st.hireDate || ds >= st.hireDate) && (!st.endDate || ds <= st.endDate);
+function employedDays(st, ym, upto){ let n = 0; for (let d = 1; d <= daysIn(ym); d++){ const ds = `${ym}-${pad(d)}`; if ((!upto || ds <= upto) && isEmployed(st, ds)) n++; } return n; }
+function dayCost(st, r, projected){
+  if (isMonthly(st)) return isEmployed(st, r.ds) ? (+st.monthly || 0) / daysIn(ymOf(r.ds)) : 0;   // 월급제: 근무 기간의 날마다 월급 ÷ 그 달 일수
+  const w = +st.wage||0, prem = cfg().otPremium ? 1.5 : 1;
+  let min = r.paid, ot = r.ot;
+  if (projected){
+    if (r.status === 'upcoming' || r.status === 'notyet'){ min = r.schedMin; ot = 0; }
+    else if (r.status === 'working'){ min = Math.max(r.paid, r.schedMin); }
+  }
+  return ((min - ot) + ot*prem) * w / 60;
+}
+
+function weekHoliday(st, sunDs, now){
+  if (!cfg().weeklyHoliday || isMonthly(st)) return { eligible:false };
+  let schedMin = 0, absent = false;
+  for (let i = 6; i >= 0; i--){
+    const r = dayCalc(st, addDays(sunDs, -i), now);
+    if (r.sc) schedMin += r.schedMin;
+    if (r.status === 'absent') absent = true;
+  }
+  if (schedMin < 900) return { eligible:false };
+  const hours = Math.min(schedMin/2400, 1) * 8;
+  return { eligible:true, sunDs, schedMin, absent, complete: sunDs < todayStr(), hours, amount: absent ? 0 : hours * (+st.wage||0) };
+}
+
+function deductions(st, gross){
+  const R = cfg().rates, t10 = x => Math.floor(x/10)*10, map = {};
+  if (st.deduct === 'biz'){ map.inc = t10(gross*0.03); map.loc = t10(map.inc*0.1); }
+  else if (st.deduct === 'ins'){ map.np = t10(gross*R.np/100); map.hi = t10(gross*R.hi/100); map.ltc = t10(map.hi*R.ltc/100); map.ei = t10(gross*R.ei/100); }
+  return { map, total: Object.values(map).reduce((a, b) => a + b, 0) };
+}
+
+function monthSummary(st, ym, now = Date.now()){
+  const w = +st.wage||0, n = daysIn(ym);
+  const o = { st, ym, workDays:0, paid:0, worked:0, ot:0, otDays:[], absentDays:[], lateDays:[], lateMin:0, earlyDays:[], leaveDays:[], restDays:[], nooutDays:[], days:[], weeks:[], holiday:0, projGross:0 };
+  for (let d = 1; d <= n; d++){
+    const ds = `${ym}-${pad(d)}`, r = dayCalc(st, ds, now);
+    o.days.push(r);
+    if (WORKED.has(r.status)){ o.workDays++; o.paid += r.paid; o.worked += r.worked; }
+    if (r.ot > 0){ o.otDays.push({ ds, min:r.ot }); o.ot += r.ot; }
+    if (r.status === 'absent') o.absentDays.push(ds);
+    if (r.late){ o.lateDays.push({ ds, min:r.late }); o.lateMin += r.late; }
+    if (r.early) o.earlyDays.push({ ds, min:r.early });
+    if (r.status === 'leave') o.leaveDays.push(ds);
+    if (r.status === 'off' && r.regOff && ds <= todayStr()) o.restDays.push(ds);
+    if (r.status === 'noout') o.nooutDays.push(ds);
+    o.projGross += dayCost(st, r, true);
+    if (parseDate(ds).getDay() === 0){
+      const wh = weekHoliday(st, ds, now);
+      if (wh.eligible){ o.weeks.push(wh); if (wh.complete) o.holiday += wh.amount; o.projGross += wh.amount; }
+    }
+  }
+  const prem = cfg().otPremium ? 1.5 : 1;
+  o.base = Math.floor((o.paid - o.ot) * w / 60);
+  o.otPay = Math.floor(o.ot * w * prem / 60);
+  o.holiday = Math.floor(o.holiday);
+  o.gross = o.base + o.otPay + o.holiday;
+  o.projGross = Math.floor(o.projGross);
+  if (isMonthly(st)){   // 월급제: 월급을 근무한 날짜 비율로 (한 달 다 일하면 월급 그대로)
+    const full = Math.floor((+st.monthly || 0) * employedDays(st, ym) / n), today = todayStr();
+    o.base = ym < ymOf(today) ? full : Math.floor((+st.monthly || 0) * employedDays(st, ym, today) / n);
+    o.otPay = 0; o.holiday = 0; o.weeks = []; o.gross = o.base; o.projGross = full;
+  }
+  o.ded = deductions(st, o.gross);
+  o.net = o.gross - o.ded.total;
+  return o;
+}
+
+function costSeries(ym, now = Date.now()){
+  const n = daysIn(ym), today = todayStr(), list = staffForMonth(ym), out = [];
+  let ca = 0, cp = 0;
+  for (let d = 1; d <= n; d++){
+    const ds = `${ym}-${pad(d)}`, sun = parseDate(ds).getDay() === 0;
+    let a = 0, p = 0;
+    for (const st of list){
+      const r = dayCalc(st, ds, now);
+      if (ds <= today) a += dayCost(st, r, false);
+      p += dayCost(st, r, true);
+      if (sun){ const wh = weekHoliday(st, ds, now); if (wh.eligible){ if (wh.complete) a += wh.amount; p += wh.amount; } }
+    }
+    ca += a; cp += p;
+    out.push({ d, ds, actual: ds <= today ? ca : null, proj: cp });
+  }
+  return out;
+}
+
+function openPunch(st, now = Date.now()){
+  const today = todayStr();
+  for (const ds of [today, addDays(today, -1)]){
+    const p = getPunch(st.id, ds);
+    if (p && p.in && !p.out && p.kind !== 'leave' && now - p.in < 20*3600000) return p;
+  }
+  return null;
+}
+
+/* ===================== 저장소 ===================== */
+function punchRef(staffId, ds){ return S.db.collection(`months/${ymOf(ds)}/punches`).doc(`${staffId}_${ds}`); }
+function errMsg(e){
+  if (e?.code === 'quota_exceeded') return '저장 공간이 가득 찼어요. 오래된 기록을 정리해야 해요.';
+  if (e?.code === 'invalid_argument') return '이 계정으로는 저장할 권한이 없어요. 사장님 계정으로 로그인해 주세요.';
+  return '잠시 후 다시 시도해 주세요.';
+}
+async function write(fn){
+  if (!S.db){ toast('저장소에 연결되지 않았어요', 'claude.ai에 로그인한 상태로 열어 주세요.', 'warn'); throw new Error('nodb'); }
+  try { return await fn(); }
+  catch (e){
+    if (e?.code === 'unavailable'){ await new Promise(r => setTimeout(r, 600 + Math.random()*600)); try { return await fn(); } catch (e2){ e = e2; } }
+    toast('저장하지 못했어요', errMsg(e), 'warn'); throw e;
+  }
+}
+function ensureMonth(ym){
+  if (!S.db || S.monthSubs[ym]) return;
+  S.months[ym] = S.months[ym] || new Map();
+  S.monthSubs[ym] = S.db.collection(`months/${ym}/punches`).onSnapshot(snap => {
+    const m = new Map();
+    snap.docs.forEach(d => m.set(d.id, { id:d.id, ...d.data() }));
+    S.months[ym] = m;
+    S.monthLoaded[ym] = true;
+    if (!snap.metadata.fromCache) markConnected();
+    if (ym === ymOf(todayStr()) || ym === shiftYM(ymOf(todayStr()), -1)) detectEvents([...m.values()]);
+    scheduleRender();
+  }, e => { S.monthLoaded[ym] = true; console.warn('month', ym, e); scheduleRender(); });
+}
+function needMonth(ym){ ensureMonth(ym); ensureMonth(shiftYM(ym, -1)); }
+let connTimer = null;
+function markConnected(){ if (!S.connected){ S.connected = true; S.connNote = ''; clearTimeout(connTimer); renderBanner(); } }
+
+/* ===================== 알림 ===================== */
+function beep(kind){
+  if (!S.audio) return;
+  try {
+    const ctx = S.audio, t = ctx.currentTime;
+    const tones = kind === 'late' ? [660, 440, 660] : kind === 'ok' ? [880] : [740, 990];
+    tones.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, t + i*0.18); g.gain.exponentialRampToValueAtTime(0.25, t + i*0.18 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + i*0.18 + 0.16);
+      o.connect(g).connect(ctx.destination); o.start(t + i*0.18); o.stop(t + i*0.18 + 0.17);
+    });
+  } catch {}
+}
+function initAudio(){ if (!S.audio){ try { S.audio = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } else if (S.audio.state === 'suspended') S.audio.resume().catch(()=>{}); }
+function toast(title, body, tone = 'info', ms = 8000){
+  const el = document.createElement('div');
+  el.className = 'toast ' + tone;
+  el.innerHTML = `<b>${esc(title)}</b>${body ? `<span>${esc(body)}</span>` : ''}`;
+  el.onclick = () => el.remove();
+  $('#toasts').prepend(el);
+  setTimeout(() => el.remove(), ms);
+}
+const ownerWatching = () => S.mode === 'owner' && S.unlocked;
+function notify(title, body, tone){
+  if (!ownerWatching()) return;
+  toast(title, body, tone, 12000);
+  if (S.sound) beep(tone);
+  try { navigator.vibrate?.(tone === 'late' ? [120, 80, 120] : 80); } catch {}
+}
+function detectEvents(docs){
+  const now = Date.now();
+  for (const p of docs){
+    const sig = `${p.in||''}|${p.out||''}|${p.kind||''}`;
+    const prev = S.seen.get(p.id);
+    S.seen.set(p.id, sig);
+    if (!S.primed || prev === sig || p.edited) continue;
+    const st = staffById(p.staffId), name = st?.name || p.name || '직원';
+    const prevOut = prev ? prev.split('|')[1] : '';
+    if (p.out && !prevOut && now - p.out < 600000){
+      const r = st ? dayCalc(st, p.date, now) : null;
+      notify(`${name} 퇴근`, `${fmtT(p.out)} 퇴근${r ? ` · 오늘 ${fmtH(r.worked)} 근무` : ''}`, 'info');
+    } else if (p.in && !prev && now - p.in < 600000){
+      const late = p.lateMin || 0;
+      notify(late ? `${name} 지각 출근` : `${name} 출근`, `${fmtT(p.in)} 출근${p.sched ? ` · 예정 ${p.sched.start}` : ''}${late ? ` · ${late}분 늦음` : ''}`, late ? 'late' : 'ok');
+    }
+  }
+  S.primed = true;
+}
+function checkNotyet(){
+  if (!ownerWatching()) return;
+  const today = todayStr(), now = Date.now(), fresh = [];
+  for (const st of activeStaff()){
+    const r = dayCalc(st, today, now), key = `${st.id}_${today}`;
+    if (r.status === 'notyet' && !S.notified.has(key)){ S.notified.add(key); fresh.push({ st, r }); }
+  }
+  if (!fresh.length) return;
+  store.set('notified', JSON.stringify({ d:today, k:[...S.notified] }));
+  if (fresh.length > 2) notify(`${fresh.length}명 아직 미출근`, fresh.map(f => f.st.name).join(', '), 'late');
+  else fresh.forEach(f => notify(`${f.st.name} 지각 의심`, `예정 ${f.r.sc.start}인데 아직 출근 기록이 없어요`, 'late'));
+}
+function loadNotified(){ try { const o = JSON.parse(store.get('notified') || 'null'); if (o && o.d === todayStr()) S.notified = new Set(o.k); } catch {} }
+
+/* ===================== 휴대폰 메일 알림 =====================
+   가게 태블릿(출퇴근 화면)이 사장님 Gmail로 보내요. 사장님 화면을 닫아 둬도 태블릿만 켜져 있으면 돼요. */
+let mcpP = null;
+const getMcp = () => mcpP || (mcpP = window.claude?.use ? window.claude.use('mcp') : Promise.resolve(null));
+const mailAddrs = to => String(to || '').split(/[\s,;]+/).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+function mailErrText(e){
+  switch (e?.code){
+    case 'server_not_connected': return 'claude.ai 설정 → 커넥터에서 Gmail을 연결해 주세요.';
+    case 'needs_reauth': return 'Gmail 연결이 끊겼어요. claude.ai 설정 → 커넥터에서 Gmail을 다시 연결해 주세요.';
+    case 'selection_required': return 'Gmail 계정이 여러 개라 고르는 창이 떴어요. 태블릿에서 계정을 골라 주세요.';
+    case 'approval_required': case 'not_in_manifest': case 'consent_required': return '태블릿에서 메일 보내기를 아직 허락하지 않았어요. 태블릿에서 ‘시험 메일 보내기’를 눌러 허락해 주세요.';
+    case 'blocked_by_policy': return '계정 정책 때문에 Gmail로 보낼 수 없어요.';
+    case 'tool_error': return 'Gmail이 보내기를 거절했어요. 받는 주소를 확인해 주세요.';
+    case 'server_unavailable': case 'upstream_error': case 'rate_limited': return 'Gmail에 잠시 연결되지 않았어요. 인터넷을 확인해 주세요.';
+    case 'not_granted': case 'capability_disabled': case 'capability_removed': return '이 화면에서는 메일을 보낼 수 없어요. claude.ai에서 링크를 열어 주세요.';
+    default: return e?.message || '알 수 없는 문제로 보내지 못했어요.';
+  }
+}
+async function sendMail(subject, lines, opt = {}){
+  const m = opt.mail || cfg().mail, to = mailAddrs(m.to);
+  if (!opt.test && !(m.on && S.mode === 'kiosk')) return null;
+  const title = `[${cfg().storeName}] ${subject}`;
+  const log = (ok, err) => S.db?.doc('status/mail').set({ at:Date.now(), ok, subject:title, err: err || '' }).catch(() => {});
+  if (!to.length){ const err = '받을 메일 주소가 없어요. 설정에서 넣어 주세요.'; if (!opt.test) log(false, err); return { ok:false, err }; }
+  const mcp = await getMcp();
+  if (!mcp){ const err = mailErrText({ code:'not_granted' }); log(false, err); return { ok:false, err }; }
+  try {
+    const input = { to, subject:title, body: [...lines, '', '— 가게 타임카드 자동 알림 (끄기: 사장님 화면 → 현황 → 메일 알림 끄기)'].join('\n') };
+    if (opt.photo) input.attachments = [{ content: await blobB64(opt.photo.blob), filename: opt.photo.name, mimeType:'image/jpeg' }];
+    await mcp.callTool('Gmail', 'send_message', input, { cache:false });
+    log(true); return { ok:true };
+  } catch (e){ const err = mailErrText(e); log(false, err); return { ok:false, err }; }
+}
+const blobB64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
+function mailPunch(st, kind, t, info){
+  const m = cfg().mail;
+  if (!m.on || S.mode !== 'kiosk') return;
+  const photo = info.blob ? { blob: info.blob, name: `${kind === 'in' ? '출근' : '퇴근'}_${st.name}_${ymd(new Date(t)).slice(5).replace('-', '')}_${fmtT(t).replace(':', '')}.jpg` } : null;
+  const tail = [info.master && '사장님 마스터 번호로 대신 기록했어요.', info.blob && '찍은 사진을 첨부했어요.'].filter(Boolean);
+  if (kind === 'in'){
+    if (info.late ? !m.ev.late : !m.ev.in) return;
+    sendMail(`${st.name} ${info.late ? `지각 출근 ${fmtT(t)} (${info.late}분 늦음)` : `출근 ${fmtT(t)}`}`,
+      [`${st.name}${st.position ? ` (${st.position})` : ''}님이 ${fmtT(t)}에 출근했어요.`, info.sc ? `정해진 출근 시각: ${info.sc.start}` : '오늘은 정해진 근무가 없는 날이라 추가 근무로 기록했어요.', info.late ? `${info.late}분 늦었어요.` : '', ...tail]
+      .filter(Boolean), { photo });
+  } else if (m.ev.out){
+    sendMail(`${st.name} 퇴근 ${fmtT(t)}`, [`${st.name}님이 ${fmtT(t)}에 퇴근했어요.`, `오늘 인정 근무: ${fmtH(info.worked)}`, ...tail], { photo });
+  }
+}
+async function checkNotyetMail(){
+  const m = cfg().mail;
+  if (S.mode !== 'kiosk' || !m.on || !m.ev.notyet || !S.db || !S.ready.staff) return;
+  const today = todayStr(), now = Date.now(), fresh = [];
+  for (const st of activeStaff()){
+    const r = dayCalc(st, today, now), key = `${st.id}_${today}`;
+    if (r.status !== 'notyet' || S.mailed.has(key)) continue;
+    S.mailed.add(key);
+    try {   // 태블릿이 여러 대여도 한 번만 보내도록 저장소에 표시
+      const ref = S.db.collection(`months/${ymOf(today)}/mails`).doc(key);
+      if ((await ref.get()).exists) continue;
+      await ref.set({ at:now, kind:'notyet' });
+    } catch { continue; }
+    fresh.push({ st, r });
+  }
+  store.set('mailed', JSON.stringify({ d:today, k:[...S.mailed] }));
+  if (!fresh.length) return;
+  sendMail(fresh.length === 1 ? `${fresh[0].st.name} 지각 의심 (아직 미출근)` : `${fresh.length}명 아직 미출근`,
+    [...fresh.map(f => `· ${f.st.name}: 정해진 출근 ${f.r.sc.start}인데 ${fmtT(now)} 현재 출근 기록이 없어요.`), '', '연락해 보시거나, 쉬는 날이면 사장님 화면 → 출퇴근 기록에서 ‘휴무 처리’ 해 주세요.']);
+}
+/* ===================== 사진 인증 =====================
+   태블릿 카메라로 찍고, 사진 아래에 가게·이름·시각을 새겨서 assets 저장소에 올려요. 기록에는 사진 id만 남겨요. */
+let assetsP = null, camStream = null;
+const getAssets = () => assetsP || (assetsP = window.claude?.use ? window.claude.use('assets') : Promise.resolve(null));
+const mb = b => `${((b || 0) / 1048576).toFixed(1)}MB`;
+function stopCam(){ if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; } }
+function attachCam(){ const v = $('#camv'); if (v && camStream && v.srcObject !== camStream){ v.srcObject = camStream; v.play?.()?.catch?.(() => {}); } }
+async function startCam(){
+  const k = S.kiosk;
+  if (!navigator.mediaDevices?.getUserMedia){ k.cam = 'fail'; k.camErr = '이 화면에서는 바로 카메라를 켤 수 없어요.'; render(true); return; }
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ ideal:960 }, height:{ ideal:1280 } }, audio:false });
+    if (k.step !== 'photo'){ s.getTracks().forEach(t => t.stop()); return; }
+    camStream = s; k.cam = 'live';
+  } catch (e){
+    k.cam = 'fail';
+    k.camErr = e?.name === 'NotFoundError' ? '카메라를 찾지 못했어요.' : e?.name === 'NotAllowedError' ? '이 화면에서 카메라 사용이 막혀 있어요.' : '카메라를 켜지 못했어요.';
+  }
+  if (k.step === 'photo') render(true);
+}
+function stampPhoto(src, w0, h0, st, kind, t){
+  const sc = Math.min(1, 720 / Math.max(w0, h0)), w = Math.round(w0*sc), h = Math.round(h0*sc);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0, w, h);
+  const u = Math.max(w, h*0.75) / 20, band = u*6;
+  const grd = g.createLinearGradient(0, h - band, 0, h);
+  grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,.78)');
+  g.fillStyle = grd; g.fillRect(0, h - band, w, band);
+  g.fillStyle = '#fff';
+  g.font = `600 ${Math.round(u*2.1)}px "IBM Plex Mono", monospace`; g.fillText(fmtClock(t), u*0.8, h - u*2.5);
+  g.font = `600 ${Math.round(u*0.85)}px "IBM Plex Sans KR", sans-serif`;
+  g.fillText(fmtDateLong(ymd(new Date(t))), u*0.8, h - u*1.45);
+  g.fillText(`${cfg().storeName} · ${st.name} · ${kind === 'in' ? '출근' : '퇴근'}`, u*0.8, h - u*0.5);
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('blob')), 'image/jpeg', 0.78));
+}
+async function uploadPhoto(blob){
+  const a = await getAssets();
+  if (!a) return { err:'사진 저장을 쓸 수 없는 화면이었어요' };
+  for (let i = 0; i < 2; i++){
+    try { const r = await a.upload(blob, { type:'image/jpeg' }); return { id:r.id }; }
+    catch (e){
+      if (e?.code === 'store_unavailable' && i === 0){ await new Promise(r => setTimeout(r, 800 + Math.random()*700)); continue; }
+      return { err: e?.code === 'quota_or_state' ? '사진 저장 공간이 가득 찼어요' : e?.code === 'not_granted' ? '사진 저장 권한이 없었어요' : '사진을 저장하지 못했어요' };
+    }
+  }
+  return { err:'사진을 저장하지 못했어요' };
+}
+async function loadImage(file){
+  if (window.createImageBitmap){ try { return await createImageBitmap(file, { imageOrientation:'from-image' }); } catch {} }
+  const url = URL.createObjectURL(file);
+  try { return await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; }); }
+  finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+}
+async function snapCam(){
+  const k = S.kiosk, v = $('#camv'), st = staffById(k.staffId);
+  if (k.busy || !st || !v || !v.videoWidth) return;
+  const t = Date.now();
+  try { const blob = await stampPhoto(v, v.videoWidth, v.videoHeight, st, k.kind, t); stopCam(); await kioskPunch(k.kind, { blob, t }); }
+  catch { k.camErr = '사진을 만들지 못했어요. 다시 눌러 주세요.'; render(true); }
+}
+async function fileShot(file){
+  const k = S.kiosk, st = staffById(k.staffId);
+  if (k.busy || !st) return;
+  const t = Date.now();
+  try {
+    const im = await loadImage(file);
+    const blob = await stampPhoto(im, im.width || im.naturalWidth, im.height || im.naturalHeight, st, k.kind, t);
+    const old = file.lastModified && t - file.lastModified > 3*60000;   // 앨범에서 고른 옛날 사진일 수 있음
+    await kioskPunch(k.kind, { blob, t, note: old ? `방금 찍은 사진이 아닐 수 있어요 (파일 시각 ${fmtT(file.lastModified)})` : '' });
+  } catch { k.camErr = '사진을 읽지 못했어요. 다시 찍어 주세요.'; render(true); }
+}
+function photoBits(p, kind){
+  if (!p) return '';
+  const id = p[kind + 'Photo'], note = p[kind + 'PhotoNote'];
+  const cap = `${p.name || ''} · ${fmtMD(p.date)} ${kind === 'in' ? '출근' : '퇴근'} ${fmtT(p[kind])}${note ? ` · ${note}` : ''}`;
+  if (id) return `<button class="thumbbtn" data-act="photo" data-id="${esc(id)}" data-cap="${esc(cap)}" aria-label="${esc(cap)} 사진 보기"><img src="/_blob/${esc(id)}" alt="" loading="lazy" onerror="this.parentNode.classList.add('gone')"></button>${note ? ` <span class="chip amber" title="${esc(note)}">확인 필요</span>` : ''}`;
+  if (id === null) return ` <span class="chip red" title="${esc(note || '')}">사진 없음</span>`;
+  return '';
+}
+function loadMailed(){ try { const o = JSON.parse(store.get('mailed') || 'null'); if (o && o.d === todayStr()) S.mailed = new Set(o.k); } catch {} }
+function mailStatusLine(){
+  const s = S.mailStatus;
+  if (!s) return '아직 보낸 메일이 없어요.';
+  const when = todayStr() === ymd(new Date(s.at)) ? fmtT(s.at) : `${fmtMD(ymd(new Date(s.at)))} ${fmtT(s.at)}`;
+  return s.ok ? `마지막으로 보낸 메일: ${when} · ${esc(s.subject)}` : `<span style="color:var(--red)">${when} 메일을 못 보냈어요 — ${esc(s.err)}</span>`;
+}
+
+/* ===================== 그리기 ===================== */
+let renderQueued = false;
+function scheduleRender(){ if (renderQueued) return; renderQueued = true; setTimeout(() => { renderQueued = false; render(false); }, 40); }
+function render(force){
+  renderTop(); renderBanner();
+  if (!force && (S.editing || (S.mode === 'kiosk' && ['photo', 'contract'].includes(S.kiosk.step)))) return;   // 사진 찍는 중에는 카메라 화면을 다시 그리지 않음
+  const v = $('#view');
+  if (S.mode === 'kiosk'){ v.innerHTML = kioskView(); attachCam(); initSigs(); }
+  else if (!S.unlocked) v.innerHTML = lockView();
+  else v.innerHTML = ({ now:nowView, records:recordsView, timecard:timecardView, payroll:payrollView, contract:contractView, staff:staffView }[S.tab] || nowView)();
+  initSigs();
+}
+function attentionCount(){
+  const today = todayStr(), now = Date.now();
+  return activeStaff().reduce((n, st) => { const r = dayCalc(st, today, now); return n + (r.status === 'notyet' || r.late ? 1 : 0); }, 0);
+}
+function renderTop(){
+  const c = cfg(), owner = S.mode === 'owner' && S.unlocked, att = owner ? attentionCount() : 0;
+  $('#top').innerHTML = `
+    <div class="brand"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? '출퇴근 화면' : '사장님 화면'}</small></div></div>
+    ${owner ? `<nav class="tabs">${TABS.map(([k, l]) => `<button data-act="tab" data-v="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'now' && att ? `<i class="badge">${att}</i>` : ''}</button>`).join('')}</nav>` : ''}
+    ${S.mode === 'kiosk' ? `<button class="ghost" data-act="toOwner">사장님 화면</button>` : `<button class="ghost" data-act="toKiosk">출퇴근 화면으로</button>`}`;
+}
+function renderBanner(){
+  let msg = '';
+  if (S.noDb) msg = '저장소에 연결되지 않았어요. claude.ai에 사장님 계정으로 로그인한 상태에서 이 페이지를 열어야 출퇴근 기록이 저장돼요.';
+  else if (S.connNote) msg = S.connNote;
+  $('#banner').textContent = msg;
+}
+const loadingNote = () => `<div class="empty">기록을 불러오는 중이에요…</div>`;
+
+function statusChips(r){
+  const c = [];
+  const m = { done:['정상','ok'], working:['근무 중','blue'], extra:[r.regOff ? '휴무일 근무' : '추가 근무','blue'], absent:['결근','red'], notyet:['미출근','amber'], leave:['휴무 처리',''], noout:['퇴근 누락','amber'], upcoming:['예정','faint'], off: r.regOff ? ['정기 휴무',''] : ['근무 기간 아님','faint'] }[r.status];
+  if (r.late) c.push(`<span class="chip red">지각 ${r.late}분</span>`);
+  if (r.status !== 'done' || !r.late) c.push(`<span class="chip ${m[1]}">${m[0]}</span>`);
+  if (r.early) c.push(`<span class="chip amber">조퇴 ${r.early}분</span>`);
+  if (r.ot && r.status === 'done') c.push(`<span class="chip blue">추가 ${fmtHM(r.ot)}</span>`);
+  if (r.p?.inBy === 'master' || r.p?.outBy === 'master') c.push(`<span class="chip amber" title="마스터 번호로 기록: ${[r.p.inBy === 'master' && '출근', r.p.outBy === 'master' && '퇴근'].filter(Boolean).join('·')}">사장님 대리 입력</span>`);
+  if (r.p?.edited) c.push(`<span class="chip faint" title="${esc(r.p.note || '사장님이 수정한 기록')}">수정됨</span>`);
+  return c.join(' ');
+}
+function schedSummary(sched){
+  const groups = new Map();
+  for (const i of WEEK_ORDER){ const s = sched?.[i]; if (s && s.on){ const k = `${s.start}–${s.end}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(DAYS[i]); } }
+  if (!groups.size) return '정해진 근무 없음';
+  const rest = WEEK_ORDER.filter(i => !(sched?.[i]?.on)).map(i => DAYS[i]);
+  return [...groups].map(([k, d]) => `${d.join('·')} ${k}`).join(' / ') + (rest.length ? ` · ${rest.join('·')} 정기 휴무` : '');
+}
+
+/* ---------- 출퇴근 화면 (키오스크) ---------- */
+function kioskStatus(st, now){
+  const today = todayStr(), op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
+  if (op) return { cls: op.lateMin ? 'late' : 'working', text:`출근 ${fmtT(op.in)} · 근무 중` };
+  if (tp && tp.out) return { cls:'done', text:`퇴근 ${fmtT(tp.out)}` };
+  if (tp && tp.kind === 'leave') return { cls:'', text:'오늘 휴무' };
+  if (sc) return { cls: now > at(today, sc.start) + cfg().graceMin*60000 ? 'wait' : '', text:`오늘 ${sc.start}–${sc.end}` };
+  return { cls:'', text: isRegularOff(st, today) ? '오늘 정기 휴무' : '오늘 근무 없음' };
+}
+function mySummary(st){
+  const o = monthSummary(st, ymOf(todayStr()));
+  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">이번 달 내 근무 (자동 계산)</div>
+    일한 시간 <b>${fmtH(o.paid)}</b> · 결근 <b>${o.absentDays.length}일</b> · 지각 <b>${o.lateDays.length}회</b><br>
+    추가근무날 <b>${otDaysText(o)}</b>${o.ot ? ` · 추가근무시간 <b>${fmtH(o.ot)}</b>` : ''}</div>`;
+}
+function kioskView(){
+  const k = S.kiosk, now = Date.now(), today = todayStr();
+  const clock = `<div class="kclock"><div class="kdate" id="kdate">${fmtDateLong(today)}</div><div class="ktime mono" id="ktime">${fmtClock(now)}</div></div>`;
+  if (S.noDb) return clock + `<div class="empty"><b>기록을 저장할 수 없어요</b>위 안내처럼 claude.ai에 로그인한 상태에서 열어 주세요.</div>`;
+  if (!S.ready.staff) return clock + loadingNote();
+  const list = activeStaff();
+  if (k.step === 'list'){
+    if (!list.length) return clock + `<div class="empty"><b>아직 등록된 직원이 없어요</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
+    return clock + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}</p>
+      <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now); return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${esc(st.position || '직원')}</small><em>${i.text}</em></button>`; }).join('')}</div>`;
+  }
+  const st = staffById(k.staffId);
+  if (!st){ resetKiosk(); return kioskView(); }
+  if (k.step === 'pin') return clock + `<div class="kpanel ${k.err ? 'shake' : ''}">${pinPad(`${esc(st.name)}님`, '개인 번호 4자리를 입력하세요', k.pin, 'staff', k.err)}</div>`;
+  if (k.step === 'action'){
+    const op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
+    let body;
+    if (op){
+      const r = dayCalc(st, op.date, now);
+      body = `<p>출근 ${fmtT(op.in)} · 지금까지 ${fmtH(r.worked)} 근무</p>${op.sched ? `<p>퇴근 예정 ${op.sched.end}</p>` : ''}
+        <button class="bigbtn out" data-act="kOut" ${k.busy ? 'disabled' : ''}>퇴근하기</button>`;
+    } else if (tp && tp.out){
+      body = `<p>오늘은 ${fmtT(tp.in)} 출근, ${fmtT(tp.out)} 퇴근으로 이미 기록됐어요.<br>잘못됐다면 사장님께 수정을 요청하세요.</p>`;
+    } else {
+      body = `<p>${sc ? `오늘 예정 ${sc.start}–${sc.end}` : (isRegularOff(st, today) ? '오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.' : '오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)')}</p>
+        <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>출근하기</button>`;
+    }
+    return clock + `<div class="kpanel"><h2>${esc(st.name)}님</h2>${k.master ? '<p><span class="chip amber">사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요</span></p>' : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">처음으로</button></div>`;
+  }
+  if (k.step === 'contract'){ const html = kioskContract(st); if (html) return html; resetKiosk(); return kioskView(); }
+  if (k.step === 'photo'){
+    const word = k.kind === 'in' ? '출근' : '퇴근', live = k.cam === 'live', fail = k.cam === 'fail';
+    return clock + `<div class="kpanel"><h2>${esc(st.name)}님 ${word} 사진</h2>
+      <p>${k.busy ? '저장하는 중이에요. 잠시만 기다려 주세요…' : '얼굴이 잘 보이게 화면을 봐 주세요'}</p>
+      ${fail ? `<p class="err">${esc(k.camErr)}${k.camErr.endsWith('요.') ? ' 아래 버튼으로 찍어 주세요.' : ''}</p>`
+        : `<div class="cam"><video id="camv" autoplay playsinline muted></video>
+          <div class="camstamp"><b id="camtime">${fmtClock(now)}</b>${esc(cfg().storeName)} · ${esc(st.name)} · ${word}</div>
+          ${live ? '' : `<div class="cammsg">${k.busy ? '' : '카메라를 켜는 중…'}</div>`}</div>
+          ${k.camErr && live ? `<p class="err">${esc(k.camErr)}</p>` : ''}`}
+      ${live && !k.busy ? `<button class="bigbtn ${k.kind === 'out' ? 'out' : ''}" data-act="kSnap">찰칵! ${word}하기</button>` : ''}
+      ${fail && !k.busy ? `<label class="bigbtn filebtn ${k.kind === 'out' ? 'out' : ''}"><input type="file" id="camFile" accept="image/*" capture="user">카메라로 찍고 ${word}하기</label>
+        <button class="linkbtn" data-act="kNoPhoto">사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)</button>` : ''}
+      ${k.busy ? '' : '<button class="linkbtn" data-act="kCancel">처음으로</button>'}</div>`;
+  }
+  if (k.step === 'done'){
+    const res = k.result || {};
+    return clock + `<div class="kpanel"><h2>${esc(st.name)}님</h2>
+      <div class="stamp ${res.late ? 'red' : ''}">${res.kind === 'in' ? '출근' : res.kind === 'contract' ? '서명' : '퇴근'}<b>${fmtT(res.t)}</b></div>
+      <p class="${res.late ? 'err' : ''}">${res.msg || ''}</p>
+      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${res.photoErr ? `<p class="err">사진: ${esc(res.photoErr)} — 기록은 저장됐어요.</p>` : ''}${mySummary(st)}
+      <button class="linkbtn" data-act="kCancel">확인</button></div>`;
+  }
+  return clock;
+}
+function pinPad(title, sub, val, ctx, err){
+  const keys = ['1','2','3','4','5','6','7','8','9','back','0','cancel'];
+  return `<h2>${title}</h2><p>${sub}</p>
+    <div class="pindots">${[0,1,2,3].map(i => `<i class="${i < val.length ? 'on' : ''}"></i>`).join('')}</div>
+    ${err ? `<p class="err">${esc(err)}</p>` : ''}
+    <div class="pad">${keys.map(x => `<button data-act="pad" data-ctx="${ctx}" data-v="${x}" class="${x.length > 1 ? 'fn' : ''}">${x === 'back' ? '지우기' : x === 'cancel' ? '취소' : x}</button>`).join('')}</div>`;
+}
+function resetKiosk(){
+  stopCam();
+  if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
+  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null });
+}
+function lockView(){
+  return `<div class="kpanel ${S.lockErr ? 'shake' : ''}" style="margin-top:24px">${pinPad('사장님 확인', '관리 번호 4자리 (처음 번호는 0000)', S.lockPin, 'owner', S.lockErr)}
+    <label class="check" style="justify-content:center;margin-top:14px"><input type="checkbox" id="rememberDev" ${S.remember ? 'checked' : ''}> 이 기기는 사장님 기기로 기억하기</label>
+    <p class="hint">가게 태블릿에서는 체크하지 마세요. 사장님 휴대폰에서만 체크하면 다음부터 번호 없이 열려요.</p></div>`;
+}
+
+/* ---------- 현황 ---------- */
+function buildFeed(today, now){
+  const items = [];
+  for (const st of staffForDay(today)){
+    const p = getPunch(st.id, today), r = dayCalc(st, today, now);
+    if (p && p.in) items.push({ t:p.in, cls: r.late ? 'late' : '', text:`<b>${esc(st.name)}</b> 출근${r.late ? ` — ${r.late}분 지각 (예정 ${r.sc.start})` : ''}` });
+    if (p && p.out) items.push({ t:p.out, cls:'', text:`<b>${esc(st.name)}</b> 퇴근 — ${fmtH(r.worked)} 근무${r.early ? ` · ${r.early}분 일찍` : ''}` });
+    if (r.status === 'notyet') items.push({ t:r.sStart + cfg().graceMin*60000, cls:'wait', text:`<b>${esc(st.name)}</b> 아직 출근 기록 없음 (예정 ${r.sc.start}) — 지각 의심` });
+    if (r.status === 'absent') items.push({ t:r.sEnd, cls:'late', text:`<b>${esc(st.name)}</b> 오늘 근무 시간이 끝났는데 출근 기록이 없어요 (결근)` });
+    const y = addDays(today, -1), ry = dayCalc(st, y, now);
+    if (ry.status === 'noout') items.push({ t:ry.p.in, cls:'wait', text:`<b>${esc(st.name)}</b> 어제 퇴근 기록이 없어요 → ‘출퇴근 기록’에서 고쳐 주세요` });
+    const yp = getPunch(st.id, y);
+    if (yp && yp.out && ymd(new Date(yp.out)) === today) items.push({ t:yp.out, cls:'', text:`<b>${esc(st.name)}</b> 퇴근 (어제 시작한 근무)` });
+  }
+  return items.sort((a, b) => b.t - a.t);
+}
+function nowView(){
+  const now = Date.now(), today = todayStr();
+  if (!S.ready.staff) return loadingNote();
+  const list = activeStaff();
+  if (!list.length) return `<div class="empty"><b>직원을 먼저 등록해 주세요</b>‘직원·설정’ 탭에서 이름, 개인 번호, 시급, 요일별 근무 시간을 넣으면 출퇴근 화면에 나타나요.<br><br><button class="btn pri" data-act="tab" data-v="staff">직원 등록하러 가기</button></div>`;
+  const rows = list.map(st => ({ st, r: dayCalc(st, today, now), op: openPunch(st, now) }));
+  const working = rows.filter(x => x.op).length;
+  const late = rows.filter(x => x.r.late).length;
+  const notyet = rows.filter(x => x.r.status === 'notyet').length;
+  const sched = rows.filter(x => x.r.sc).length;
+  const costToday = rows.reduce((t, x) => t + dayCost(x.st, x.r, false), 0);
+  const feed = buildFeed(today, now);
+  const order = { notyet:0, working:1, upcoming:2, done:3, extra:3, absent:0, noout:1, leave:4, off:5 };
+  rows.sort((a, b) => (order[a.r.status] ?? 9) - (order[b.r.status] ?? 9));
+  return `
+  ${reportReminder()}
+  <div class="alertbar">
+    <span>${S.sound ? '🔔 <b>소리 알림 켜짐</b>' : '이 화면을 켜 두면 직원이 출근·퇴근할 때, 그리고 <b>정해진 시간이 지나도 출근하지 않으면</b> 알림이 떠요.'}</span>
+    <span class="spacer"></span>
+    <button class="btn sm ${S.sound ? '' : 'pri'}" data-act="sound">${S.sound ? '소리 끄기' : '소리 알림 켜기'}</button>
+  </div>
+  ${(() => { const m = cfg().mail; return `<div class="alertbar mailbar ${m.on ? 'on' : ''}">
+    <span>📱 <b>휴대폰 메일 알림 ${m.on ? '켜짐' : '꺼짐'}</b> — ${m.on ? `${esc(mailAddrs(m.to).join(', '))}(으)로 ${[m.ev.in && '출근', m.ev.late && '지각 출근', m.ev.notyet && '지각 의심', m.ev.out && '퇴근'].filter(Boolean).join('·') || '보낼 항목 없음'} 소식을 보내요. 가게 태블릿이 ‘출퇴근 화면’으로 켜져 있어야 해요.` : '켜면 이 화면을 닫아 둬도 출근·지각 소식이 메일로 와요.'}
+      <small class="mailst">${mailStatusLine()}</small></span>
+    <span class="spacer"></span>
+    <button class="btn sm" data-act="mailSet">메일 설정</button>
+    <button class="btn sm ${m.on ? '' : 'pri'}" role="switch" aria-checked="${m.on}" data-act="mailToggle">${m.on ? '메일 알림 끄기' : '메일 알림 켜기'}</button>
+  </div>`; })()}
+  <div class="stats">
+    <div class="stat blue"><small>지금 근무 중</small><b>${working}</b><em> / 오늘 예정 ${sched}명</em></div>
+    <div class="stat ${late ? 'red' : ''}"><small>오늘 지각</small><b>${late}</b><em>명</em></div>
+    <div class="stat ${notyet ? 'amber' : ''}"><small>아직 미출근</small><b>${notyet}</b><em>명 (지각 의심)</em></div>
+    <div class="stat"><small>오늘 인건비 (지금까지)</small><b>${num(costToday)}</b><em>원</em></div>
+  </div>
+  <div class="cols">
+    <section class="panel"><h3>오늘 근무 현황 <small>${fmtDateLong(today)}</small></h3>
+      <div class="board">${rows.map(({ st, r, op }) => {
+        const p = op || r.p;
+        const dotc = r.status === 'notyet' || r.status === 'absent' ? 'late' : r.late ? 'late' : op ? 'working' : r.status === 'done' ? 'done' : '';
+        const times = p && p.in ? `${fmtT(p.in)} → ${p.out ? fmtT(p.out, p.date) : '근무 중'}` : '';
+        return `<div class="bitem"><span class="dot ${dotc}"></span><div><b>${esc(st.name)}</b> <span class="small muted">${esc(st.position || '')}</span>
+          <div class="sub">${r.sc ? `예정 ${r.sc.start}–${r.sc.end}` : '정해진 근무 없음'}${times ? ` · 실제 ${times}` : ''}${op ? ` · ${fmtH(dayCalc(st, op.date, now).worked)}째` : ''}</div>
+          ${p && (p.inPhoto !== undefined || p.outPhoto !== undefined) ? `<div class="sub" style="margin-top:4px">${p.inPhoto !== undefined ? `출근${photoBits(p, 'in')}` : ''}${p.outPhoto !== undefined ? ` &nbsp;퇴근${photoBits(p, 'out')}` : ''}</div>` : ''}</div>
+          <div>${op && op.date !== today ? '<span class="chip blue">근무 중 (어제부터)</span>' : statusChips(r)}</div></div>`;
+      }).join('')}</div>
+    </section>
+    <section class="panel"><h3>오늘 알림 <small>${feed.length}건</small></h3>
+      ${feed.length ? `<ul class="feed">${feed.map(f => `<li class="${f.cls}"><time>${fmtT(f.t)}</time><span>${f.text}</span></li>`).join('')}</ul>` : '<p class="muted small">아직 오늘 기록이 없어요.</p>'}
+    </section>
+  </div>`;
+}
+
+/* ---------- 출퇴근 기록 (일·월·년) ---------- */
+function recordsView(){
+  const sub = S.recSub;
+  let nav = '', body = '';
+  if (sub === 'day'){
+    needMonth(ymOf(S.viewDate));
+    nav = `<div class="nav"><button data-act="dayShift" data-v="-1" aria-label="전날">‹</button><input type="date" id="dayPick" value="${S.viewDate}" class="btn" style="padding:5px 8px"><button data-act="dayShift" data-v="1" aria-label="다음날">›</button><button class="btn sm" data-act="dayToday">오늘</button></div>`;
+    body = dayTable(S.viewDate);
+  } else if (sub === 'month'){
+    needMonth(S.month);
+    nav = monthNav();
+    body = monthGrid(S.month);
+  } else {
+    for (let m = 1; m <= 12; m++) needMonth(`${S.year}-${pad(m)}`);
+    nav = `<div class="nav"><button data-act="yearShift" data-v="-1" aria-label="이전 해">‹</button><b>${S.year}년</b><button data-act="yearShift" data-v="1" aria-label="다음 해">›</button></div>`;
+    body = yearTable(S.year);
+  }
+  return `<div class="sec-head"><h2>출퇴근 기록</h2>
+    <div class="seg">${[['day','일별'],['month','월별'],['year','연별']].map(([k, l]) => `<button data-act="recSub" data-v="${k}" class="${sub === k ? 'on' : ''}">${l}</button>`).join('')}</div>${nav}</div>${body}`;
+}
+function monthNav(){ return `<div class="nav"><button data-act="monthShift" data-v="-1" aria-label="이전 달">‹</button><b>${fmtYM(S.month)}</b><button data-act="monthShift" data-v="1" aria-label="다음 달">›</button></div>`; }
+function dayTable(ds){
+  if (!S.monthLoaded[ymOf(ds)]) return loadingNote();
+  const now = Date.now(), list = staffForDay(ds);
+  if (!list.length) return `<div class="empty">등록된 직원이 없어요.</div>`;
+  const rows = list.map(st => {
+    const r = dayCalc(st, ds, now), key = `punch:${st.id}|${ds}`;
+    if (S.editing === key){
+      const p = r.p || {};
+      const tin = p.in ? fmtT(p.in).replace('⁺¹', '') : (r.sc?.start || '');
+      const tout = p.out ? fmtT(p.out).replace('⁺¹', '') : '';
+      return `<tr class="edit"><td><b>${esc(st.name)}</b></td><td colspan="6">
+        <div class="inl">
+          <label>출근<input type="time" id="ed-in" value="${tin}"></label>
+          <label>퇴근<input type="time" id="ed-out" value="${tout}"></label>
+          <label style="flex:1;min-width:160px">메모 (수정 사유)<input id="ed-note" value="${esc(p.note || '')}" placeholder="예: 퇴근 버튼 누르는 걸 잊음"></label>
+        </div>
+        <p class="hint">퇴근이 출근보다 이른 시각이면 다음 날 퇴근으로 계산해요. 결근이 아니라 쉬기로 한 날이면 ‘휴무로 처리’를 누르세요.</p>
+        <div class="row" style="margin-top:8px"><button class="btn pri sm" data-act="saveEdit">저장</button><button class="btn sm" data-act="leaveEdit">휴무로 처리</button>${r.p ? '<button class="btn danger sm" data-act="delEdit">기록 삭제</button>' : ''}<button class="btn sm" data-act="cancelEdit">취소</button></div>
+      </td></tr>`;
+    }
+    return `<tr><td><b>${esc(st.name)}</b><div class="small muted">${esc(st.position || '')}</div></td>
+      <td class="mono">${r.sc ? `${r.sc.start}–${r.sc.end}` : '—'}</td>
+      <td class="mono ${r.late ? 'late' : ''}">${r.p?.in ? fmtT(r.p.in) : '—'}${photoBits(r.p, 'in')}</td>
+      <td class="mono">${r.p?.out ? fmtT(r.p.out, ds) : r.running ? '근무 중' : '—'}${photoBits(r.p, 'out')}</td>
+      <td class="mono r">${WORKED.has(r.status) ? fmtHM(r.paid) : '—'}</td>
+      <td>${statusChips(r)}</td>
+      <td class="r"><button class="btn sm" data-act="editPunch" data-id="${st.id}" data-ds="${ds}">수정</button></td></tr>`;
+  }).join('');
+  return `<section class="panel"><h3>${fmtDateLong(ds)}</h3><div class="tscroll"><table class="t">
+    <thead><tr><th>직원</th><th>예정</th><th>출근</th><th>퇴근</th><th class="r">인정 시간</th><th>상태</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="hint">인정 시간 = 실제 근무 − 휴게시간. ${cfg().earlyClamp ? '정해진 시간보다 일찍 와도 정해진 출근 시각부터 계산해요. ' : ''}추가근무는 ${cfg().otUnit}분 단위로 인정해요.</p></section>`;
+}
+function cellOf(r){
+  switch (r.status){
+    case 'done': return r.late ? ['c-late', (r.paid/60).toFixed(1)] : ['c-done', (r.paid/60).toFixed(1)];
+    case 'working': return ['c-extra', '근무'];
+    case 'extra': return ['c-extra', (r.paid/60).toFixed(1)];
+    case 'absent': return ['c-absent', '결'];
+    case 'notyet': return ['c-wait', '미'];
+    case 'noout': return ['c-wait', '누락'];
+    case 'leave': return ['c-leave', '휴'];
+    case 'upcoming': return ['c-sched', '·'];
+    default: return r.regOff ? ['c-rest', '휴무'] : ['c-off', ''];
+  }
+}
+function monthGrid(ym){
+  if (!S.monthLoaded[ym]) return loadingNote();
+  const now = Date.now(), n = daysIn(ym), list = staffForMonth(ym);
+  if (!list.length) return `<div class="empty">이 달에 기록된 직원이 없어요.</div>`;
+  const head = Array.from({ length:n }, (_, i) => { const ds = `${ym}-${pad(i+1)}`, w = parseDate(ds).getDay(); return `<th class="${w === 0 || w === 6 ? 'we' : ''}">${i+1}<br>${DAYS[w]}</th>`; }).join('');
+  const body = list.map(st => {
+    const o = monthSummary(st, ym, now);
+    return `<tr><td class="name">${esc(st.name)}</td>${o.days.map(r => { const [c, t] = cellOf(r); return `<td class="${c}"><button data-act="gotoDay" data-ds="${r.ds}" title="${r.ds}">${t}</button></td>`; }).join('')}
+      <td class="tot">${fmtH(o.paid)}<div class="small muted">결근 ${o.absentDays.length} · 지각 ${o.lateDays.length}</div></td></tr>`;
+  }).join('');
+  return `<section class="panel"><div class="tscroll"><table class="mgrid"><thead><tr><th class="name">직원</th>${head}<th>합계</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="legend"><span><i class="c-done"></i>정상 (숫자 = 인정 시간)</span><span><i class="c-late"></i>지각</span><span><i class="c-absent"></i>결근</span><span><i class="c-extra"></i>추가 근무 / 근무 중</span><span><i class="c-wait"></i>미출근·퇴근 누락</span><span>휴무 = 정기 휴무(근무표에서 쉬는 요일)</span><span>휴 = 근무일을 휴무 처리</span><span><i class="c-sched"></i>예정</span></div>
+    <p class="hint">날짜 칸을 누르면 그날 기록을 보고 고칠 수 있어요.</p></section>`;
+}
+function yearTable(y){
+  const months = Array.from({ length:12 }, (_, i) => `${y}-${pad(i+1)}`);
+  if (!months.every(m => S.monthLoaded[m])) return loadingNote();
+  const now = Date.now(), ids = new Set();
+  months.forEach(m => staffForMonth(m).forEach(s => ids.add(s.id)));
+  const list = S.staff.filter(s => ids.has(s.id));
+  if (!list.length) return `<div class="empty">이 해에 기록된 직원이 없어요.</div>`;
+  const tot = months.map(() => ({ min:0, pay:0 }));
+  const rows = list.map(st => {
+    let tm = 0, tp = 0;
+    const cells = months.map((m, i) => {
+      const o = monthSummary(st, m, now);
+      tm += o.paid; tp += o.gross; tot[i].min += o.paid; tot[i].pay += o.gross;
+      return o.paid || o.gross ? `<td class="r mono">${fmtHM(o.paid)}<div class="small muted">${num(o.gross)}</div></td>` : '<td class="r muted">—</td>';
+    }).join('');
+    return `<tr><td><b>${esc(st.name)}</b></td>${cells}<td class="r mono"><b>${fmtHM(tm)}</b><div class="small">${won(tp)}</div></td></tr>`;
+  }).join('');
+  const all = tot.reduce((a, t) => ({ min:a.min + t.min, pay:a.pay + t.pay }), { min:0, pay:0 });
+  return `<section class="panel"><div class="tscroll"><table class="t"><thead><tr><th>직원</th>${months.map((m, i) => `<th class="r">${i+1}월</th>`).join('')}<th class="r">합계</th></tr></thead>
+    <tbody>${rows}</tbody><tfoot><tr><td>합계</td>${tot.map(t => `<td class="r mono">${t.min ? fmtHM(t.min) : '—'}<div class="small">${t.pay ? num(t.pay) : ''}</div></td>`).join('')}<td class="r mono">${fmtHM(all.min)}<div class="small">${won(all.pay)}</div></td></tr></tfoot></table></div>
+    <p class="hint">위 숫자 = 인정 근무시간(시:분), 아래 숫자 = 그달 지급총액(원, 공제 전).</p></section>`;
+}
+
+/* ---------- 근무 집계 (타임카드) ---------- */
+function tcText(o){
+  return `${o.st.name} ${fmtYM(o.ym)} 근무: 일한 시간 ${fmtH(o.paid)} / 결근 ${o.absentDays.length}일 / 추가근무날 ${otDaysText(o)} / 추가근무시간 ${fmtH(o.ot)} / 지각 ${o.lateDays.length}회(${o.lateMin}분) / 정기 휴무 ${o.restDays.length}일`;
+}
+function timecardView(){
+  needMonth(S.month);
+  const head = `<div class="sec-head"><h2>근무 집계</h2>${monthNav()}</div>`;
+  if (!S.monthLoaded[S.month] || !S.ready.staff) return head + loadingNote();
+  const now = Date.now(), list = staffForMonth(S.month);
+  if (!list.length) return head + `<div class="empty">이 달에 기록된 직원이 없어요.</div>`;
+  const ongoing = S.month >= ymOf(todayStr());
+  return head + `<p class="muted small" style="margin:-6px 0 14px">직원들이 손으로 계산하던 타임카드를 자동으로 정리했어요.${ongoing ? ' 이번 달은 오늘까지 기준이에요.' : ''}</p>
+  <div class="alertbar mailbar"><span>📮 월말에 세무사 사무실에 보내는 <b>급여 내역</b>은 ‘인건비·급여’ 탭에서 정리하고 보내요.</span><span class="spacer"></span><button class="btn sm pri" data-act="rpOpen">세무사 전달용 급여 내역</button></div>
+  <div class="tcs">${list.map(st => {
+    const o = monthSummary(st, S.month, now);
+    const today = todayStr(), shown = o.days.filter(r => r.status !== 'upcoming' && (r.status !== 'off' || (r.regOff && r.ds <= today)));
+    return `<article class="tc">
+      <header><b>${esc(st.name)}</b><small>${esc(st.position || '')} · 시급 ${num(st.wage)}원</small></header>
+      <div class="tcline">
+        <span>일한 시간 <b>${fmtH(o.paid)}</b></span> /
+        <span>결근 <b>${o.absentDays.length}일</b></span> /
+        <span>추가근무날 <b>${otDaysText(o)}</b></span> /
+        <span>추가근무시간 <b>${fmtH(o.ot)}</b></span>
+      </div>
+      <div class="tcmeta">
+        <div><small>근무일수</small><b>${o.workDays}일</b></div>
+        <div><small>지각</small><b class="${o.lateDays.length ? 'late' : ''}" style="${o.lateDays.length ? 'color:var(--red)' : ''}">${o.lateDays.length}회 · ${o.lateMin}분</b></div>
+        <div><small>조퇴</small><b>${o.earlyDays.length}회</b></div>
+        <div><small>정기 휴무</small><b>${o.restDays.length}일</b></div>
+        <div><small>휴무 처리</small><b>${o.leaveDays.length}일</b></div>
+        <div><small>퇴근 누락</small><b style="${o.nooutDays.length ? 'color:var(--amber)' : ''}">${o.nooutDays.length}건</b></div>
+        <div><small>주휴 해당 주</small><b>${o.weeks.filter(w => w.complete && w.amount).length}주</b></div>
+      </div>
+      <details><summary>날짜별 타임카드 보기 (${shown.length}일)</summary>
+        <div class="tscroll"><table class="cardtab"><thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>인정</th><th>추가</th><th>비고</th></tr></thead><tbody>
+        ${shown.map(r => { const w = parseDate(r.ds).getDay(); return `<tr class="${w === 0 || w === 6 ? 'we' : ''}"><td>${fmtMD(r.ds)} ${DAYS[w]}</td>
+          <td class="${r.late ? 'late' : ''}">${r.p?.in ? fmtT(r.p.in) : '—'}</td><td>${r.p?.out ? fmtT(r.p.out, r.ds) : r.running ? '근무중' : '—'}</td>
+          <td>${WORKED.has(r.status) ? fmtHM(r.paid) : ''}</td><td class="ot">${r.ot ? fmtHM(r.ot) : ''}</td>
+          <td style="font-family:var(--f-body)">${r.status === 'absent' ? '<span class="late">결근</span>' : r.status === 'leave' ? '휴무 처리' : r.status === 'off' ? '<span class="muted">정기 휴무</span>' : r.status === 'extra' && r.regOff ? '휴무일 근무' : r.status === 'noout' ? '퇴근 누락' : r.late ? `<span class="late">지각 ${r.late}분</span>` : ''}</td></tr>`; }).join('')}
+        </tbody></table></div></details>
+      <div class="tcfoot"><button class="btn sm" data-act="copyTc" data-id="${st.id}">요약 복사</button></div>
+    </article>`;
+  }).join('')}</div>`;
+}
+
+/* ---------- 인건비·급여 ---------- */
+function niceMax(v){ if (v <= 0) return 100000; const p = 10 ** Math.floor(Math.log10(v)), f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+const fmtMan = v => v >= 10000 ? `${(Math.round(v/1000)/10).toLocaleString('ko-KR')}만` : `${Math.round(v)}`;
+function chartSVG(series){
+  const W = 720, H = 270, L = 58, R = 20, T = 28, B = 32, n = series.length;
+  const max = niceMax(Math.max(...series.map(s => s.proj || 0), ...series.map(s => s.actual || 0)));
+  const x = d => L + (d - 1) * (W - L - R) / Math.max(1, n - 1);
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let g = '';
+  for (let i = 0; i <= 4; i++){ const v = max * i / 4; g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${fmtMan(v)}</text>`; }
+  [1, 5, 10, 15, 20, 25, n].filter((d, i, a) => d <= n && a.indexOf(d) === i && !(d !== n && n - d < 3)).forEach(d => { g += `<text x="${x(d)}" y="${H - 10}" text-anchor="middle">${d}일</text>`; });
+  const act = series.filter(s => s.actual != null);
+  if (act.length){
+    const pts = act.map(s => `${x(s.d)},${y(s.actual)}`).join(' ');
+    g += `<polygon class="area" points="${x(1)},${y(0)} ${pts} ${x(act[act.length-1].d)},${y(0)}"/><polyline class="act" points="${pts}"/>`;
+  }
+  const lastA = act[act.length - 1];
+  const projPts = series.filter(s => !lastA || s.d >= lastA.d).map(s => `${x(s.d)},${y(s.d === lastA?.d ? lastA.actual : s.proj)}`).join(' ');
+  if (!lastA || lastA.d < n) g += `<polyline class="proj" points="${projPts}"/>`;
+  if (lastA && lastA.d < n) g += `<line class="today" x1="${x(lastA.d)}" x2="${x(lastA.d)}" y1="${T - 10}" y2="${H - B}"/><text x="${x(lastA.d)}" y="${T - 14}" text-anchor="middle" style="fill:var(--amber)">오늘</text>`;
+  [10, 20, n].forEach(d => {
+    const s = series[d - 1]; if (!s) return;
+    const isA = s.actual != null, v = isA ? s.actual : s.proj;
+    g += `<circle class="mk ${isA ? '' : 'p'}" cx="${x(d)}" cy="${y(v)}" r="5"/><text class="lab" x="${x(d) + (d === n ? -8 : 0)}" y="${y(v) - 10}" text-anchor="${d === n ? 'end' : 'middle'}">${fmtMan(v)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="일자별 누적 인건비">${g}</svg>`;
+}
+const LCOLS = [['No','i'],['성명','s'],['직책','s'],['생년월일','s'],['입사일','s'],['시급','w'],['근로일수','i'],['총근로시간','h'],['추가근무시간','h'],['기본근무수당','w'],['추가근무수당','w'],['주휴수당','w'],['지급총액','w'],['국민연금','w'],['건강보험','w'],['장기요양','w'],['고용보험','w'],['소득세','w'],['공제계','w'],['실지급액','w']];
+const SUMFROM = 6;
+function ledgerData(ym){
+  const now = Date.now();
+  const sums = staffForMonth(ym).map(st => monthSummary(st, ym, now)).filter(o => o.workDays || o.gross || o.absentDays.length || o.leaveDays.length);
+  const rows = sums.map((o, i) => { const d = o.ded.map; return [i + 1, o.st.name, o.st.position || '', o.st.birth || '', o.st.hireDate || '', +o.st.wage || 0, o.workDays, o.paid, o.ot, o.base, o.otPay, o.holiday, o.gross, d.np || 0, d.hi || 0, d.ltc || 0, d.ei || 0, (d.inc || 0) + (d.loc || 0), o.ded.total, o.net]; });
+  const total = LCOLS.map((c, i) => i === 1 ? '합계' : i >= SUMFROM ? rows.reduce((t, r) => t + r[i], 0) : '');
+  return { rows, total };
+}
+const lcell = (v, t) => v === '' ? '' : t === 'w' ? num(v) : t === 'h' ? fmtHM(v) : esc(v);
+function ledgerDoc(ym){
+  const { rows, total } = ledgerData(ym), c = cfg();
+  const ongoing = ym >= ymOf(todayStr());
+  const [y, m] = ym.split('-');
+  return `<div class="ledger-inner">
+    <h1>임 금 대 장</h1>
+    <div class="meta"><span>사업장: <b>${esc(c.storeName)}</b></span><span>귀속 연월: <b>${y}년 ${+m}월</b> (${ym}-01 ~ ${ym}-${pad(daysIn(ym))})</span><span>작성일: ${todayStr()}${ongoing ? ' · <b>진행 중(오늘까지 기준)</b>' : ''}</span></div>
+    <div class="tscroll"><table><thead><tr>${LCOLS.map(([h]) => `<th>${h}</th>`).join('')}<th>수령 확인</th></tr></thead>
+    <tbody>${rows.length ? rows.map(r => `<tr>${r.map((v, i) => `<td class="${LCOLS[i][1] === 's' ? 'l' : ''}">${lcell(v, LCOLS[i][1])}</td>`).join('')}<td></td></tr>`).join('') : `<tr><td colspan="${LCOLS.length + 1}" class="l">이 달 근무 기록이 없어요.</td></tr>`}</tbody>
+    <tfoot><tr>${total.map((v, i) => `<td class="${i === 1 ? 'l' : ''}">${i === 0 ? '' : lcell(v, LCOLS[i][1])}</td>`).join('')}<td></td></tr></tfoot></table></div>
+    <div class="note">· 총근로시간 = 출퇴근 기록 기준 인정 시간(휴게시간 제외), 시:분 표기. 추가근무수당 = 정해진 시간을 넘긴 근무${c.otPremium ? ' × 시급 × 1.5 (5인 이상 가산 적용)' : ' × 시급'}.<br>
+    · 주휴수당 = 주 15시간 이상, 그 주 결근 없음일 때 (주 소정시간 ÷ 40 × 8시간 × 시급). 주는 월~일, 일요일이 속한 달에 넣었어요.<br>
+    · 공제: 4대보험 근로자 부담분(국민연금 ${c.rates.np}% · 건강 ${c.rates.hi}% · 장기요양 건강보험료의 ${c.rates.ltc}% · 고용 ${c.rates.ei}%) 또는 3.3%(소득세 3% + 지방소득세 0.3%), 10원 미만 절사. 4대보험 대상자의 근로소득세(간이세액)는 포함하지 않았으니 세무사 확인 후 반영하세요.</div>
+    <div class="sign"><div><b>작성</b><span></span></div><div><b>대표</b><span></span></div></div>
+  </div>`;
+}
+function ledgerFile(ym){
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>임금대장 ${ym}</title><style>
+@page{size:A4 landscape;margin:10mm}
+body{font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#111;margin:20px}
+h1{font-size:22px;text-align:center;letter-spacing:.4em;margin:0}
+.meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin:14px 0 8px}
+table{border-collapse:collapse;width:100%;font-size:10px}
+th,td{border:1px solid #333;padding:4px 4px;text-align:right;white-space:nowrap}
+th{background:#eee;text-align:center}
+td.l{text-align:left}
+tfoot td{font-weight:700;background:#f4f4f4}
+.note{font-size:10px;color:#333;margin-top:10px;line-height:1.7}
+.sign{display:flex;justify-content:flex-end;margin-top:12px}
+.sign div{border:1px solid #333;width:80px;text-align:center;font-size:11px}
+.sign div+div{border-left:0}
+.sign b{display:block;border-bottom:1px solid #333;padding:3px;background:#eee}
+.sign span{display:block;height:46px}
+.bar{margin-bottom:14px}
+.bar button{padding:10px 18px;font-size:15px;cursor:pointer}
+@media print{.bar{display:none}body{margin:0}}
+</style></head><body><div class="bar"><button onclick="print()">인쇄하기</button> 인쇄 창에서 ‘가로’ 방향을 고르면 한 장에 들어가요.</div>${ledgerDoc(ym)}</body></html>`;
+}
+function ledgerCSV(ym){
+  const { rows, total } = ledgerData(ym);
+  const q = v => { const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const conv = (v, i) => LCOLS[i][1] === 'h' && v !== '' ? (v / 60).toFixed(2) : v;
+  const lines = [LCOLS.map(c => c[0] + (c[1] === 'h' ? '(시간)' : '')).map(q).join(','), ...rows.map(r => r.map((v, i) => q(conv(v, i))).join(',')), total.map((v, i) => q(i === 0 ? '' : conv(v, i))).join(',')];
+  return '﻿' + lines.join('\r\n');
+}
+function ledgerTSV(ym){
+  const { rows, total } = ledgerData(ym);
+  const conv = (v, i) => LCOLS[i][1] === 'h' && v !== '' ? (v / 60).toFixed(2) : v;
+  return [LCOLS.map(c => c[0]).join('\t'), ...rows.map(r => r.map(conv).join('\t')), total.map((v, i) => i === 0 ? '' : conv(v, i)).join('\t')].join('\n');
+}
+function payrollView(){
+  needMonth(S.month);
+  const head = `<div class="sec-head"><h2>인건비·급여</h2>${monthNav()}</div>`;
+  if (!S.monthLoaded[S.month] || !S.ready.staff) return head + loadingNote();
+  const now = Date.now(), ym = S.month, today = todayStr(), n = daysIn(ym);
+  const series = costSeries(ym, now);
+  const lastA = [...series].reverse().find(s => s.actual != null);
+  const tile = (d, label) => { const s = series[d - 1]; const isA = s.actual != null; return `<div class="stat ${isA ? 'blue' : ''}"><small>${label} ${isA ? '(실제)' : '(예상)'}</small><b>${num(isA ? s.actual : s.proj)}</b><em>원</em></div>`; };
+  const sums = staffForMonth(ym).map(st => monthSummary(st, ym, now));
+  const totNow = sums.reduce((t, o) => t + o.gross, 0), totProj = sums.reduce((t, o) => t + o.projGross, 0);
+  return head + `
+  <div class="stats">
+    <div class="stat blue"><small>${ym === ymOf(today) ? '오늘까지 나간 인건비' : ym < ymOf(today) ? '이 달 인건비 (확정)' : '아직 시작 전'}</small><b>${num(lastA ? lastA.actual : 0)}</b><em>원</em></div>
+    ${tile(10, '10일까지')}${tile(20, '20일까지')}
+    <div class="stat"><small>말일까지 예상</small><b>${num(series[n - 1].proj)}</b><em>원</em></div>
+  </div>
+  <section class="panel chart"><h3>일자별 누적 인건비 <small>실선 = 실제 기록 · 점선 = 남은 근무표대로 일했을 때 예상</small></h3>${chartSVG(series)}</section>
+  <section class="panel" style="margin-top:16px"><h3>직원별 급여 <small>시급제는 시급 × 인정 근무시간, 월급제는 월급(근무한 날짜 비율) · 실시간 계산</small></h3>
+    <div class="tscroll"><table class="t"><thead><tr><th>직원</th><th class="r">시급</th><th class="r">근무시간</th><th class="r">기본</th><th class="r">추가근무</th><th class="r">주휴</th><th class="r">지금까지</th><th class="r">말일 예상</th></tr></thead>
+    <tbody>${sums.map(o => `<tr><td><b>${esc(o.st.name)}</b>${!isMonthly(o.st) && (+o.st.wage || 0) < MIN_WAGE ? ' <span class="chip red" title="2026년 최저시급 10,320원">최저시급 미만</span>' : ''}</td><td class="r mono">${isMonthly(o.st) ? `월 ${num(o.st.monthly)}` : num(o.st.wage)}</td><td class="r mono">${fmtHM(o.paid)}</td><td class="r mono">${num(o.base)}</td><td class="r mono">${num(o.otPay)}</td><td class="r mono">${num(o.holiday)}</td><td class="r mono"><b>${num(o.gross)}</b></td><td class="r mono muted">${num(o.projGross)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>합계</td><td></td><td class="r mono">${fmtHM(sums.reduce((t, o) => t + o.paid, 0))}</td><td class="r mono">${num(sums.reduce((t, o) => t + o.base, 0))}</td><td class="r mono">${num(sums.reduce((t, o) => t + o.otPay, 0))}</td><td class="r mono">${num(sums.reduce((t, o) => t + o.holiday, 0))}</td><td class="r mono">${num(totNow)}</td><td class="r mono">${num(totProj)}</td></tr></tfoot></table></div>
+    <p class="hint">주휴수당은 한 주(월~일)가 끝나야 ‘지금까지’에 들어가요. ${cfg().otPremium ? '추가근무는 1.5배로 계산 중이에요.' : '추가근무는 시급 그대로 계산 중이에요 (5인 이상 사업장이면 설정에서 1.5배를 켜세요).'}</p>
+  </section>
+  <div style="margin-top:16px">${taxPanel(ym)}</div>
+  <section style="margin-top:16px">
+    <div class="sec-head"><h2 style="font-size:17px">월급대장 (인쇄용)</h2>
+      <button class="btn pri" data-act="dlHtml">인쇄용 파일 받기</button><button class="btn" data-act="dlCsv">엑셀 파일(CSV) 받기</button><button class="btn" data-act="copyLedger">표 복사</button></div>
+    <p class="hint" style="margin:-8px 0 10px">‘인쇄용 파일’을 받아서 열면 ‘인쇄하기’ 버튼이 있어요. 엑셀에 붙여 넣으려면 ‘표 복사’를 누르세요.</p>
+    <div class="ledger">${ledgerDoc(ym)}</div>
+  </section>`;
+}
+
+/* ---------- 직원·설정 ---------- */
+const defaultSched = () => Array.from({ length:7 }, (_, i) => ({ on: i >= 1 && i <= 5, start:'09:00', end:'18:00', brk:60 }));
+function staffForm(st){
+  const s = st || { name:'', position:'', pin:'', wage:MIN_WAGE, hireDate:todayStr(), birth:'', deduct:'none', sched:defaultSched() };
+  const sc = s.sched || defaultSched();
+  return `<section class="panel"><h3>${st ? `${esc(st.name)} 정보 고치기` : '새 직원 등록'}</h3>
+    <div class="form ${s.payType === 'month' ? 'pt-m' : ''}">
+      <label>이름<input id="f-name" value="${esc(s.name)}" placeholder="홍길동"></label>
+      <label>담당 (홀·주방 등)<input id="f-pos" value="${esc(s.position)}" placeholder="홀"></label>
+      <label>개인 번호 4자리 (출근할 때 입력)<input id="f-pin" value="${esc(s.pin)}" inputmode="numeric" maxlength="4" placeholder="예: 휴대폰 뒷자리"></label>
+      <label>급여 방식<select id="f-ptype"><option value="hour" ${s.payType !== 'month' ? 'selected' : ''}>시급제 (일한 시간만큼)</option><option value="month" ${s.payType === 'month' ? 'selected' : ''}>월급제 (매달 고정)</option></select></label>
+      <label class="pt-hour">시급 (원)<input id="f-wage" type="number" min="0" step="10" value="${esc(s.wage)}"></label>
+      <label class="pt-month">월급 (세전, 원)<input id="f-monthly" type="number" min="0" step="1000" value="${esc(s.monthly || '')}" placeholder="예: 2500000"></label>
+      <label>입사일<input id="f-hire" type="date" value="${esc(s.hireDate || '')}"></label>
+      <label>생년월일 (임금대장용, 선택)<input id="f-birth" type="date" value="${esc(s.birth || '')}"></label>
+      <label>주민등록번호 (세무사 신고용, 선택)<input id="f-rrn" value="" inputmode="numeric" autocomplete="off" placeholder="${s.rrn ? `저장됨 ${maskRrn(s.rrn)} · 바꿀 때만 입력` : '000000-0000000'}"></label>
+      ${s.rrn ? '<label class="check"><input type="checkbox" id="f-rrn-del"> 저장된 주민번호 지우기</label>' : ''}
+      <label>급여에서 떼는 것<select id="f-ded">
+        <option value="none" ${s.deduct === 'none' ? 'selected' : ''}>없음</option>
+        <option value="biz" ${s.deduct === 'biz' ? 'selected' : ''}>3.3% (사업소득)</option>
+        <option value="ins" ${s.deduct === 'ins' ? 'selected' : ''}>4대보험 (근로자 부담분)</option></select></label>
+    </div>
+    <h3 style="margin-top:18px">요일별 정해진 근무 시간 <small>이 시간을 기준으로 지각·결근·추가근무를 판단해요</small></h3>
+    <div class="tscroll"><table class="schedt"><thead><tr><th></th><th>근무날 / 휴무날</th><th>출근</th><th>퇴근</th><th>휴게(분)</th></tr></thead><tbody>
+      ${WEEK_ORDER.map(i => `<tr class="${sc[i]?.on ? '' : 'rest'}"><td><b>${DAYS[i]}</b></td><td><div class="seg" role="radiogroup" aria-label="${DAYS[i]}요일"><label><input type="radio" name="sc-m-${i}" id="sc-on-${i}" ${sc[i]?.on ? 'checked' : ''}><span>근무날</span></label><label><input type="radio" class="off" name="sc-m-${i}" id="sc-off-${i}" ${sc[i]?.on ? '' : 'checked'}><span>휴무날</span></label></div></td>
+        <td><span class="restlbl">정기 휴무 · 급여 없음</span><input type="time" id="sc-start-${i}" value="${sc[i]?.start || '09:00'}"></td><td><input type="time" id="sc-end-${i}" value="${sc[i]?.end || '18:00'}"></td>
+        <td><input type="number" id="sc-brk-${i}" min="0" step="10" value="${sc[i]?.brk ?? 60}"></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" data-act="copyMon">월요일 시간을 다른 근무날에 똑같이 넣기</button></div>
+    <p class="hint">쉬는 요일은 <b>휴무날</b>을 고르면 정기 휴무로 표시돼요. 정기 휴무일은 결근으로 세지 않고, 그날 출근하면 ‘휴무일 근무’(추가근무)로 계산해요.</p>
+    <p class="hint">법정 휴게: 4시간 근무마다 30분 이상, 8시간이면 1시간 이상. 퇴근이 출근보다 이르면 다음 날 퇴근(야간 근무)으로 봐요.</p>
+    <div class="row" style="margin-top:14px"><button class="btn pri" data-act="saveStaff">저장</button><button class="btn" data-act="cancelEdit">취소</button>
+      ${st ? `<span class="spacer"></span>${st.active === false ? `<button class="btn" data-act="reactivate" data-id="${st.id}">다시 근무 중으로</button>` : `<button class="btn danger" data-act="retire" data-id="${st.id}">퇴사 처리</button>`}` : ''}</div>
+  </section>`;
+}
+function configForm(){
+  const c = cfg();
+  return `<section class="panel"><h3>가게 설정 고치기</h3>
+    <div class="form">
+      <label>가게 이름<input id="c-name" value="${esc(c.storeName)}"></label>
+      <label>사장님 관리 번호 4자리<input id="c-pin" value="${esc(c.ownerPin)}" inputmode="numeric" maxlength="4"></label>
+      <label>마스터 번호 4자리 (비우면 안 씀)<input id="c-master" value="${esc(c.masterPin)}" inputmode="numeric" maxlength="4" placeholder="예: 9999"></label>
+      <p class="hint full" style="margin:0">마스터 번호는 출퇴근 화면에서 <b>어느 직원의 개인 번호 대신 넣어도 통과</b>하는 사장님용 번호예요. 직원이 번호를 잊었을 때 대신 찍어 줄 수 있어요. 마스터 번호로 찍은 기록에는 ‘사장님 대리 입력’ 표시가 남아요. 직원 개인 번호와 겹치면 안 돼요.</p>
+      <label>지각 봐주는 시간 (분)<input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
+      <label>추가근무 인정 단위 (분)<input id="c-unit" type="number" min="1" value="${c.otUnit}"></label>
+      <label class="check full"><input type="checkbox" id="c-early" ${c.earlyClamp ? 'checked' : ''}> 정해진 시간보다 일찍 와도 정해진 출근 시각부터 계산</label>
+      <label class="check full"><input type="checkbox" id="c-prem" ${c.otPremium ? 'checked' : ''}> 추가근무 1.5배 가산 (상시 5인 이상 사업장)</label>
+      <label class="check full"><input type="checkbox" id="c-hol" ${c.weeklyHoliday ? 'checked' : ''}> 주휴수당 계산 (주 15시간 이상 근무자)</label>
+      <label>국민연금 (%)<input id="c-np" type="number" step="0.001" value="${c.rates.np}"></label>
+      <label>건강보험 (%)<input id="c-hi" type="number" step="0.001" value="${c.rates.hi}"></label>
+      <label>장기요양 (건강보험료의 %)<input id="c-ltc" type="number" step="0.01" value="${c.rates.ltc}"></label>
+      <label>고용보험 (%)<input id="c-ei" type="number" step="0.001" value="${c.rates.ei}"></label>
+    </div>
+    <p class="hint">4대보험 요율은 근로자 부담분이에요. 해마다 바뀌니 세무사 사무실에서 받은 숫자로 맞춰 주세요.</p>
+    <h3 style="margin-top:18px">사진 인증 <small>출퇴근할 때 태블릿 카메라로 얼굴 사진을 찍어요</small></h3>
+    <div class="form"><label class="check full"><input type="checkbox" id="p-on" ${c.photo.on ? 'checked' : ''}> 출퇴근할 때 사진 찍기 (사진에 가게 이름·직원 이름·시각이 찍혀요)</label></div>
+    <h3 id="mailSec" style="margin-top:18px">휴대폰 메일 알림 <small>가게 태블릿이 사장님 Gmail로 보내요</small></h3>
+    <div class="form">
+      <label class="check full"><input type="checkbox" id="m-on" ${c.mail.on ? 'checked' : ''}> 메일 알림 켜기</label>
+      <label class="full">받을 메일 주소 (여러 개면 쉼표로 나눠 주세요)<input id="m-to" value="${esc(c.mail.to)}" inputmode="email" autocomplete="email" placeholder="예: myshop@naver.com"></label>
+      <label class="check"><input type="checkbox" id="m-in" ${c.mail.ev.in ? 'checked' : ''}> 출근</label>
+      <label class="check"><input type="checkbox" id="m-late" ${c.mail.ev.late ? 'checked' : ''}> 지각 출근</label>
+      <label class="check"><input type="checkbox" id="m-notyet" ${c.mail.ev.notyet ? 'checked' : ''}> 지각 의심 (시간이 지나도 미출근)</label>
+      <label class="check"><input type="checkbox" id="m-out" ${c.mail.ev.out ? 'checked' : ''}> 퇴근</label>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="btn sm" data-act="mailTest">시험 메일 보내기</button><span class="small muted" id="mailTestNote"></span></div>
+    <p class="hint">처음 한 번은 <b>가게 태블릿에서</b> ‘시험 메일 보내기’를 눌러 Gmail 사용을 허락해 주세요. 내 Gmail에서 내 Gmail로 보내면 휴대폰 알림이 안 울리는 경우가 있어요. 그럴 땐 네이버 메일 등 다른 주소를 받는 주소로 넣어 주세요.</p>
+    <div class="row" style="margin-top:12px"><button class="btn pri" data-act="saveConfig">저장</button><button class="btn" data-act="cancelEdit">취소</button></div></section>`;
+}
+function staffView(){
+  if (S.editing === 'staff:new') return staffForm(null);
+  if (S.editing?.startsWith('staff:')) return staffForm(staffById(S.editing.slice(6)));
+  if (S.editing === 'config') return configForm();
+  if (!S.ready.staff) return loadingNote();
+  const c = cfg(), samples = S.staff.filter(s => s.sample);
+  const list = [...S.staff].sort((a, b) => (a.active === false) - (b.active === false));
+  return `<div class="cols">
+    <section class="panel"><h3>직원 <small>${activeStaff().length}명 근무 중</small><span class="spacer"></span><button class="btn pri sm" data-act="newStaff">+ 직원 추가</button></h3>
+      ${list.length ? `<div class="slist">${list.map(st => { const wk = weeklySchedMin(st); return `<div class="sitem ${st.active === false ? 'off' : ''}"><div>
+        <b>${esc(st.name)}</b> <span class="small muted">${esc(st.position || '')}${st.sample ? ' · 예시' : ''}${st.active === false ? ' · 퇴사' : ''}</span>
+        <div class="sub">${isMonthly(st) ? `월급 ${num(st.monthly)}원` : `시급 ${num(st.wage)}원`} · ${schedSummary(st.sched)} · 주 ${fmtH(wk)}${wk >= 900 ? ' (주휴 대상)' : ''}</div>
+        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div></div>
+        <button class="btn sm" data-act="editStaff" data-id="${st.id}">고치기</button></div>`; }).join('')}</div>` : '<p class="muted">아직 직원이 없어요. ‘+ 직원 추가’를 눌러 시작하세요.</p>'}
+      ${samples.length ? `<div class="alertbar" style="margin:14px 0 0;background:var(--amber-soft)"><span>지금 보이는 <b style="color:var(--amber)">예시 직원 ${samples.length}명</b>과 그 기록은 둘러보기용이에요.</span><span class="spacer"></span>
+        <button class="btn sm danger" data-act="clearSamples">${S.confirmClear ? '정말 지울까요? 한 번 더 누르기' : '예시 데이터 모두 지우기'}</button></div>` : ''}
+    </section>
+    <section class="panel"><h3>가게 설정<span class="spacer"></span><button class="btn sm" data-act="editConfig">고치기</button></h3>
+      <dl class="kv">
+        <dt>가게 이름</dt><dd>${esc(c.storeName)}</dd>
+        <dt>관리 번호</dt><dd>${c.ownerPin === '0000' ? '<span style="color:var(--red)">처음 번호(0000) 그대로예요 — 바꿔 주세요</span>' : '설정됨'}</dd>
+        <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
+        <dt>지각 기준</dt><dd>정해진 시간 + ${c.graceMin}분 넘으면 지각</dd>
+        <dt>추가근무</dt><dd>${c.otUnit}분 단위 인정 · ${c.otPremium ? '1.5배 가산' : '시급 그대로'}</dd>
+        <dt>일찍 출근</dt><dd>${c.earlyClamp ? '정해진 시각부터 계산' : '실제 출근 시각부터 계산'}</dd>
+        <dt>주휴수당</dt><dd>${c.weeklyHoliday ? '계산함' : '계산 안 함'}</dd>
+        <dt>4대보험 요율</dt><dd class="small">연금 ${c.rates.np}% · 건강 ${c.rates.hi}% · 요양 ${c.rates.ltc}% · 고용 ${c.rates.ei}%</dd>
+        <dt>메일 알림</dt><dd>${c.mail.on ? `켜짐 · ${esc(mailAddrs(c.mail.to).join(', '))}` : '꺼짐'}</dd>
+        <dt>사진 인증</dt><dd>${c.photo.on ? '<b style="color:var(--green)">켜짐</b> · 출퇴근 때 얼굴 사진을 찍어요' : '꺼짐'}
+          <button class="btn sm ${c.photo.on ? '' : 'pri'}" role="switch" aria-checked="${c.photo.on}" data-act="photoToggle" style="margin-left:6px">${c.photo.on ? '사진 인증 끄기' : '사진 인증 켜기'}</button>
+          <div class="small muted" style="margin-top:4px">${S.photoUse ? `사진 저장 공간 ${mb(S.photoUse.bytes)} / ${mb(S.photoUse.maxBytes)} 사용 (${num(S.photoUse.files)} / ${num(S.photoUse.maxFiles)}장)` : ''}
+            <button class="linkbtn" style="margin:0" data-act="photoUsage">저장 공간 확인</button>
+            ${S.photoUse?.old.length ? `<button class="btn sm danger" data-act="photoClean">${S.confirmPhotoClean ? '정말 지울까요? 한 번 더 누르기' : `3개월 지난 사진 ${S.photoUse.old.length}장 지우기`}</button>` : ''}</div></dd>
+      </dl>
+      <p class="hint">가게 태블릿은 ‘출퇴근 화면’으로 켜 두고, 사장님 휴대폰에서는 같은 링크를 열어 ‘사장님 화면’으로 보세요. 두 기기 모두 사장님 claude.ai 계정으로 로그인해 있어야 기록이 함께 보여요.</p>
+    </section></div>${backupPanel()}`;
+}
+
+/* ===================== 전자 근로계약서 =====================
+   고용노동부 표준근로계약서 항목을 직원 정보로 채우고, 태블릿에서 손가락 서명을 받아요.
+   서명한 계약서는 그대로 두고, 내용을 바꾸면 새 버전(변경 계약서)을 만들어 다시 서명받아요. */
+const INS = [['emp','고용보험'],['acc','산재보험'],['np','국민연금'],['hi','건강보험']];
+const PAY_METHODS = ['근로자 명의 예금통장에 입금', '근로자에게 직접 지급'];
+const C_LABEL = { none:['계약서 없음','faint'], draft:['직원 서명 대기','amber'], owner:['사장님 서명 대기','amber'], signed:['서명 완료','ok'] };
+const SIG_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+const fmtKDate = ds => { if (!ds) return '    년   월   일'; const d = parseDate(ds); return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`; };
+function contractsOf(sid){ return S.contracts.filter(c => c.staffId === sid).sort((a, b) => (b.ver || 0) - (a.ver || 0)); }
+function currentContract(sid){ return contractsOf(sid)[0] || null; }
+function signedContract(sid){ return contractsOf(sid).find(c => c.empSign && c.ownerSign) || null; }
+function cStatus(c){ return !c ? 'none' : c.empSign && c.ownerSign ? 'signed' : c.empSign ? 'owner' : 'draft'; }
+function cLabel(c){ const s = cStatus(c); return s === 'draft' && c.prev ? ['변경 계약 서명 대기','amber'] : C_LABEL[s]; }
+function firstPunchDate(sid){ let d = ''; for (const m of Object.values(S.months)) for (const p of m.values()) if (p.staffId === sid && p.in && (!d || p.date < d)) d = p.date; return d; }
+function defaultTerms(st){
+  const cc = cfg().contract, sched = (st.sched || defaultSched()).map(s => ({ on: !!s?.on, start: s?.start || '09:00', end: s?.end || '18:00', brk: +s?.brk || 0 }));
+  const off = WEEK_ORDER.find(i => !sched[i].on);
+  return { startDate: st.hireDate || firstPunchDate(st.id) || todayStr(), endDate:'', place: cfg().biz.addr || cfg().storeName, job: st.position || '매장 업무',
+    sched, holiday: off ?? 0, wage: +st.wage || MIN_WAGE, payType: isMonthly(st) ? 'month' : 'hour', monthly: +st.monthly || 0, bonus:'없음', extraPay:'없음', payDay: cc.payDay, payMethod: cc.payMethod,
+    ins:{ emp:true, acc:true, np: st.deduct === 'ins', hi: st.deduct === 'ins' }, special: cc.special || '' };
+}
+async function createContract(st, terms, prev){
+  const ver = (contractsOf(st.id)[0]?.ver || 0) + 1, id = `${st.id}_v${ver}`;
+  const doc = { staffId:st.id, name:st.name, ver, createdAt:Date.now(), terms: terms || defaultTerms(st), emp: prev?.emp || {}, empSign:'', empSignedAt:0, ownerSign:'', ownerSignedAt:0, prev: prev?.id || '' };
+  await write(() => S.db.doc('contracts/' + id).set(doc));
+  if (!S.contracts.some(c => c.id === id)) S.contracts.push({ id, ...doc });   // 저장소 소식이 오기 전에도 바로 쓰도록
+  return S.contracts.find(c => c.id === id);
+}
+async function contractNeeded(st){   // 첫 출근(계약서 없음)이면 표준근로계약서를 자동으로 만들고, 서명 안 한 계약서를 돌려줌
+  if (!cfg().contract.on || !S.ready.contracts) return null;
+  let c = currentContract(st.id);
+  if (!c){ try { c = await createContract(st); } catch { return null; } }
+  return c && !c.empSign ? c : null;
+}
+async function contractHash(c){
+  try {
+    const data = JSON.stringify([c.staffId, c.ver, c.terms, c.biz, c.emp, c.empSign, c.empSignedAt, c.ownerSign, c.ownerSignedAt]);
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  } catch { return ''; }
+}
+function ownerSignFields(){ const b = cfg().biz; return { ownerSign:S.ownerSign, ownerSignedAt:Date.now(), biz:{ ...b, name: b.name || cfg().storeName } }; }
+const sigImg = d => SIG_RE.test(d || '') ? `<img class="sig" src="${d}" alt="서명">` : '<span class="sigph">(서명)</span>';
+function contractBody(c){
+  const t = c.terms, b = c.biz || { ...cfg().biz, name: cfg().biz.name || cfg().storeName }, e = c.emp || {};
+  const weekMin = t.sched.reduce((s, x) => s + (x.on ? shiftMin(x) : 0), 0), part = weekMin < 2400, prem = cfg().otPremium;
+  const rows = WEEK_ORDER.map(i => { const s = t.sched[i]; return `<tr><th>${DAYS[i]}</th>${s.on ? `<td>${fmtH(shiftMin(s))}</td><td>${s.start}</td><td>${s.end}</td><td>${s.brk}분</td>` : `<td colspan="4">${i === +t.holiday ? '주휴일' : '휴무일'}</td>`}</tr>`; }).join('');
+  const box = on => on ? '☑' : '☐';
+  const signDay = c.empSignedAt ? ymd(new Date(c.empSignedAt)) : '';
+  return `<h1>${part ? '단시간근로자 ' : ''}표준근로계약서</h1>
+  <p class="lead"><b>${esc(b.name)}</b>(이하 “사업주”)과(와) <b>${esc(c.name)}</b>(이하 “근로자”)은 다음과 같이 근로계약을 체결한다.</p>
+  <ol class="terms">
+    <li><b>근로계약기간</b> ${fmtKDate(t.startDate)}부터 ${t.endDate ? `${fmtKDate(t.endDate)}까지` : '(기간의 정함이 없음)'}</li>
+    <li><b>근무 장소</b> ${esc(t.place)}</li>
+    <li><b>업무의 내용</b> ${esc(t.job)}</li>
+    <li><b>근로일 및 근로일별 근로시간</b> (1주 소정근로시간 ${fmtH(weekMin)})
+      <table class="ct"><thead><tr><th>요일</th><th>근로시간</th><th>시업</th><th>종업</th><th>휴게시간</th></tr></thead><tbody>${rows}</tbody></table></li>
+    <li><b>휴일</b> 주휴일 매주 ${DAYS[+t.holiday]}요일 (1주 소정근로시간이 15시간 이상인 경우 유급)</li>
+    <li><b>임금</b><ul>
+      <li>${t.payType === 'month' ? `월급: ${num(t.monthly)}원 (주휴수당 포함)` : `시간급: ${num(t.wage)}원`}</li>
+      <li>상여금: ${esc(t.bonus || '없음')}</li>
+      <li>기타 급여(제수당 등): ${esc(t.extraPay || '없음')}</li>
+      <li>초과근로 가산임금률: ${prem ? `50%${part ? ' (소정근로시간을 초과한 근로 포함)' : ''}` : '해당 없음 (상시 4명 이하 사업장)'}</li>
+      <li>임금지급일: 매월 ${esc(t.payDay)}일 (휴일인 경우 전일 지급)</li>
+      <li>지급방법: ${esc(t.payMethod)}</li></ul></li>
+    <li><b>연차유급휴가</b> 근로기준법에서 정하는 바에 따라 부여함${prem ? '' : ' (상시 5명 이상 사업장에 적용)'}</li>
+    <li><b>사회보험 적용 여부</b> ${INS.map(([k, l]) => `${box(t.ins?.[k])} ${l}`).join(' &nbsp; ')}</li>
+    <li><b>근로계약서 교부</b> 사업주는 근로계약을 체결함과 동시에 본 계약서를 사본하여 근로자의 교부 요구와 관계없이 근로자에게 교부함 (근로기준법 제17조 이행)</li>
+    <li><b>근로계약, 취업규칙 등의 성실한 이행 의무</b> 사업주와 근로자는 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 함</li>
+    <li><b>기타</b> 이 계약에 정함이 없는 사항은 근로기준법령에 의함</li>
+    ${t.special ? `<li><b>특약 사항</b> ${esc(t.special).replace(/\n/g, '<br>')}</li>` : ''}
+  </ol>
+  <p class="cdate">${fmtKDate(signDay)}</p>
+  <div class="parties">
+    <div><h4>(사업주)</h4><p>사업체명: ${esc(b.name)}</p><p>전화: ${esc(b.phone || '')}</p><p>주소: ${esc(b.addr || '')}</p><p class="sigline">대표자: ${esc(b.ceo || '')} ${sigImg(c.ownerSign)}</p></div>
+    <div><h4>(근로자)</h4><p>주소: ${esc(e.addr || '')}</p><p>연락처: ${esc(e.phone || '')}</p><p class="sigline">성명: ${esc(c.name)} ${sigImg(c.empSign)}</p></div>
+  </div>`;
+}
+function contractMeta(c){
+  return `문서 번호 ${esc(c.id)} · ${c.ver}번째 계약서${c.prev ? ' (변경 계약)' : ''}<br>
+    근로자 서명 ${c.empSignedAt ? new Date(c.empSignedAt).toLocaleString('ko-KR') : '전'} · 사업주 서명 ${c.ownerSignedAt ? new Date(c.ownerSignedAt).toLocaleString('ko-KR') : '전'}${c.hash ? `<br>문서 지문 ${c.hash}` : ''}`;
+}
+function contractFile(c){
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>근로계약서 ${esc(c.name)}</title><style>
+@page{size:A4;margin:14mm}
+body{font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#111;margin:24px auto;max-width:760px;font-size:13px;line-height:1.65}
+h1{font-size:22px;text-align:center;letter-spacing:.2em;margin:0 0 18px}
+.terms{padding-left:20px}.terms li{margin:6px 0}.terms ul{padding-left:18px;margin:2px 0}
+table.ct{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px}table.ct th,table.ct td{border:1px solid #444;padding:3px 6px;text-align:center}table.ct thead th{background:#eee}
+.cdate{text-align:center;margin:18px 0}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:20px}.parties h4{margin:0 0 4px}.parties p{margin:2px 0}
+.sigline{display:flex;align-items:center;gap:8px}.sig{height:52px;max-width:170px}.sigph{color:#888}
+.meta{margin-top:22px;padding-top:8px;border-top:1px solid #ccc;font-size:10px;color:#555}
+.bar{margin-bottom:14px}.bar button{padding:10px 18px;font-size:15px;cursor:pointer}
+@media print{.bar{display:none}body{margin:0}}
+</style></head><body><div class="bar"><button onclick="print()">인쇄하기</button></div>${contractBody(c)}
+<p class="meta">${contractMeta(c)}<br>이 계약서는 ‘${esc(cfg().storeName)} 타임카드’에서 전자서명으로 작성되었습니다.</p></body></html>`;
+}
+
+/* ---------- 서명판 ---------- */
+const SIG = {};
+function sigPad(id, hint = '여기에 손가락으로 서명해 주세요'){
+  return `<div class="sigwrap"><canvas id="${id}" class="sigpad" aria-label="${hint}"></canvas><span class="sighint">${hint}</span>
+    <button type="button" class="btn sm sigclr" data-act="sigClear" data-id="${id}">다시 쓰기</button></div>`;
+}
+function initSigs(){ document.querySelectorAll?.('canvas.sigpad').forEach(c => initSig(c)); }
+function initSig(c){
+  if (c.dataset.ready) return;
+  c.dataset.ready = '1';
+  const id = c.id, r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
+  const g = c.getContext('2d');
+  g.scale(dpr, dpr); g.lineWidth = 2.6; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111'; g.fillStyle = '#111';
+  SIG[id] = { n:0 };
+  let down = false, lx = 0, ly = 0;
+  const pos = e => { const b = c.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  c.addEventListener('pointerdown', e => { down = true; try { c.setPointerCapture(e.pointerId); } catch {} [lx, ly] = pos(e); g.beginPath(); g.arc(lx, ly, 1.3, 0, 7); g.fill(); SIG[id].n++; c.parentNode.classList.add('signed'); S.kiosk.at = Date.now(); e.preventDefault(); });
+  c.addEventListener('pointermove', e => { if (!down) return; const [x, y] = pos(e); g.beginPath(); g.moveTo(lx, ly); g.lineTo(x, y); g.stroke(); lx = x; ly = y; SIG[id].n++; e.preventDefault(); });
+  const up = () => { down = false; };
+  c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up); c.addEventListener('pointerleave', up);
+}
+function clearSig(id){ const c = $('#' + id); if (!c) return; c.getContext('2d').clearRect(0, 0, c.width, c.height); if (SIG[id]) SIG[id].n = 0; c.parentNode.classList.remove('signed'); }
+function sigData(id){
+  const c = $('#' + id);
+  if (!c || !SIG[id] || SIG[id].n < 3) return '';
+  const w = Math.min(600, c.width), h = Math.round(c.height * w / c.width), o = document.createElement('canvas');
+  o.width = w; o.height = h; o.getContext('2d').drawImage(c, 0, 0, w, h);
+  return o.toDataURL('image/png');
+}
+
+/* ---------- 출퇴근 화면: 직원 서명 ---------- */
+function kioskContract(st){
+  const k = S.kiosk, c = S.contracts.find(x => x.id === k.contractId);
+  if (!c) return '';
+  const e = c.emp || {};
+  return `<div class="kpanel wide"><h2>${esc(st.name)}님, 근로계약서 서명</h2>
+    <p>${k.result ? '출근이 기록됐어요. ' : ''}${c.prev ? '계약 내용이 바뀌어서 다시 서명이 필요해요.' : '아래 근로계약서를 끝까지 읽고 서명해 주세요.'}</p>
+    <div class="contract cbox">${contractBody(c)}</div>
+    <div class="form ksign">
+      <label>주소<input id="k-addr" value="${esc(e.addr || '')}" autocomplete="street-address"></label>
+      <label>연락처<input id="k-phone" value="${esc(e.phone || '')}" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>
+      <label class="full">이메일 (계약서 사본 받을 곳, 선택)<input id="k-email" value="${esc(e.email || '')}" inputmode="email" autocomplete="email"></label>
+      <label class="check full"><input type="checkbox" id="k-agree"> 위 근로계약서 내용을 모두 읽었고 이에 동의합니다</label>
+    </div>
+    ${sigPad('sig-emp')}
+    <button class="bigbtn" data-act="kSign" ${k.busy ? 'disabled' : ''}>${k.busy ? '저장하는 중…' : '서명하고 제출하기'}</button>
+    <button class="linkbtn" data-act="kSignLater">다음에 할게요</button></div>`;
+}
+async function kioskSign(){
+  const k = S.kiosk, c = S.contracts.find(x => x.id === k.contractId);
+  if (!c || k.busy) return;
+  const addr = $('#k-addr').value.trim(), phone = $('#k-phone').value.trim(), email = mailAddrs($('#k-email').value)[0] || '';
+  if (!addr || !phone){ toast('주소와 연락처를 넣어 주세요', '계약서에 들어가는 내용이에요.', 'warn'); return; }
+  if (!$('#k-agree').checked){ toast('동의 칸에 체크해 주세요', '', 'warn'); return; }
+  const sig = sigData('sig-emp');
+  if (!sig){ toast('서명을 해 주세요', '네모 칸에 손가락으로 이름을 써 주세요.', 'warn'); return; }
+  k.busy = true; const btn = document.querySelector?.('[data-act="kSign"]'); if (btn){ btn.disabled = true; btn.textContent = '저장하는 중…'; }
+  const upd = { emp:{ addr, phone, email }, empSign:sig, empSignedAt:Date.now() };
+  if (cfg().contract.autoOwnerSign && S.ownerSign) Object.assign(upd, ownerSignFields());
+  try {
+    if (upd.ownerSign) upd.hash = await contractHash({ ...c, ...upd });
+    await write(() => S.db.doc('contracts/' + c.id).update(upd));
+    Object.assign(c, upd);
+    k.result = { kind:'contract', t:upd.empSignedAt, late:false, msg: upd.ownerSign ? '근로계약서 서명이 끝났어요. 사본은 사장님께 받으세요.' : '서명했어요. 사장님 서명까지 되면 계약이 완료돼요.' };
+    k.step = 'done'; k.at = Date.now(); beep('ok');
+  } catch {}
+  k.busy = false; render(true);
+}
+
+/* ---------- 사장님 화면: 근로계약 탭 ---------- */
+function contractView(){
+  if (S.editing === 'csign') return ownerSignForm();
+  if (S.editing === 'cbiz') return bizForm();
+  if (S.editing?.startsWith('cedit:')) return contractForm(S.editing.slice(6));
+  if (S.editing?.startsWith('cview:')) return contractPreview(S.editing.slice(6));
+  const head = `<div class="sec-head"><h2>근로계약서</h2></div>`;
+  if (!S.ready.staff || !S.ready.contracts) return head + loadingNote();
+  const c = cfg(), cc = c.contract, b = c.biz, bizOk = b.ceo && b.addr;
+  const list = activeStaff();
+  return head + `
+  <div class="alertbar mailbar ${cc.on ? 'on' : ''}"><span>📝 <b>첫 출근 때 계약서 받기 ${cc.on ? '켜짐' : '꺼짐'}</b> — ${cc.on ? '계약서가 없는 직원이 출근하면 표준근로계약서가 자동으로 만들어지고, 태블릿에서 바로 서명받아요.' : '켜면 계약서가 없는 직원이 출근할 때 표준근로계약서를 자동으로 만들어 서명받아요.'}</span>
+    <span class="spacer"></span><button class="btn sm ${cc.on ? '' : 'pri'}" role="switch" aria-checked="${cc.on}" data-act="cToggle">${cc.on ? '끄기' : '켜기'}</button></div>
+  ${!bizOk ? `<div class="alertbar" style="background:var(--amber-soft)"><span>계약서에 들어갈 <b style="color:var(--amber)">사업주 정보(대표자·주소)</b>를 먼저 넣어 주세요.</span><span class="spacer"></span><button class="btn sm" data-act="cBiz">사업주 정보 넣기</button></div>` : ''}
+  ${!S.ownerSign ? `<div class="alertbar" style="background:var(--amber-soft)"><span><b style="color:var(--amber)">사장님 서명</b>을 한 번 등록해 두면 계약서마다 쓸 수 있어요.</span><span class="spacer"></span><button class="btn sm" data-act="cSignReg">서명 등록하기</button></div>` : ''}
+  <div class="cols">
+    <section class="panel"><h3>직원별 계약서 <small>${list.length}명</small></h3>
+      ${list.length ? `<div class="slist">${list.map(st => contractRow(st)).join('')}</div>` : '<p class="muted">등록된 직원이 없어요.</p>'}
+    </section>
+    <section class="panel"><h3>계약서 기본 설정<span class="spacer"></span><button class="btn sm" data-act="cBiz">고치기</button></h3>
+      <dl class="kv">
+        <dt>사업체명</dt><dd>${esc(b.name || c.storeName)}</dd>
+        <dt>대표자</dt><dd>${b.ceo ? esc(b.ceo) : '<span style="color:var(--red)">없음</span>'}</dd>
+        <dt>주소</dt><dd>${b.addr ? esc(b.addr) : '<span style="color:var(--red)">없음</span>'}</dd>
+        <dt>전화</dt><dd>${esc(b.phone || '—')}</dd>
+        <dt>임금지급일</dt><dd>매월 ${esc(cc.payDay)}일 · ${esc(cc.payMethod)}</dd>
+        <dt>특약 기본 문구</dt><dd class="small">${cc.special ? esc(cc.special) : '없음'}</dd>
+        <dt>사장님 서명</dt><dd>${S.ownerSign ? `<img class="sig sigsm" src="${S.ownerSign}" alt="등록된 사장님 서명"> <button class="btn sm" data-act="cSignReg">다시 등록</button>` : '<button class="btn sm pri" data-act="cSignReg">서명 등록하기</button>'}</dd>
+        <dt>자동 서명</dt><dd>${cc.autoOwnerSign ? '직원이 서명하면 사장님 서명을 자동으로 넣어요' : '사장님이 직접 ‘사장님 서명’을 눌러요'}</dd>
+      </dl>
+      <p class="hint">계약서는 고용노동부 표준근로계약서 항목을 따라 만들어요. 서명한 계약서는 바뀌지 않고, 내용을 고치면 ‘변경 계약서’가 새로 만들어져 직원이 다시 서명해요. 처음 쓰실 때 노무사나 세무사 사무실에 한 번 보여 주시면 안심이에요.</p>
+    </section>
+  </div>`;
+}
+function contractRow(st){
+  const c = currentContract(st.id), s = cStatus(c), lab = cLabel(c), sc = signedContract(st.id), old = contractsOf(st.id).length - 1;
+  const diff = sc && !isMonthly(st) && sc.terms.payType !== 'month' && +sc.terms.wage !== +st.wage ? `<div class="sub" style="color:var(--amber)">직원 정보 시급(${num(st.wage)}원)과 계약서 시급(${num(sc.terms.wage)}원)이 달라요 → ‘내용 고치기’로 변경 계약서를 만드세요</div>` : '';
+  return `<div class="sitem"><div><b>${esc(st.name)}</b> <span class="chip ${lab[1]}">${lab[0]}</span>
+      <div class="sub">${c ? `${c.ver}번째 계약서 · ${c.empSignedAt ? `직원 서명 ${fmtMD(ymd(new Date(c.empSignedAt)))}` : `만든 날 ${fmtMD(ymd(new Date(c.createdAt)))}`}${sc && sc !== c ? ` · 지금 유효한 계약: ${sc.ver}번째` : ''}${old > 0 ? ` · 이전 계약서 ${old}개` : ''}` : '아직 계약서가 없어요'}</div>${diff}</div>
+    <div class="row" style="justify-content:flex-end">
+      ${c ? `<button class="btn sm" data-act="cView" data-id="${c.id}">보기</button><button class="btn sm" data-act="cEdit" data-id="${c.id}">내용 고치기</button>` : `<button class="btn sm pri" data-act="cNew" data-id="${st.id}">계약서 만들기</button>`}
+      ${s === 'draft' ? `<button class="btn sm pri" data-act="cSignHere" data-id="${c.id}">이 기기에서 서명받기</button>` : ''}
+      ${s === 'owner' ? `<button class="btn sm pri" data-act="cOwnerSign" data-id="${c.id}">사장님 서명</button>` : ''}
+    </div></div>`;
+}
+function contractPreview(id){
+  const c = S.contracts.find(x => x.id === id);
+  if (!c){ S.editing = null; return contractView(); }
+  const s = cStatus(c), hist = contractsOf(c.staffId);
+  return `<section class="panel"><h3>${esc(c.name)} 근로계약서 <span class="chip ${cLabel(c)[1]}">${cLabel(c)[0]}</span><span class="spacer"></span><button class="btn sm" data-act="cancelEdit">목록으로</button></h3>
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn sm" data-act="cFile" data-id="${c.id}">인쇄용 파일 받기</button>
+      ${c.emp?.email ? `<button class="btn sm" data-act="cMail" data-id="${c.id}">${esc(c.emp.email)}(으)로 사본 보내기</button>` : ''}
+      <button class="btn sm" data-act="cEdit" data-id="${c.id}">내용 고치기</button>
+      ${s === 'draft' ? `<button class="btn sm pri" data-act="cSignHere" data-id="${c.id}">이 기기에서 서명받기</button>` : ''}
+      ${s === 'owner' ? `<button class="btn sm pri" data-act="cOwnerSign" data-id="${c.id}">사장님 서명</button>` : ''}
+    </div>
+    ${hist.length > 1 ? `<div class="row small" style="margin-bottom:10px">버전: ${hist.map(h => `<button class="btn sm ${h.id === c.id ? 'pri' : ''}" data-act="cView" data-id="${h.id}">${h.ver}번째 · ${cLabel(h)[0]}</button>`).join('')}</div>` : ''}
+    <div class="contract">${contractBody(c)}<p class="meta">${contractMeta(c)}</p></div>
+    ${s === 'signed' ? '<p class="hint">근로기준법상 계약서 사본을 직원에게 꼭 주어야 해요. ‘인쇄용 파일 받기’로 인쇄해서 주시거나, 직원 이메일이 있으면 사본을 보내 주세요.</p>' : ''}
+  </section>`;
+}
+function contractForm(id){
+  const c = S.contracts.find(x => x.id === id), st = c && staffById(c.staffId);
+  if (!c || !st){ S.editing = null; return contractView(); }
+  const t = S.cDraft || c.terms, signed = !!c.empSign;
+  const weekMin = t.sched.reduce((s, x) => s + (x.on ? shiftMin(x) : 0), 0);
+  return `<section class="panel"><h3>${esc(c.name)} 계약서 내용 고치기 <small>${c.ver}번째 계약서</small></h3>
+    ${signed ? '<div class="alertbar" style="background:var(--amber-soft)"><span>이 계약서는 이미 서명됐어요. 저장하면 <b style="color:var(--amber)">변경 계약서</b>가 새로 만들어지고, 직원이 다시 서명해야 해요. 지금 계약서는 기록으로 그대로 남아요.</span></div>' : ''}
+    <div class="form">
+      <label>근로 시작일<input type="date" id="ce-start" value="${esc(t.startDate)}"></label>
+      <label>근로 종료일 (없으면 비우기)<input type="date" id="ce-end" value="${esc(t.endDate)}"></label>
+      <label>근무 장소<input id="ce-place" value="${esc(t.place)}"></label>
+      <label>업무 내용<input id="ce-job" value="${esc(t.job)}"></label>
+      <label>급여 방식<select id="ce-ptype"><option value="hour" ${t.payType !== 'month' ? 'selected' : ''}>시간급</option><option value="month" ${t.payType === 'month' ? 'selected' : ''}>월급</option></select></label>
+      <label>시간급 (원, 시간급일 때)<input type="number" id="ce-wage" min="0" step="10" value="${esc(t.wage)}"></label>
+      <label>월급 (원, 월급일 때)<input type="number" id="ce-monthly" min="0" step="1000" value="${esc(t.monthly || '')}"></label>
+      <label>주휴일<select id="ce-hol">${WEEK_ORDER.map(i => `<option value="${i}" ${+t.holiday === i ? 'selected' : ''}>${DAYS[i]}요일</option>`).join('')}</select></label>
+      <label>상여금<input id="ce-bonus" value="${esc(t.bonus)}"></label>
+      <label>기타 급여 (제수당 등)<input id="ce-extra" value="${esc(t.extraPay)}"></label>
+      <label>임금지급일 (매월)<input type="number" id="ce-payday" min="1" max="31" value="${esc(t.payDay)}"></label>
+      <label>지급방법<select id="ce-paym">${PAY_METHODS.map(m => `<option ${t.payMethod === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+      <div class="full"><span class="small muted">사회보험</span><div class="row" style="margin-top:4px">${INS.map(([k, l]) => `<label class="check"><input type="checkbox" id="ce-ins-${k}" ${t.ins?.[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
+      <label class="full">특약 사항<textarea id="ce-special" rows="3" placeholder="예: 수습기간 3개월 (임금은 동일)">${esc(t.special)}</textarea></label>
+    </div>
+    <h3 style="margin-top:16px">근로일·근로시간 <small>1주 ${fmtH(weekMin)} · ${schedSummary(t.sched)}</small></h3>
+    <div class="row"><button class="btn sm" data-act="cReload" data-id="${c.id}">직원 정보의 근무 시간·시급 다시 불러오기</button></div>
+    <p class="hint">근무 시간은 ‘직원·설정’에서 직원 정보를 고친 뒤 이 버튼으로 불러오세요.</p>
+    <div class="row" style="margin-top:12px"><button class="btn pri" data-act="cSave" data-id="${c.id}">${signed ? '변경 계약서로 저장' : '저장'}</button><button class="btn" data-act="cancelEdit">취소</button></div>
+  </section>`;
+}
+function readContractForm(base){
+  return { ...base, startDate: $('#ce-start').value || base.startDate, endDate: $('#ce-end').value || '', place: $('#ce-place').value.trim(), job: $('#ce-job').value.trim(),
+    wage: Math.round(+$('#ce-wage').value || 0), payType: $('#ce-ptype').value === 'month' ? 'month' : 'hour', monthly: Math.round(+$('#ce-monthly').value || 0), holiday: +$('#ce-hol').value, bonus: $('#ce-bonus').value.trim() || '없음', extraPay: $('#ce-extra').value.trim() || '없음',
+    payDay: Math.min(31, Math.max(1, Math.round(+$('#ce-payday').value || 10))), payMethod: $('#ce-paym').value,
+    ins: Object.fromEntries(INS.map(([k]) => [k, $('#ce-ins-' + k).checked])), special: $('#ce-special').value.trim() };
+}
+function bizForm(){
+  const b = cfg().biz, cc = cfg().contract;
+  return `<section class="panel"><h3>계약서 기본 설정 고치기</h3>
+    <div class="form">
+      <label>사업체명<input id="cb-name" value="${esc(b.name)}" placeholder="${esc(cfg().storeName)}"></label>
+      <label>대표자 성명<input id="cb-ceo" value="${esc(b.ceo)}"></label>
+      <label class="full">사업장 주소<input id="cb-addr" value="${esc(b.addr)}"></label>
+      <label>사업장 전화<input id="cb-phone" value="${esc(b.phone)}" inputmode="tel"></label>
+      <label>임금지급일 (매월)<input type="number" id="cb-payday" min="1" max="31" value="${esc(cc.payDay)}"></label>
+      <label>지급방법<select id="cb-paym">${PAY_METHODS.map(m => `<option ${cc.payMethod === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+      <label class="full">특약 기본 문구 (새 계약서에 들어가요, 선택)<textarea id="cb-special" rows="3">${esc(cc.special)}</textarea></label>
+      <label class="check full"><input type="checkbox" id="cb-auto" ${cc.autoOwnerSign ? 'checked' : ''}> 직원이 서명하면 등록한 사장님 서명을 자동으로 넣기</label>
+    </div>
+    <p class="hint">여기서 바꾼 내용은 앞으로 만드는 계약서에 들어가요. 이미 서명한 계약서는 바뀌지 않아요.</p>
+    <div class="row" style="margin-top:12px"><button class="btn pri" data-act="cBizSave">저장</button><button class="btn" data-act="cancelEdit">취소</button></div></section>`;
+}
+function ownerSignForm(){
+  return `<section class="panel"><h3>사장님 서명 등록</h3>
+    <p class="muted small">아래 칸에 서명해 주세요. 계약서의 대표자 서명 자리에 들어가요.</p>
+    ${sigPad('sig-owner', '여기에 사장님 서명')}
+    <div class="row" style="margin-top:12px"><button class="btn pri" data-act="cSignSave">이 서명으로 등록</button><button class="btn" data-act="cancelEdit">취소</button></div></section>`;
+}
+const CACT = {
+  sigClear(d){ clearSig(d.id); },
+  async kSign(){ await kioskSign(); },
+  kSignLater(){ const k = S.kiosk; if (k.result && k.result.kind !== 'contract'){ k.step = 'done'; k.at = Date.now(); render(true); } else { resetKiosk(); render(true); } },
+  async cToggle(){
+    const cc = cfg().contract;
+    await write(() => S.db.doc('config/main').set({ ...S.config, contract:{ ...cc, on:!cc.on } }));
+    toast(cc.on ? '계약서 받기를 껐어요' : '계약서 받기를 켰어요', cc.on ? '' : '계약서가 없는 직원이 다음에 출근하면 서명 화면이 나와요.', 'ok'); render(true);
+  },
+  cBiz(){ S.editing = 'cbiz'; render(true); },
+  async cBizSave(){
+    const biz = { name: $('#cb-name').value.trim(), ceo: $('#cb-ceo').value.trim(), addr: $('#cb-addr').value.trim(), phone: $('#cb-phone').value.trim() };
+    const contract = { ...cfg().contract, payDay: Math.min(31, Math.max(1, Math.round(+$('#cb-payday').value || 10))), payMethod: $('#cb-paym').value, special: $('#cb-special').value.trim(), autoOwnerSign: $('#cb-auto').checked };
+    await write(() => S.db.doc('config/main').set({ ...S.config, biz, contract }));
+    toast('계약서 기본 설정을 저장했어요', '', 'ok'); S.editing = null; render(true);
+  },
+  cSignReg(){ S.tab = 'contract'; S.editing = 'csign'; render(true); },
+  async cSignSave(){
+    const data = sigData('sig-owner');
+    if (!data){ toast('서명을 해 주세요', '', 'warn'); return; }
+    await write(() => S.db.doc('config/sign').set({ data, at:Date.now() }));
+    S.ownerSign = data; toast('사장님 서명을 등록했어요', '', 'ok'); S.editing = null; render(true);
+  },
+  async cNew(d){ const st = staffById(d.id); if (!st) return; const c = await createContract(st); S.editing = 'cview:' + c.id; render(true); },
+  cView(d){ S.cDraft = null; S.editing = 'cview:' + d.id; render(true); scrollTo(0, 0); },
+  cEdit(d){ S.cDraft = null; S.editing = 'cedit:' + d.id; render(true); scrollTo(0, 0); },
+  cReload(d){ const c = S.contracts.find(x => x.id === d.id), st = c && staffById(c.staffId); if (!st) return; const f = readContractForm(c.terms), dt = defaultTerms(st); S.cDraft = { ...f, sched: dt.sched, wage: dt.wage, payType: dt.payType, monthly: dt.monthly }; render(true); toast('근무 시간과 시급을 불러왔어요', '저장을 눌러야 계약서에 들어가요.', 'ok'); },
+  async cSave(d){
+    const c = S.contracts.find(x => x.id === d.id), st = c && staffById(c.staffId);
+    if (!c || !st) return;
+    const terms = readContractForm(S.cDraft || c.terms);
+    if (!terms.place || !terms.job){ toast('근무 장소와 업무 내용을 넣어 주세요', '', 'warn'); return; }
+    if (terms.payType !== 'month' && terms.wage < MIN_WAGE) toast('시급이 2026년 최저시급(10,320원)보다 낮아요', '저장은 했어요. 금액을 다시 확인해 주세요.', 'warn');
+    if (c.empSign){ const n = await createContract(st, terms, c); toast('변경 계약서를 만들었어요', '직원이 다음 출근 때나 ‘이 기기에서 서명받기’로 다시 서명해요.', 'ok'); S.editing = 'cview:' + n.id; }
+    else { await write(() => S.db.doc('contracts/' + c.id).update({ terms })); c.terms = terms; toast('계약서 내용을 고쳤어요', '', 'ok'); S.editing = 'cview:' + c.id; }
+    S.cDraft = null; render(true);
+  },
+  async cOwnerSign(d){
+    const c = S.contracts.find(x => x.id === d.id);
+    if (!c) return;
+    if (!S.ownerSign){ toast('사장님 서명을 먼저 등록해 주세요', '', 'warn'); CACT.cSignReg(); return; }
+    const upd = ownerSignFields(); upd.hash = await contractHash({ ...c, ...upd });
+    await write(() => S.db.doc('contracts/' + c.id).update(upd)); Object.assign(c, upd);
+    toast('계약서 서명이 끝났어요', '사본을 직원에게 꼭 주세요.', 'ok'); render(true);
+  },
+  cSignHere(d){
+    const c = S.contracts.find(x => x.id === d.id);
+    if (!c) return;
+    S.mode = 'kiosk'; S.editing = null; S.unlocked = false; store.set('mode', 'kiosk'); resetKiosk();
+    Object.assign(S.kiosk, { staffId:c.staffId, step:'contract', contractId:c.id, at:Date.now() });
+    render(true); scrollTo(0, 0);
+  },
+  async cFile(d){ const c = S.contracts.find(x => x.id === d.id); if (c) await saveFile(`근로계약서_${c.name}_${c.ver}.html`, contractFile(c)); },
+  async cMail(d){
+    const c = S.contracts.find(x => x.id === d.id), to = c?.emp?.email;
+    if (!c || !to) return;
+    const mcp = await getMcp();
+    if (!mcp){ toast('이 화면에서는 메일을 보낼 수 없어요', mailErrText({ code:'not_granted' }), 'warn'); return; }
+    try {
+      const html = contractFile(c);
+      await mcp.callTool('Gmail', 'send_message', { to:[to], subject:`[${cfg().storeName}] 근로계약서 사본 (${c.name})`,
+        body:`${c.name}님, 근로계약서 사본을 보내 드려요.\n첨부 파일을 열면 계약서를 보고 인쇄할 수 있어요.\n\n${cfg().biz.name || cfg().storeName} 드림`,
+        attachments:[{ content: await blobB64(new Blob([html], { type:'text/html' })), filename:`근로계약서_${c.name}.html`, mimeType:'text/html' }] }, { cache:false });
+      toast('계약서 사본을 보냈어요', to, 'ok');
+    } catch (e){ toast('메일을 보내지 못했어요', mailErrText(e), 'warn'); }
+  }
+};
+
+/* ===================== 세무사 전달용 급여 내역 =====================
+   월말에 세무사 사무실에 보내던 문자를 자동으로 정리해요. 4대보험 가입자 / 미가입(인건비 신고자)로 나누고,
+   세전 급여·입사일(·퇴사일·주민번호)만 담아요. 금액은 보내기 전에 고칠 수 있어요. */
+const RRN_RE = /^(\d{6})-?(\d{7})$/;
+const maskRrn = r => { const m = RRN_RE.exec(r || ''); return m ? `${m[1]}-${m[2][0]}******` : ''; };
+const fmtYYMD = ds => { if (!ds) return ''; const d = parseDate(ds); return `${String(d.getFullYear()).slice(2)}년 ${d.getMonth()+1}월 ${d.getDate()}일`; };
+const prevYM = () => shiftYM(ymOf(todayStr()), -1);
+function reportRows(ym){
+  const now = Date.now(), ongoing = ym >= ymOf(todayStr()), rep = S.reports[ym] || {}, first = `${ym}-01`, last = `${ym}-${pad(daysIn(ym))}`;
+  return staffForMonth(ym).filter(st => !st.sample && (!st.hireDate || st.hireDate <= last) && (!st.endDate || st.endDate >= first)).map(st => {
+    const o = monthSummary(st, ym, now), calc = ongoing ? o.projGross : o.gross;
+    const amount = rep.amounts?.[st.id] ?? calc;
+    const newHire = !!st.hireDate && st.hireDate >= first && st.hireDate <= last;
+    const withRrn = !!st.rrn && (rep.rrn?.[st.id] ?? newHire);
+    return { st, o, calc, amount: Math.round(+amount || 0), edited: rep.amounts?.[st.id] != null && +rep.amounts[st.id] !== calc, ins: st.deduct === 'ins', newHire, withRrn,
+      left: st.endDate && st.endDate >= first && st.endDate <= last ? st.endDate : '' };
+  }).filter(r => r.amount > 0 || r.o.workDays);
+}
+function reportText(ym, rows = reportRows(ym), mask = false){
+  const [y, m] = ym.split('-'), rep = S.reports[ym] || {};
+  const block = list => list.length ? list.map((r, i) => `${i + 1}. ${r.st.name}: 입사일 ${fmtYYMD(r.st.hireDate) || '(입사일 없음)'}${r.left ? ` / 퇴사일 ${fmtYYMD(r.left)}` : ''}${r.withRrn ? `\n${mask ? maskRrn(r.st.rrn) : r.st.rrn}` : ''}\n(급여: [세전] ${num(r.amount)}원)`).join('\n\n') : '(없음)';
+  return `안녕하세요. ${y.slice(2)}년 ${+m}월 급여내역 보내드립니다.
+
+<4대보험 가입자 급여신고자>
+
+${block(rows.filter(r => r.ins))}
+
+<4대보험 미가입 인건비 신고자>
+
+${block(rows.filter(r => !r.ins))}${rep.note ? `\n\n참고: ${rep.note}` : ''}
+
+- ${cfg().biz.name || cfg().storeName} 드림`;
+}
+function reportCSV(ym, rows = reportRows(ym)){
+  const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const head = ['번호','구분','성명','입사일','퇴사일','주민등록번호','세전 급여(원)','급여 방식','근무일수','인정 근무시간'];
+  const lines = rows.sort((a, b) => b.ins - a.ins).map((r, i) => [i + 1, r.ins ? '4대보험 가입' : '4대보험 미가입', r.st.name, r.st.hireDate || '', r.left, r.withRrn ? r.st.rrn : '', r.amount,
+    isMonthly(r.st) ? `월급 ${r.st.monthly}` : `시급 ${r.st.wage}`, r.o.workDays, (r.o.paid / 60).toFixed(2)].map(q).join(','));
+  return '﻿' + [head.join(','), ...lines].join('\r\n');
+}
+function taxPanel(ym){
+  const rows = reportRows(ym), t = cfg().tax, rep = S.reports[ym] || {}, ongoing = ym >= ymOf(todayStr()), [y, m] = ym.split('-');
+  const editing = S.editing === 'report:' + ym;
+  const sent = rep.sentAt ? `<span class="chip ok">${fmtMD(ymd(new Date(rep.sentAt)))} ${fmtT(rep.sentAt)} ${rep.auto ? '자동으로 ' : ''}보냄</span>` : rep.err ? `<span class="chip red" title="${esc(rep.err)}">자동 보내기 실패</span>` : '<span class="chip faint">아직 안 보냄</span>';
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  if (editing) return `<section class="panel" id="taxSec"><h3>세무사 전달용 급여 내역 고치기 <small>${y}년 ${+m}월</small></h3>
+    <div class="tscroll"><table class="t"><thead><tr><th>직원</th><th>구분</th><th class="r">계산된 금액</th><th class="r">보낼 세전 급여</th><th>주민번호 같이 보내기</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td><b>${esc(r.st.name)}</b>${r.newHire ? ' <span class="chip blue">이달 입사</span>' : ''}</td><td>${r.ins ? '4대보험 가입' : '미가입'}</td><td class="r mono">${num(r.calc)}</td>
+      <td class="r"><input type="number" class="inlnum" id="rp-amt-${r.st.id}" value="${r.amount}" min="0" step="10"></td>
+      <td>${r.st.rrn ? `<label class="check"><input type="checkbox" id="rp-rrn-${r.st.id}" ${r.withRrn ? 'checked' : ''}> ${maskRrn(r.st.rrn)}</label>` : '<span class="small muted">등록 안 됨</span>'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="form" style="margin-top:10px"><label class="full">세무사님께 덧붙일 말 (선택)<input id="rp-note" value="${esc(rep.note || '')}" placeholder="예: 이기종님 10월 상여 30만 원 포함"></label></div>
+    <p class="hint">구분(4대보험 가입/미가입)은 직원 정보의 ‘급여에서 떼는 것’이 4대보험이면 가입자로 나눠요. 주민번호는 ‘직원·설정’에서 넣을 수 있어요.</p>
+    <div class="row" style="margin-top:10px"><button class="btn pri" data-act="rpSave" data-ym="${ym}">저장</button><button class="btn" data-act="rpReset" data-ym="${ym}">계산된 금액으로 되돌리기</button><button class="btn" data-act="cancelEdit">취소</button></div></section>`;
+  return `<section class="panel" id="taxSec"><h3>세무사 전달용 급여 내역 <small>${y}년 ${+m}월 · ${rows.length}명 · 세전 합계 ${num(total)}원</small><span class="spacer"></span>${sent}</h3>
+    ${ongoing ? '<p class="hint" style="margin-top:0">이번 달은 아직 끝나지 않았어요. 지금은 근무표대로 일했을 때의 <b>말일 예상 금액</b>으로 채워져 있어요.</p>' : ''}
+    <pre class="taxtext">${esc(reportText(ym, rows, true))}</pre>
+    <div class="row" style="margin-top:10px">
+      <button class="btn pri" data-act="rpMail" data-ym="${ym}">${t.email ? '세무사에게 메일 보내기' : '메일 주소 넣고 보내기'}</button>
+      <button class="btn" data-act="rpCopy" data-ym="${ym}">문자용 복사</button>
+      <button class="btn" data-act="rpCsv" data-ym="${ym}">엑셀 파일(CSV) 받기</button>
+      <button class="btn" data-act="rpEdit" data-ym="${ym}">금액·내용 고치기</button>
+    </div>
+    <div class="taxset">
+      <label>세무사 사무실 메일<input id="tx-email" value="${esc(t.email)}" inputmode="email" placeholder="예: 세무사 사무실 메일 주소"></label>
+      <label class="check"><input type="checkbox" id="tx-auto" ${t.auto ? 'checked' : ''}> 매월 1일 오전 9시가 지나면 지난달 내역을 자동으로 보내기</label>
+      <button class="btn sm" data-act="rpSet">보내기 설정 저장</button>
+    </div>
+    <p class="hint">‘문자용 복사’를 누르면 지금처럼 카톡·문자에 붙여 넣을 수 있어요. 메일로 보내면 같은 내용에 엑셀 파일이 첨부돼요. 자동 보내기는 가게 태블릿(출퇴근 화면)이 켜져 있을 때 보내지고, 금액을 고쳐 둔 게 있으면 고친 금액으로 보내요.</p>
+  </section>`;
+}
+async function sendReport(ym, auto){
+  const t = cfg().tax, to = mailAddrs(t.email);
+  if (!to.length) return { ok:false, err:'세무사 메일 주소가 없어요' };
+  const rows = reportRows(ym), [y, m] = ym.split('-');
+  const mcp = await getMcp();
+  if (!mcp) return { ok:false, err: mailErrText({ code:'not_granted' }) };
+  try {
+    await mcp.callTool('Gmail', 'send_message', { to, subject:`[${cfg().biz.name || cfg().storeName}] ${y.slice(2)}년 ${+m}월 급여내역`, body: reportText(ym, rows),
+      attachments:[{ content: await blobB64(new Blob([reportCSV(ym, rows)], { type:'text/csv' })), filename:`급여내역_${ym}.csv`, mimeType:'text/csv' }] }, { cache:false });
+    await S.db.doc('reports/' + ym).set({ ...(S.reports[ym] || {}), sentAt:Date.now(), sentTo:to.join(', '), auto:!!auto, err:'' });
+    return { ok:true };
+  } catch (e){
+    const err = mailErrText(e);
+    if (auto) S.db.doc('reports/' + ym).set({ ...(S.reports[ym] || {}), err, triedOn:todayStr() }).catch(() => {});
+    return { ok:false, err };
+  }
+}
+let reportBusy = false;
+async function autoReport(){   // 출퇴근 화면(태블릿)에서만: 매월 1일 9시 이후 지난달 내역을 한 번 보냄
+  const t = cfg().tax, now = new Date();
+  if (reportBusy || S.mode !== 'kiosk' || !t.auto || !mailAddrs(t.email).length || !S.db || !S.ready.staff || !S.ready.reports || now.getHours() < 9) return;
+  const ym = prevYM(), rep = S.reports[ym] || {};
+  needMonth(ym);
+  if (rep.sentAt || rep.triedOn === todayStr() || !S.monthLoaded[ym]) return;
+  reportBusy = true;
+  try {
+    const ref = S.db.doc('reports/' + ym), cur = await ref.get();   // 태블릿이 여러 대여도 한 번만
+    const d = cur.exists ? cur.data() : {};
+    if (d.sentAt || d.triedOn === todayStr()) return;
+    await ref.set({ ...d, triedOn:todayStr() });
+    S.reports[ym] = { ...d, triedOn:todayStr() };
+    await sendReport(ym, true);
+  } catch (e){ console.warn('report', e); }
+  finally { reportBusy = false; }
+}
+function reportReminder(){
+  const ym = prevYM(), rep = S.reports[ym];
+  if (!S.ready.reports || new Date().getDate() > 10 || rep?.sentAt || !staffForMonth(ym).some(st => !st.sample)) return '';
+  const [y, m] = ym.split('-');
+  return `<div class="alertbar" style="background:var(--amber-soft)"><span>📮 <b style="color:var(--amber)">${+m}월 급여 내역</b>을 아직 세무사에게 보내지 않았어요.</span><span class="spacer"></span><button class="btn sm" data-act="rpGo">보내러 가기</button></div>`;
+}
+const RACT = {
+  rpGo(){ S.tab = 'payroll'; S.month = prevYM(); S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); },
+  rpEdit(d){ S.editing = 'report:' + d.ym; render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); },
+  async rpSave(d){
+    const rows = reportRows(d.ym), amounts = {}, rrn = {};
+    for (const r of rows){
+      const v = Math.round(+$('#rp-amt-' + r.st.id).value || 0);
+      if (v !== r.calc) amounts[r.st.id] = v;
+      const cb = $('#rp-rrn-' + r.st.id); if (cb && r.st.rrn) rrn[r.st.id] = cb.checked;
+    }
+    await write(() => S.db.doc('reports/' + d.ym).set({ ...(S.reports[d.ym] || {}), amounts, rrn, note: $('#rp-note').value.trim() }));
+    toast('급여 내역을 저장했어요', '', 'ok'); S.editing = null; render(true);
+  },
+  async rpReset(d){ await write(() => S.db.doc('reports/' + d.ym).set({ ...(S.reports[d.ym] || {}), amounts:{} })); toast('계산된 금액으로 되돌렸어요', '', 'ok'); render(true); },
+  rpCopy(d){ copyText(reportText(d.ym), '급여 내역을 복사했어요', '세무사님 카톡이나 문자에 붙여 넣으세요.'); },
+  async rpCsv(d){ await saveFile(`급여내역_${d.ym}.csv`, reportCSV(d.ym)); },
+  async rpSet(){
+    const email = mailAddrs($('#tx-email').value)[0] || '', auto = $('#tx-auto').checked;
+    if (auto && !email){ toast('세무사 메일 주소를 넣어 주세요', '자동으로 보내려면 주소가 필요해요.', 'warn'); return; }
+    await write(() => S.db.doc('config/main').set({ ...S.config, tax:{ ...cfg().tax, email, auto } }));
+    toast('보내기 설정을 저장했어요', auto ? '매월 1일 오전 9시 이후 가게 태블릿이 지난달 내역을 보내요.' : '', 'ok'); render(true);
+  },
+  async rpMail(d){
+    const typed = mailAddrs($('#tx-email')?.value)[0];
+    if (typed && typed !== cfg().tax.email){ const nc = { ...S.config, tax:{ ...cfg().tax, email:typed } }; await write(() => S.db.doc('config/main').set(nc)); S.config = nc; }
+    if (!typed && !cfg().tax.email){ toast('세무사 메일 주소를 넣어 주세요', '아래 칸에 넣은 뒤 다시 눌러 주세요.', 'warn'); $('#tx-email')?.focus(); return; }
+    const r = await sendReport(d.ym, false);
+    toast(r.ok ? '세무사에게 급여 내역을 보냈어요' : '메일을 보내지 못했어요', r.ok ? cfg().tax.email : r.err, r.ok ? 'ok' : 'warn');
+    render(true);
+  }
+};
+
+/* ===================== 전체 백업 =====================
+   저장소의 모든 기록을 파일 하나(.json)로 받아요. 출퇴근 기록은 엑셀(.csv)로도 받을 수 있어요.
+   사진은 파일이 커서 넣지 않고, 사진 번호(id)만 기록에 남아요. */
+let backupBusy = false;
+function backupMonths(){   // 가장 이른 입사일·기록 달부터 이번 달까지 (최대 10년)
+  const cur = ymOf(todayStr());
+  let from = cur;
+  for (const st of S.staff) if (st.hireDate && ymOf(st.hireDate) < from) from = ymOf(st.hireDate);
+  for (const ym of Object.keys(S.months)) if (S.months[ym].size && ym < from) from = ym;
+  const out = [];
+  for (let ym = from; ym <= cur && out.length < 120; ym = shiftYM(ym, 1)) out.push(ym);
+  return out;
+}
+async function readAllPunches(onStep){
+  const out = {};
+  const months = backupMonths();
+  for (let i = 0; i < months.length; i++){
+    const ym = months[i];
+    onStep?.(i + 1, months.length);
+    const snap = await S.db.collection(`months/${ym}/punches`).limit(1000).get();
+    if (snap.docs.length) out[ym] = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  }
+  return out;
+}
+const backupStamp = () => { const d = new Date(); return `${ymd(d)}_${pad(d.getHours())}${pad(d.getMinutes())}`; };
+function backupLine(){
+  const b = S.backupStatus;
+  if (!b?.at) return '<span style="color:var(--amber)">아직 백업한 적이 없어요.</span>';
+  const days = Math.floor((Date.now() - b.at) / 86400000);
+  const when = `${fmtMD(ymd(new Date(b.at)))} ${fmtT(b.at)}`;
+  return days > 30 ? `<span style="color:var(--amber)">마지막 백업 ${when} (${days}일 전) — 새로 받아 두세요.</span>` : `마지막 백업 ${when}${b.kind === 'csv' ? ' (출퇴근 엑셀)' : ''}`;
+}
+function backupPanel(){
+  return `<section class="panel" style="margin-top:16px" id="backupSec"><h3>데이터 백업 <small>저장소의 기록을 내 기기에 파일로 받아 두기</small></h3>
+    <p class="small" style="margin:0 0 10px">${backupLine()}</p>
+    <div class="row">
+      <button class="btn pri" data-act="bkAll" ${backupBusy ? 'disabled' : ''}>전체 백업 파일 받기 (.json)</button>
+      <button class="btn" data-act="bkCsv" ${backupBusy ? 'disabled' : ''}>출퇴근 기록 전체 엑셀 받기 (.csv)</button>
+      <span class="small muted" id="bkNote"></span>
+    </div>
+    <p class="hint">전체 백업에는 가게 설정, 직원 정보, 모든 달의 출퇴근 기록, 근로계약서와 서명, 세무사 전달 내역이 들어가요. 사진은 크기 때문에 빠지고 사진 번호만 남아요.<br>
+    <b>백업 파일에는 주민번호·연락처·서명이 들어 있어요.</b> 카톡 등으로 함부로 보내지 말고, 사장님만 쓰는 PC나 USB, 클라우드에 보관하세요. 한 달에 한 번 받아 두시길 권해요.</p>
+  </section>`;
+}
+async function backupMark(kind){ try { await S.db.doc('status/backup').set({ at:Date.now(), kind }); } catch {} }
+const BACT = {
+  async bkAll(){
+    if (backupBusy || !S.db) return;
+    backupBusy = true;
+    const note = $('#bkNote'), step = (i, n) => { if (note) note.textContent = `기록 모으는 중… (${i}/${n}달)`; };
+    try {
+      const punches = await readAllPunches(step);
+      const data = {
+        app:'가게 타임카드 백업', format:1, exportedAt:new Date().toISOString(), store: cfg().storeName,
+        config: S.config, ownerSign: S.ownerSign || '', staff: S.staff, punches, contracts: S.contracts, reports: S.reports,
+        counts:{ staff: S.staff.length, punches: Object.values(punches).reduce((t, a) => t + a.length, 0), months: Object.keys(punches).length, contracts: S.contracts.length },
+        note:'사진 파일은 포함되지 않았어요 (기록의 inPhoto/outPhoto는 사진 번호).'
+      };
+      if (note) note.textContent = '파일 만드는 중…';
+      const dl = window.claude?.use ? await window.claude.use('downloads') : null;
+      if (!dl){ toast('이 화면에서는 파일 저장을 쓸 수 없어요', 'claude.ai에서 링크를 열어 주세요.', 'warn'); return; }
+      try {
+        await dl.save({ filename:`타임카드_백업_${backupStamp()}.json`, data: JSON.stringify(data, null, 1) });
+        await backupMark('json');
+        toast('전체 백업 파일을 저장했어요', `직원 ${data.counts.staff}명 · 출퇴근 ${data.counts.punches}건 · 계약서 ${data.counts.contracts}건`, 'ok');
+      } catch (e){ if (e?.code !== 'declined') toast('저장하지 못했어요', e?.message || '', 'warn'); }
+    } catch (e){ toast('기록을 모으지 못했어요', '인터넷 연결을 확인하고 다시 눌러 주세요.', 'warn'); console.warn(e); }
+    finally { backupBusy = false; if (note) note.textContent = ''; render(true); }
+  },
+  async bkCsv(){
+    if (backupBusy || !S.db) return;
+    backupBusy = true;
+    const note = $('#bkNote');
+    try {
+      const punches = await readAllPunches((i, n) => { if (note) note.textContent = `기록 모으는 중… (${i}/${n}달)`; });
+      const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const name = id => staffById(id)?.name;
+      const rows = Object.values(punches).flat().sort((a, b) => (a.date + (name(a.staffId) || a.name)).localeCompare(b.date + (name(b.staffId) || b.name), 'ko'));
+      const lines = rows.map(p => [p.date, DAYS[parseDate(p.date).getDay()], name(p.staffId) || p.name || '', p.kind === 'leave' ? '휴무 처리' : '근무',
+        p.in ? fmtT(p.in) : '', p.out ? fmtT(p.out, p.date).replace('⁺¹', ' (다음 날)') : '', p.sched ? `${p.sched.start}-${p.sched.end}` : '', p.lateMin || 0,
+        p.inBy === 'master' || p.outBy === 'master' ? '사장님 대리' : '', p.edited ? '수정됨' : '', p.inPhoto ? '있음' : p.inPhoto === null ? '없음' : '', p.note || ''].map(q).join(','));
+      const csv = '﻿' + ['날짜,요일,직원,구분,출근,퇴근,정해진 시간,지각(분),대리 입력,수정,출근 사진,메모', ...lines].join('\r\n');
+      if (await saveFile(`출퇴근기록_전체_${backupStamp()}.csv`, csv)) await backupMark('csv');
+    } catch (e){ toast('기록을 모으지 못했어요', '인터넷 연결을 확인하고 다시 눌러 주세요.', 'warn'); console.warn(e); }
+    finally { backupBusy = false; if (note) note.textContent = ''; render(true); }
+  }
+};
+
+/* ===================== 동작 ===================== */
+const ACT = {
+  tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
+  toOwner(){ S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },
+  toKiosk(){ S.mode = 'kiosk'; S.editing = null; S.unlocked = false; resetKiosk(); store.set('mode', 'kiosk'); render(true); requestWake(); },
+  sound(){ initAudio(); S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); if (S.sound){ beep('ok'); toast('소리 알림을 켰어요', '이 화면을 열어 두면 출퇴근·지각 때 소리가 나요.', 'ok'); } render(true); },
+  kPick(d){ const st = staffById(d.id); Object.assign(S.kiosk, { staffId:d.id, pin:'', err:'', step: st && st.pin ? 'pin' : 'action' }); requestWake(); render(true); },
+  kCancel(){ resetKiosk(); render(true); },
+  pad(d){ padPress(d.ctx, d.v); },
+  async kIn(){ if (cfg().photo.on) kPhoto('in'); else await kioskPunch('in'); },
+  async kOut(){ if (cfg().photo.on) kPhoto('out'); else await kioskPunch('out'); },
+  async kSnap(){ await snapCam(); },
+  async kNoPhoto(){ const k = S.kiosk; stopCam(); await kioskPunch(k.kind, { t:Date.now(), note: k.camErr || '카메라가 켜지지 않음' }); },
+  recSub(d){ S.recSub = d.v; render(true); },
+  dayShift(d){ S.viewDate = addDays(S.viewDate, +d.v); S.editing = null; render(true); },
+  dayToday(){ S.viewDate = todayStr(); S.editing = null; render(true); },
+  monthShift(d){ S.month = shiftYM(S.month, +d.v); render(true); },
+  yearShift(d){ S.year += +d.v; render(true); },
+  gotoDay(d){ S.viewDate = d.ds; S.recSub = 'day'; render(true); },
+  editPunch(d){ S.editing = `punch:${d.id}|${d.ds}`; render(true); },
+  cancelEdit(){ S.editing = null; render(true); },
+  async saveEdit(){ await savePunchEdit('work'); },
+  async leaveEdit(){ await savePunchEdit('leave'); },
+  async delEdit(){ const [sid, ds] = S.editing.slice(6).split('|'); await write(() => punchRef(sid, ds).delete()); toast('기록을 지웠어요', '', 'ok'); S.editing = null; render(true); },
+  copyTc(d){ const st = staffById(d.id); if (st) copyText(tcText(monthSummary(st, S.month))); },
+  async dlHtml(){ await saveFile(`임금대장_${S.month}.html`, ledgerFile(S.month)); },
+  async dlCsv(){ await saveFile(`임금대장_${S.month}.csv`, ledgerCSV(S.month)); },
+  copyLedger(){ copyText(ledgerTSV(S.month), '표를 복사했어요', '엑셀 첫 칸을 누르고 붙여 넣으세요.'); },
+  newStaff(){ S.editing = 'staff:new'; render(true); },
+  editStaff(d){ S.editing = 'staff:' + d.id; render(true); },
+  editConfig(){ S.editing = 'config'; render(true); },
+  copyMon(){ const s = $('#sc-start-1').value, e = $('#sc-end-1').value, b = $('#sc-brk-1').value; for (const i of [0,2,3,4,5,6]) if ($(`#sc-on-${i}`).checked){ $(`#sc-start-${i}`).value = s; $(`#sc-end-${i}`).value = e; $(`#sc-brk-${i}`).value = b; } },
+  async saveStaff(){ await saveStaff(); },
+  async retire(d){ await write(() => S.db.doc('staff/' + d.id).update({ active:false, endDate:todayStr() })); toast('퇴사 처리했어요', '지난 기록은 그대로 남아요.', 'ok'); S.editing = null; render(true); },
+  async reactivate(d){ await write(() => S.db.doc('staff/' + d.id).update({ active:true, endDate:null })); S.editing = null; render(true); },
+  async saveConfig(){ await saveConfig(); },
+  async photoToggle(){
+    const p = cfg().photo;
+    await write(() => S.db.doc('config/main').set({ ...S.config, photo:{ ...p, on:!p.on } }));
+    toast(p.on ? '사진 인증을 껐어요' : '사진 인증을 켰어요', p.on ? '이제 사진 없이 출퇴근을 찍어요.' : '가게 태블릿에서 처음 한 번 카메라 사용을 허락해 주세요.', 'ok');
+    render(true);
+  },
+  async photoUsage(){
+    const a = await getAssets();
+    if (!a){ toast('이 화면에서는 사진 저장 공간을 볼 수 없어요', '', 'warn'); return; }
+    try {
+      const r = await a.list(), cut = Date.now() - 90*86400000;
+      S.photoUse = { ...r.usage, old: r.assets.filter(x => x.contentType === 'image/jpeg' && Date.parse(x.createdAt) < cut).map(x => x.id) };
+    } catch { toast('저장 공간을 확인하지 못했어요', '잠시 뒤 다시 눌러 주세요.', 'warn'); }
+    render(true);
+  },
+  async photoClean(){
+    if (!S.confirmPhotoClean){ S.confirmPhotoClean = true; render(true); setTimeout(() => { S.confirmPhotoClean = false; scheduleRender(); }, 5000); return; }
+    S.confirmPhotoClean = false;
+    const a = await getAssets(), ids = S.photoUse?.old || [];
+    let n = 0;
+    for (const id of ids){ try { await a.delete(id); n++; } catch {} }
+    toast('지난 사진을 지웠어요', `${n}장 · 출퇴근 기록은 그대로 남아요`, 'ok');
+    await ACT.photoUsage();
+  },
+  photo(d){
+    if (!/^[\w-]+$/.test(d.id || '')) return;
+    const m = $('#modal');
+    m.innerHTML = `<div class="box"><img class="big" src="/_blob/${d.id}" alt="${esc(d.cap)} 사진"><p class="small muted" style="margin-top:8px">${esc(d.cap)}</p><div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" id="closeModal">닫기</button></div></div>`;
+    m.hidden = false; $('#closeModal').onclick = () => { m.hidden = true; };
+  },
+  mailSet(){ S.tab = 'staff'; S.editing = 'config'; store.set('tab', 'staff'); render(true); $('#mailSec')?.scrollIntoView({ block:'start' }); },
+  async mailToggle(){
+    const m = cfg().mail;
+    if (!m.on && !mailAddrs(m.to).length){ toast('받을 메일 주소를 먼저 넣어 주세요', '설정 화면을 열었어요.', 'warn'); ACT.mailSet(); return; }
+    await write(() => S.db.doc('config/main').set({ ...S.config, mail:{ ...m, on:!m.on } }));
+    toast(m.on ? '메일 알림을 껐어요' : '메일 알림을 켰어요', m.on ? '이제 메일은 오지 않아요.' : '가게 태블릿이 ‘출퇴근 화면’으로 켜져 있어야 메일이 가요.', 'ok');
+    render(true);
+  },
+  async mailTest(){
+    if (S.mailBusy) return;
+    const m = readMailForm(), note = $('#mailTestNote');
+    if (!mailAddrs(m.to).length){ toast('받을 메일 주소를 넣어 주세요', '', 'warn'); return; }
+    S.mailBusy = true; if (note) note.textContent = '보내는 중…';
+    const r = await sendMail('시험 메일', ['휴대폰 메일 알림이 잘 연결됐어요.', '이 메일이 휴대폰 알림으로 떴다면 준비 끝이에요.'], { test:true, mail:m });
+    S.mailBusy = false;
+    if (note) note.textContent = r.ok ? '보냈어요. 휴대폰에 알림이 왔는지 확인해 보세요.' : r.err;
+    toast(r.ok ? '시험 메일을 보냈어요' : '메일을 보내지 못했어요', r.ok ? m.to : r.err, r.ok ? 'ok' : 'warn');
+  },
+  async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
+};
+Object.assign(ACT, CACT, RACT, BACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+document.addEventListener('click', e => {
+  initAudio();
+  S.kiosk.at = Date.now();
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const fn = ACT[b.dataset.act];
+  if (fn) Promise.resolve(fn(b.dataset, b)).catch(err => console.warn(err));
+});
+document.addEventListener('change', e => {
+  const sm = e.target.id?.match(/^sc-(on|off)-[0-6]$/);
+  if (sm) e.target.closest('tr')?.classList.toggle('rest', sm[1] === 'off');
+  if (e.target.id === 'f-ptype') e.target.closest('.form')?.classList.toggle('pt-m', e.target.value === 'month');
+  if (e.target.id === 'dayPick' && e.target.value){ S.viewDate = e.target.value; S.editing = null; render(true); }
+  if (e.target.id === 'rememberDev') S.remember = e.target.checked;
+  if (e.target.id === 'camFile' && e.target.files?.[0]) fileShot(e.target.files[0]).catch(err => console.warn(err));
+});
+document.addEventListener('keydown', e => {
+  const ctx = S.mode === 'owner' && !S.unlocked ? 'owner' : S.mode === 'kiosk' && S.kiosk.step === 'pin' ? 'staff' : null;
+  if (!ctx || e.target.matches('input,textarea,select')) return;
+  if (/^[0-9]$/.test(e.key)) padPress(ctx, e.key);
+  else if (e.key === 'Backspace') padPress(ctx, 'back');
+  else if (e.key === 'Escape') padPress(ctx, 'cancel');
+});
+
+function padPress(ctx, v){
+  if (ctx === 'owner'){
+    if (v === 'cancel'){ S.lockPin = ''; S.lockErr = ''; ACT.toKiosk(); return; }
+    S.lockPin = v === 'back' ? S.lockPin.slice(0, -1) : (S.lockPin + v).slice(0, 4);
+    S.lockErr = '';
+    if (S.lockPin.length === 4){
+      if (S.lockPin === String(cfg().ownerPin)){ S.unlocked = true; if (S.remember) store.set('ownerDevice', '1'); S.lockPin = ''; checkNotyet(); }
+      else { S.lockErr = '번호가 맞지 않아요'; S.lockPin = ''; }
+    }
+    render(true); return;
+  }
+  const k = S.kiosk;
+  if (v === 'cancel'){ resetKiosk(); render(true); return; }
+  k.pin = v === 'back' ? k.pin.slice(0, -1) : (k.pin + v).slice(0, 4);
+  k.err = '';
+  if (k.pin.length === 4){
+    const st = staffById(k.staffId);
+    const master = String(cfg().masterPin || '');
+    if (st && k.pin === String(st.pin)){ k.step = 'action'; k.pin = ''; k.master = false; }
+    else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; }   // 사장님 마스터 번호: 어느 직원이든 통과
+    else { k.err = '번호가 맞지 않아요. 다시 입력해 주세요'; k.pin = ''; }
+  }
+  render(true);
+}
+function kPhoto(kind){
+  const k = S.kiosk;
+  Object.assign(k, { step:'photo', kind, cam:'opening', camErr:'', at:Date.now() });
+  render(true); startCam();
+}
+async function photoFields(kind, shot){   // shot: 사진 인증일 때 { blob?, t, note? }
+  if (!shot) return {};
+  let id = null, note = shot.note || '';
+  if (shot.blob){
+    const r = await uploadPhoto(shot.blob);
+    if (r.id) id = r.id; else note = r.err;
+    S.kiosk.photoUrl = URL.createObjectURL(shot.blob);
+  }
+  return { [kind + 'Photo']: id, [kind + 'PhotoNote']: note };
+}
+async function kioskPunch(kind, shot){
+  const k = S.kiosk, st = staffById(k.staffId);
+  if (!st || k.busy) return;
+  k.busy = true; render(true);
+  const now = shot?.t || Date.now(), today = todayStr();
+  try {
+    if (kind === 'in'){
+      const sc = schedFor(st, today, null);
+      const late = sc && now > at(today, sc.start) + cfg().graceMin*60000 ? Math.round((now - at(today, sc.start))/60000) : 0;
+      const ph = await photoFields('in', shot);
+      await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}) }));
+      k.result = { kind:'in', t:now, late, photoErr: shot?.blob && !ph.inPhoto ? ph.inPhotoNote : '', msg: late ? `예정 ${sc.start}보다 ${late}분 늦었어요. 사장님께 알림이 갔어요.` : sc ? `오늘 퇴근 예정 ${sc.end} · 좋은 하루 보내세요!` : '추가 근무로 기록했어요.' };
+      mailPunch(st, 'in', now, { late, sc, blob: shot?.blob, master: k.master });
+      const need = await contractNeeded(st);
+      if (need){ k.contractId = need.id; k.nextStep = 'contract'; }
+    } else {
+      const op = openPunch(st, now);
+      if (!op){ toast('출근 기록이 없어요', '사장님께 확인을 요청하세요.', 'warn'); resetKiosk(); render(true); return; }
+      const ph = await photoFields('out', shot);
+      await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}) }));
+      const r = dayCalc(st, op.date, now);
+      k.result = { kind:'out', t:now, late:false, photoErr: shot?.blob && !ph.outPhoto ? ph.outPhotoNote : '', msg:`오늘 ${fmtH(r.worked)} 근무했어요. 수고하셨어요!` };
+      mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master });
+    }
+    k.step = k.nextStep || 'done'; k.nextStep = null; k.at = Date.now(); beep('ok');
+  } catch { if (k.step === 'photo') resetKiosk(); }
+  k.busy = false; render(true);
+}
+async function savePunchEdit(kind){
+  const [sid, ds] = S.editing.slice(6).split('|');
+  const st = staffById(sid), p = getPunch(sid, ds);
+  if (!st) return;
+  const sc = p && p.sched !== undefined ? p.sched : schedFor(st, ds, null);
+  const note = $('#ed-note')?.value.trim() || '';
+  const keep = p ? Object.fromEntries(['inPhoto', 'inPhotoNote', 'outPhoto', 'outPhotoNote', 'inBy', 'outBy'].filter(f => p[f] !== undefined).map(f => [f, p[f]])) : {};   // 고쳐도 사진은 그대로
+  let doc;
+  if (kind === 'leave') doc = { ...keep, staffId:sid, name:st.name, date:ds, kind:'leave', in:null, out:null, sched:sc, lateMin:0, edited:true, note: note || '휴무 처리' };
+  else {
+    const tin = $('#ed-in').value, tout = $('#ed-out').value;
+    if (!tin){ toast('출근 시각을 넣어 주세요', '', 'warn'); return; }
+    const inMs = at(ds, tin);
+    let outMs = tout ? at(ds, tout) : null;
+    if (outMs !== null && outMs <= inMs) outMs += 86400000;
+    const late = sc && inMs > at(ds, sc.start) + cfg().graceMin*60000 ? Math.round((inMs - at(ds, sc.start))/60000) : 0;
+    doc = { ...keep, staffId:sid, name:st.name, date:ds, kind:'work', in:inMs, out:outMs, sched:sc, lateMin:late, edited:true, note };
+  }
+  await write(() => punchRef(sid, ds).set(doc));
+  toast('기록을 고쳤어요', `${st.name} · ${fmtMD(ds)}`, 'ok');
+  S.editing = null; render(true);
+}
+async function saveStaff(){
+  const id0 = S.editing === 'staff:new' ? null : S.editing.slice(6);
+  const old = id0 ? staffById(id0) : null;
+  const name = $('#f-name').value.trim(), pin = $('#f-pin').value.trim(), wage = Math.round(+$('#f-wage').value || 0);
+  if (!name){ toast('이름을 넣어 주세요', '', 'warn'); return; }
+  if (!/^\d{4}$/.test(pin)){ toast('개인 번호는 숫자 4자리로 넣어 주세요', '', 'warn'); return; }
+  if (S.staff.some(s => s.id !== id0 && s.active !== false && String(s.pin) === pin)){ toast('다른 직원과 같은 번호예요', '겹치지 않는 번호로 바꿔 주세요.', 'warn'); return; }
+  if (cfg().masterPin && pin === String(cfg().masterPin)){ toast('사장님 마스터 번호와 같아요', '직원 개인 번호는 마스터 번호와 다르게 정해 주세요.', 'warn'); return; }
+  if (pin === String(cfg().ownerPin)){ toast('사장님 관리 번호와 같아요', '이 번호로는 사장님 화면이 열려요. 다른 번호로 정해 주세요.', 'warn'); return; }
+  const ptype = $('#f-ptype').value === 'month' ? 'month' : 'hour', monthly = Math.round(+$('#f-monthly').value || 0);
+  if (ptype === 'month' && !monthly){ toast('월급 금액을 넣어 주세요', '세전 금액으로 넣어 주세요.', 'warn'); return; }
+  let rrn = old?.rrn || '';
+  const rrnIn = $('#f-rrn').value.replace(/\s/g, '');
+  if (rrnIn){ const m = RRN_RE.exec(rrnIn); if (!m){ toast('주민등록번호 형식을 확인해 주세요', '예: 000000-0000000', 'warn'); return; } rrn = `${m[1]}-${m[2]}`; }
+  if ($('#f-rrn-del')?.checked) rrn = '';
+  let birth = $('#f-birth').value || '';
+  if (!birth && rrn){ const g = +rrn[7], cent = g === 3 || g === 4 || g === 7 || g === 8 ? '20' : '19'; birth = `${cent}${rrn.slice(0, 2)}-${rrn.slice(2, 4)}-${rrn.slice(4, 6)}`; }
+  const sched = Array.from({ length:7 }, (_, i) => ({ on: $(`#sc-on-${i}`).checked, start: $(`#sc-start-${i}`).value || '09:00', end: $(`#sc-end-${i}`).value || '18:00', brk: Math.max(0, Math.round(+$(`#sc-brk-${i}`).value || 0)) }));
+  const doc = { ...(old ? Object.fromEntries(Object.entries(old).filter(([k]) => k !== 'id')) : { active:true, order:Date.now() }),
+    name, pin, wage, payType: ptype, monthly, rrn, position: $('#f-pos').value.trim(), hireDate: $('#f-hire').value || '', birth, deduct: $('#f-ded').value, sched };
+  const id = id0 || 's' + Date.now().toString(36);
+  await write(() => S.db.doc('staff/' + id).set(doc));
+  const low = ptype === 'hour' && wage < MIN_WAGE;
+  toast(old ? '직원 정보를 고쳤어요' : '직원을 등록했어요', low ? `시급이 2026년 최저시급(10,320원)보다 낮아요.` : name, low ? 'warn' : 'ok');
+  S.editing = null; render(true);
+}
+async function saveConfig(){
+  const pin = $('#c-pin').value.trim();
+  if (!/^\d{4}$/.test(pin)){ toast('관리 번호는 숫자 4자리로 넣어 주세요', '', 'warn'); return; }
+  const master = $('#c-master').value.trim();
+  if (master && !/^\d{4}$/.test(master)){ toast('마스터 번호는 숫자 4자리로 넣어 주세요', '쓰지 않으려면 칸을 비워 두세요.', 'warn'); return; }
+  const clash = master && activeStaff().find(s => String(s.pin) === master);
+  if (clash){ toast('마스터 번호가 직원 번호와 같아요', `${clash.name}님의 개인 번호와 겹쳐요. 다른 번호로 정해 주세요.`, 'warn'); return; }
+  const doc = { storeName: $('#c-name').value.trim() || '우리 가게', ownerPin: pin, masterPin: master,
+    graceMin: Math.max(0, Math.round(+$('#c-grace').value || 0)), otUnit: Math.max(1, Math.round(+$('#c-unit').value || 1)),
+    earlyClamp: $('#c-early').checked, otPremium: $('#c-prem').checked, weeklyHoliday: $('#c-hol').checked,
+    rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
+    mail: readMailForm(), photo:{ ...cfg().photo, on: $('#p-on').checked } };
+  if (doc.mail.on && !mailAddrs(doc.mail.to).length){ toast('받을 메일 주소를 넣어 주세요', '메일 알림을 켜려면 주소가 필요해요.', 'warn'); return; }
+  await write(() => S.db.doc('config/main').set({ ...S.config, ...doc }));
+  toast('설정을 저장했어요', '', 'ok');
+  S.editing = null; render(true);
+}
+function readMailForm(){
+  return { on: $('#m-on').checked, to: mailAddrs($('#m-to').value).join(', '),
+    ev:{ in: $('#m-in').checked, late: $('#m-late').checked, notyet: $('#m-notyet').checked, out: $('#m-out').checked } };
+}
+async function clearSamples(){
+  const ids = new Set(S.staff.filter(s => s.sample).map(s => s.id));
+  let n = 0;
+  for (const ym of Object.keys(S.months)) for (const p of [...S.months[ym].values()]) if (ids.has(p.staffId)){ await write(() => S.db.doc(`months/${ym}/punches/${p.id}`).delete()); n++; }
+  for (const id of ids) await write(() => S.db.doc('staff/' + id).delete());
+  toast('예시 데이터를 지웠어요', `직원 ${ids.size}명 · 기록 ${n}건`, 'ok');
+  render(true);
+}
+async function saveFile(filename, data){
+  const dl = window.claude?.use ? await window.claude.use('downloads') : null;
+  if (!dl){ toast('이 화면에서는 파일 저장을 쓸 수 없어요', '대신 ‘표 복사’로 엑셀에 붙여 넣어 주세요.', 'warn'); return; }
+  try { await dl.save({ filename, data }); toast('파일을 저장했어요', filename, 'ok'); return true; }
+  catch (e){ if (e?.code !== 'declined') toast('저장하지 못했어요', e?.message || '', 'warn'); }
+}
+function copyText(text, title = '복사했어요', body = '카카오톡이나 메모에 붙여 넣으세요.'){
+  const fallback = () => {
+    const m = $('#modal');
+    m.innerHTML = `<div class="box"><h3 style="margin-bottom:8px">아래 내용을 길게 눌러 복사하세요</h3><textarea id="copyBox" readonly>${esc(text)}</textarea><div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" id="closeModal">닫기</button></div></div>`;
+    m.hidden = false; const ta = $('#copyBox'); ta.focus(); ta.select();
+    $('#closeModal').onclick = () => { m.hidden = true; };
+  };
+  try { navigator.clipboard.writeText(text).then(() => toast(title, body, 'ok'), fallback); } catch { fallback(); }
+}
+let wake = null;
+function requestWake(){ if (S.mode !== 'kiosk' || wake) return; try { navigator.wakeLock?.request('screen').then(w => { wake = w; w.addEventListener('release', () => { wake = null; }); }).catch(() => {}); } catch {} }
+
+/* ===================== 시계 · 시작 ===================== */
+let lastDay = todayStr();
+function tick1(){
+  const now = Date.now();
+  const t = $('#ktime'); if (t) t.textContent = fmtClock(now);
+  const ct = $('#camtime'); if (ct) ct.textContent = fmtClock(now);
+  const k = S.kiosk;
+  if (S.mode === 'kiosk' && k.step !== 'list' && !k.busy){
+    const idle = now - (k.at || now);
+    if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : 30000)){ resetKiosk(); render(true); }
+  }
+  if (todayStr() !== lastDay){
+    lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();
+    const ym = ymOf(lastDay); needMonth(ym);
+    const kd = $('#kdate'); if (kd) kd.textContent = fmtDateLong(lastDay);
+    scheduleRender();
+  }
+}
+function tick30(){
+  checkNotyet();
+  checkNotyetMail().catch(err => console.warn(err));
+  autoReport().catch(err => console.warn(err));
+  if (S.mode === 'owner' && S.unlocked && ['now','payroll'].includes(S.tab)) render(false);
+  else if (S.mode === 'kiosk' && S.kiosk.step === 'list') render(false);
+  else renderTop();
+}
+async function boot(){
+  const h = (location.hash || '').slice(1);
+  S.mode = h === 'kiosk' ? 'kiosk' : TABS.some(t => t[0] === h) ? 'owner' : (store.get('mode') || 'kiosk');
+  S.tab = TABS.some(t => t[0] === h) ? h : (store.get('tab') || 'now');
+  S.unlocked = S.mode === 'owner' && store.get('ownerDevice') === '1';
+  loadNotified(); loadMailed();
+  render(true);
+  setInterval(tick1, 1000);
+  setInterval(tick30, 30000);
+  connTimer = setTimeout(() => { if (!S.connected && !S.noDb){ S.connNote = '저장소 응답을 기다리고 있어요. 인터넷 연결을 확인해 주세요.'; renderBanner(); } }, 10000);
+  const db = window.claude?.use ? await window.claude.use('db') : null;
+  if (!db){ clearTimeout(connTimer); S.noDb = true; S.ready.staff = true; render(true); return; }
+  S.db = db;
+  db.doc('config/main').onSnapshot(s => { S.config = s.exists ? s.data() : {}; S.ready.config = true; if (!s.metadata.fromCache) markConnected(); scheduleRender(); }, e => console.warn('config', e));
+  db.collection('staff').onSnapshot(s => {
+    S.staff = s.docs.map(d => ({ id:d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.name).localeCompare(String(b.name), 'ko'));
+    S.ready.staff = true; if (!s.metadata.fromCache) markConnected(); scheduleRender();
+  }, e => { S.ready.staff = true; console.warn('staff', e); scheduleRender(); });
+  db.collection('contracts').onSnapshot(s => { S.contracts = s.docs.map(d => ({ id:d.id, ...d.data() })); S.ready.contracts = true; scheduleRender(); }, e => { S.ready.contracts = true; console.warn('contracts', e); scheduleRender(); });
+  db.collection('reports').onSnapshot(s => { S.reports = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); S.ready.reports = true; scheduleRender(); }, e => { S.ready.reports = true; console.warn('reports', e); });
+  db.doc('config/sign').onSnapshot(s => { const d = s.exists ? s.data().data : ''; S.ownerSign = SIG_RE.test(d || '') ? d : ''; scheduleRender(); }, e => console.warn('sign', e));
+  db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
+  db.doc('status/mail').onSnapshot(s => { S.mailStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('mail', e));
+  needMonth(ymOf(todayStr()));
+}
+boot();
+</script>

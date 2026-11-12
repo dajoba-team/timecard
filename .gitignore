@@ -1,0 +1,15 @@
+# 시험할 때 자동으로 만들어지는 파일
+tests/chk.js
+node_modules/
+
+# 개인정보가 들어 있는 백업·내보내기 파일은 저장소에 올리지 않기
+backups/
+*백업*.json
+타임카드_백업_*.json
+출퇴근기록_전체_*.csv
+급여내역_*.csv
+임금대장_*
+근로계약서_*
+
+.DS_Store
+Thumbs.db

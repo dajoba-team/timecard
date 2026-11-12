@@ -1,0 +1,12 @@
+{
+  "name": "dajoba-timecard",
+  "version": "11.0.0",
+  "private": true,
+  "description": "가게 직원 출퇴근·급여·근로계약 관리 (claude.ai 아티팩트로 운영)",
+  "scripts": {
+    "test": "node tests/run-all.js",
+    "test:verbose": "node tests/run-all.js -v",
+    "sample-data": "node tools/make-sample-data.js"
+  },
+  "engines": { "node": ">=18" }
+}
