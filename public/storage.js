@@ -455,6 +455,17 @@
       return null;   // mcp(메일): 아직 없음
     },
     photoUrl,
+    // Edge Function 호출 (로그인한 사장님 토큰이 자동으로 붙음). 실패하면 서버가 준 오류 문구로 throw
+    invoke: async (name, body) => {
+      await ensureLogin();
+      const { data, error } = await sb.functions.invoke(name, { body: body || {} });
+      if (error) {
+        let msg = error.message;
+        try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {}
+        throw Object.assign(new Error(msg), { code: /fetch|network/i.test(msg) ? "unavailable" : "function_error" });
+      }
+      return data;
+    },
     userEmail: () => userEmail,
     pendingCount: () => pendOps.length,
     // 로그아웃: 보내지 못한 기록도 이 기기에서 지움 (앱이 먼저 경고함)

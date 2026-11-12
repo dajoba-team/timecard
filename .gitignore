@@ -23,3 +23,6 @@ backups/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Supabase CLI 임시 파일
+supabase/.temp/

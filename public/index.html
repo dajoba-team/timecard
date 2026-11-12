@@ -383,6 +383,7 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   rates:{ np:4.75, hi:3.595, ltc:13.14, ei:0.9 },
   mail:{ on:false, to:'', ev:{ in:true, late:true, out:false, notyet:true } },
   photo:{ on:false },
+  slack:{ on:false },
   biz:{ name:'', ceo:'', addr:'', phone:'' },
   contract:{ on:false, autoOwnerSign:true, payDay:10, payMethod:'근로자 명의 예금통장에 입금', special:'' },
   tax:{ email:'', auto:false } };
@@ -397,12 +398,12 @@ const S = {
   kiosk:{ step:'list', staffId:null, pin:'', err:'', at:0, result:null, busy:false },
   recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
   sound: store.get('sound') === '1', audio:null, confirmClear:false,
-  mailStatus:null, mailed:new Set(), mailBusy:false,
+  mailStatus:null, mailed:new Set(), mailBusy:false, alertStatus:null, slackBusy:false,
   photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0
 };
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
-  photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) },
+  photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
   biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
@@ -812,6 +813,12 @@ function photoBits(p, kind){
   return '';
 }
 function loadMailed(){ try { const o = JSON.parse(store.get('mailed') || 'null'); if (o && o.d === todayStr()) S.mailed = new Set(o.k); } catch {} }
+function alertStatusLine(){
+  const s = S.alertStatus;
+  if (!s) return '아직 보낸 슬랙 알림이 없어요.';
+  const when = todayStr() === ymd(new Date(s.at)) ? fmtT(s.at) : `${fmtMD(ymd(new Date(s.at)))} ${fmtT(s.at)}`;
+  return s.ok ? `마지막 알림: ${when} · ${esc(s.text || '')}` : `<span style="color:var(--red)">${when} 슬랙 알림을 못 보냈어요 — ${esc(s.err || '')}</span>`;
+}
 function mailStatusLine(){
   const s = S.mailStatus;
   if (!s) return '아직 보낸 메일이 없어요.';
@@ -973,11 +980,21 @@ function buildFeed(today, now){
   }
   return items.sort((a, b) => b.t - a.t);
 }
+function slackBar(){   // 현황 탭의 슬랙 미출근 알림 칸 (직원이 없을 때도 보여서 시험 알림을 먼저 해 볼 수 있게)
+  const k = cfg().slack;
+  return `<div class="alertbar mailbar ${k.on ? 'on' : ''}" id="slackBar">
+    <span>💬 <b>슬랙 미출근 알림 ${k.on ? '켜짐' : '꺼짐'}</b> — 정해진 출근 시각에서 ${num(+cfg().graceMin || 0)}분이 지나도 출근 기록이 없으면 슬랙으로 알려요. 가게 태블릿이 꺼져 있어도 서버가 5분마다 확인해요.
+      <small class="mailst">${alertStatusLine()}</small></span>
+    <span class="spacer"></span>
+    <button class="btn sm" data-act="slackTest" ${S.slackBusy ? 'disabled' : ''}>${S.slackBusy ? '보내는 중…' : '시험 알림 보내기'}</button>
+    <button class="btn sm ${k.on ? '' : 'pri'}" role="switch" aria-checked="${k.on}" data-act="slackToggle">${k.on ? '슬랙 알림 끄기' : '슬랙 알림 켜기'}</button>
+  </div>`;
+}
 function nowView(){
   const now = Date.now(), today = todayStr();
   if (!S.ready.staff) return loadingNote();
   const list = activeStaff();
-  if (!list.length) return `<div class="empty"><b>직원을 먼저 등록해 주세요</b>‘직원·설정’ 탭에서 이름, 개인 번호, 시급, 요일별 근무 시간을 넣으면 출퇴근 화면에 나타나요.<br><br><button class="btn pri" data-act="tab" data-v="staff">직원 등록하러 가기</button></div>`;
+  if (!list.length) return `<div class="empty"><b>직원을 먼저 등록해 주세요</b>‘직원·설정’ 탭에서 이름, 개인 번호, 시급, 요일별 근무 시간을 넣으면 출퇴근 화면에 나타나요.<br><br><button class="btn pri" data-act="tab" data-v="staff">직원 등록하러 가기</button></div>` + slackBar();
   const rows = list.map(st => ({ st, r: dayCalc(st, today, now), op: openPunch(st, now) }));
   const working = rows.filter(x => x.op).length;
   const late = rows.filter(x => x.r.late).length;
@@ -1001,6 +1018,7 @@ function nowView(){
     <button class="btn sm" data-act="mailSet">메일 설정</button>
     <button class="btn sm ${m.on ? '' : 'pri'}" role="switch" aria-checked="${m.on}" data-act="mailToggle">${m.on ? '메일 알림 끄기' : '메일 알림 켜기'}</button>
   </div>`; })()}
+  ${slackBar()}
   <div class="stats">
     <div class="stat blue"><small>지금 근무 중</small><b>${working}</b><em> / 오늘 예정 ${sched}명</em></div>
     <div class="stat ${late ? 'red' : ''}"><small>오늘 지각</small><b>${late}</b><em>명</em></div>
@@ -2071,6 +2089,23 @@ const ACT = {
     m.hidden = false; $('#closeModal').onclick = () => { m.hidden = true; };
   },
   mailSet(){ S.tab = 'staff'; S.editing = 'config'; store.set('tab', 'staff'); render(true); $('#mailSec')?.scrollIntoView({ block:'start' }); },
+  async slackToggle(){
+    const k = cfg().slack;
+    await write(() => S.db.doc('config/main').set({ ...S.config, slack:{ ...k, on:!k.on } }));
+    toast(k.on ? '슬랙 알림을 껐어요' : '슬랙 알림을 켰어요', k.on ? '이제 미출근 알림이 오지 않아요.' : '먼저 ‘시험 알림 보내기’로 슬랙에 잘 오는지 확인해 보세요.', 'ok');
+    render(true);
+  },
+  async slackTest(){
+    if (S.slackBusy) return;
+    if (!window.tcStore?.invoke){ toast('이 화면에서는 슬랙 알림을 보낼 수 없어요', '', 'warn'); return; }
+    S.slackBusy = true; render(true);
+    try {
+      await window.tcStore.invoke('tc-notyet-check', { test:true });
+      toast('시험 알림을 보냈어요', '슬랙에 메시지가 왔는지 확인해 보세요.', 'ok');
+    } catch (e){
+      toast('슬랙 알림을 보내지 못했어요', e?.code === 'unavailable' ? '인터넷 연결을 확인해 주세요.' : (e?.message || ''), 'warn');
+    } finally { S.slackBusy = false; render(true); }
+  },
   async mailToggle(){
     const m = cfg().mail;
     if (!m.on && !mailAddrs(m.to).length){ toast('받을 메일 주소를 먼저 넣어 주세요', '설정 화면을 열었어요.', 'warn'); ACT.mailSet(); return; }
@@ -2327,6 +2362,7 @@ async function boot(){
   db.collection('reports').onSnapshot(s => { S.reports = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); S.ready.reports = true; scheduleRender(); }, e => { S.ready.reports = true; console.warn('reports', e); });
   db.doc('config/sign').onSnapshot(s => { const d = s.exists ? s.data().data : ''; S.ownerSign = SIG_RE.test(d || '') ? d : ''; scheduleRender(); }, e => console.warn('sign', e));
   db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
+  db.doc('status/alert').onSnapshot(s => { S.alertStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('alert', e));
   db.doc('status/mail').onSnapshot(s => { S.mailStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('mail', e));
   needMonth(ymOf(todayStr()));
 }
