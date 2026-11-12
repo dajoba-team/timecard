@@ -1,28 +1,75 @@
-# 다잡아 타임카드 (가게 타임카드)
+# 출퇴근 기록 웹 서비스
 
 가게 직원의 **출퇴근·근무 집계·급여·근로계약**을 한 곳에서 관리하는 프로그램이에요.
 가게 태블릿에서 출퇴근을 찍고, 사장님은 휴대폰이나 PC에서 기록·인건비·월급대장을 봐요.
 
-- **운영 주소:** https://claude.ai/artifact/6n5eNiJTa4CfLhzssb7V6m (비공개, 사장님 claude.ai 계정으로 로그인)
-- **운영 방식:** claude.ai **아티팩트**로 올라가 있어요. 서버를 따로 두지 않고, 저장·로그인·파일 보관·Gmail 발송을 claude.ai가 맡아요.
-- **현재 버전:** 11 (2026-11-11)
+- **운영 방식:** Netlify(화면) + Supabase(저장·로그인·사진). **장부(jangbu-web)와 같은 Supabase 프로젝트**를 함께 써요 (추가 비용 없음).
+- **이름 규칙:** 타임카드가 만드는 자원은 모두 `tc` 접두어 (`tc_docs`, `tc_audit_log`, `tc-photos`, `tc-notyet-check` …). 장부 자원은 건드리지 않아요.
+- **이전 중:** 지금 운영 중인 곳은 claude.ai 아티팩트(https://claude.ai/artifact/6n5eNiJTa4CfLhzssb7V6m)예요. 데이터 이전이 확인되면 Netlify 주소로 바꿔요. 아티팩트 설정은 `docs/legacy-artifact.json`에 남겨 뒀어요.
+- **현재 버전:** 12 (배포 전)
 
-## 폴더 구성
+## 구조
 
 ```
-dajoba-timecard/
-├── src/timecard.html        ← 프로그램 전체 (HTML + CSS + JavaScript, 파일 하나)
-├── artifact.json            ← 올라가 있는 주소와 권한(capabilities) 설정
-├── docs/
-│   ├── DATA_MODEL.md        ← 저장소에 무엇이 어떤 이름으로 저장되는지
-│   ├── HOW_TO_UPDATE.md     ← 고치고 다시 올리는 방법
-│   └── CHANGELOG.md         ← 버전별로 바뀐 것
-├── tests/                   ← 계산·기능 시험 (Node.js로 실행)
-│   ├── run-all.js           ← 모든 시험 한 번에 실행
-│   ├── *.test.js            ← 기능별 시험
-│   └── writes.json          ← 시험용 예시 데이터 (예시 직원 3명, 2026년 11월)
-└── tools/make-sample-data.js ← 시험용 예시 데이터 다시 만들기
+public/              ← Netlify 배포 대상 (이 폴더만 공개됨)
+  index.html         앱 화면 (HTML + CSS + JavaScript, 빌드 없음)
+  storage.js         저장 계층: Supabase 로그인(타임카드 권한 확인), tc_docs 테이블, 실시간 반영, 사진, 파일 저장
+supabase/
+  schema.sql         tc_docs 테이블·변경 이력·보안 정책·실시간·tc-photos 버킷 (장부 프로젝트 SQL Editor에서 실행)
+  002_notyet_alert.sql  미출근 알림 5분 예약 작업 (pg_cron)
+  functions/tc-notyet-check/  미출근 슬랙 알림 Edge Function (index.ts) + 판단 규칙 (rules.mjs)
+scripts/
+  import.mjs         아티팩트 전체 백업(.json) → Supabase 이전 (1회용)
+  lib.mjs            스크립트 공용 (.env, 백업 → tc_docs 변환)
+docs/
+  DATA_MODEL.md      무엇이 어떤 이름으로 저장되는지
+  결정사항.md         결정한 것과 이유, 대표님 공유용 (개발 몰라도 읽을 수 있게)
+  이관_작업순서.md    이관하는 날 그대로 따라 하는 순서서 (백업 → 옮기기 → 확인 → 기기 바꾸기)
+  HOW_TO_UPDATE.md   처음 설치, 고치고 배포하는 방법, 코드 구조
+  CHANGELOG.md       버전별로 바뀐 것
+tests/               계산·기능 시험 (Node.js, 가짜 저장소로 실행)
+tools/make-sample-data.js  시험용 예시 데이터 만들기
+netlify.toml         배포 설정 (publish = public)
 ```
+
+## 데이터 저장 방식
+
+| 저장소 | 내용 | 앱 권한 (로그인 사용자) |
+|---|---|---|
+| `tc_docs` 테이블 | 설정, 직원, 출퇴근 기록, 근로계약서, 세무사 전달 내역 (아티팩트의 `컬렉션/문서` 구조 그대로) | 읽기·추가·수정 |
+| `tc_audit_log` 테이블 | `tc_docs`의 모든 추가·수정 이력 (변경 전/후, 계정, 시각). DB 트리거가 자동 기록 | 읽기만 |
+| Storage `tc-photos` 버킷 (비공개) | 출퇴근 사진 `{사진id}.jpg` | 읽기·업로드·삭제 |
+
+- **앱 권한 칸의 '로그인 사용자'는 타임카드 권한이 있는 계정만**이에요 (`app_metadata.apps`에 `"timecard"`). 같은 프로젝트의 장부 전용 계정은 타임카드 데이터를 볼 수 없고, 로그인하면 '권한이 없는 계정' 안내가 떠요.
+
+- 삭제는 소프트 삭제(`deleted_at`). 실제 DELETE는 정책상 불가
+- 태블릿에서 찍은 출퇴근은 Supabase Realtime으로 사장님 화면에 바로 보여요
+- 인터넷이 끊겨 저장하지 못한 기록은 기기(localStorage)의 전송 대기 목록에 보관했다가 연결되면 순서대로 자동 전송해요. 화면 위 안내줄에 남은 건수가 보여요
+
+## 데이터 이전 (아티팩트 → Supabase)
+
+```bash
+npm install
+cp .env.example .env   # 장부와 같은 프로젝트의 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY(secret key) 입력
+node scripts/import.mjs <타임카드_백업.json> --dry-run   # 파일 검사만
+node scripts/import.mjs <타임카드_백업.json>             # 이전 + 검증
+node scripts/import.mjs <타임카드_백업.json> --verify    # 서버와 비교만
+```
+
+서버에 이미 문서가 있으면 덮어쓰기 방지를 위해 멈춰요 (같은 백업을 다시 넣을 때만 `--force`). 사진 파일은 옮기지 않아요.
+
+## 키
+
+| 키 | 위치 | 공개 |
+|---|---|---|
+| Publishable key (`sb_publishable_...`) | `public/storage.js` | 가능 (RLS로 보호, 로그인 필요) |
+| Secret key (`sb_secret_...`) | `.env` (커밋 금지) | 불가 — 모든 보안 정책 우회 |
+
+## 계정
+
+회원가입은 막혀 있어요. Supabase 대시보드 → Authentication → Users → Add user로 만들어요 (Auto Confirm 체크).
+가게 태블릿과 사장님 휴대폰 모두 같은 사장님 계정으로 한 번 로그인하면 계속 유지돼요.
+로그아웃은 사장님 화면 → 직원·설정 → 맨 아래 '계정'에서 해요 (두 번 눌러야 됨). 가게 태블릿은 로그아웃하지 않고 켜 두세요.
 
 ## 주요 기능
 
@@ -30,7 +77,7 @@ dajoba-timecard/
 |---|---|
 | 출퇴근 (태블릿) | 이름 → 개인 번호 4자리 → 출근/퇴근. 사장님 마스터 번호로 대리 입력 가능 |
 | 사진 인증 (켜기/끄기) | 출퇴근할 때 얼굴 사진, 사진에 시각·이름이 새겨짐 |
-| 알림 | 사장님 화면 알림·소리, 휴대폰 메일 알림(출근·지각·미출근·퇴근, 켜기/끄기) |
+| 알림 | 사장님 화면 알림·소리, **슬랙 미출근 알림** (서버가 5분마다 확인, 태블릿이 꺼져 있어도 감), 휴대폰 메일 알림(준비 중) |
 | 기록 | 일·월·년별 출퇴근 기록, 사장님 수정(수정 표시 남음), 휴무 처리 |
 | 근무 집계 | "일한 시간 / 결근 / 추가근무날 / 추가근무시간 / 정기 휴무" 자동 정리, 요약 복사 |
 | 인건비·급여 | 시급제·월급제, 추가근무(5인 이상 1.5배), 주휴수당, 3.3%·4대보험 공제, 10일·20일·말일 예상 |
@@ -48,11 +95,11 @@ npm test
 ```
 
 `npm run test:verbose`로 실행하면 각 시험이 계산한 값(근무시간, 급여, 메일 내용 등)을 함께 보여 줘요.
-시험은 claude.ai 없이 가짜 저장소·가짜 Gmail로 돌아가요. 실제 카메라·메일 발송·태블릿 화면은 확인하지 않아요.
+시험은 Supabase 없이 가짜 저장소·가짜 Gmail로 돌아가요. 실제 카메라·메일 발송·태블릿 화면은 확인하지 않아요.
 
 ## 알아둘 점
 
-- 프로그램이 claude.ai 기능(저장소, 파일 보관, Gmail 연결, 파일 저장)에 기대고 있어서 **이 HTML 파일만 다른 곳에 올리면 저장·메일이 동작하지 않아요.** 독립 운영하려면 저장소(예: Firebase)와 메일 발송을 새로 붙여야 해요.
-- 데이터는 이 저장소(GitHub)에 들어 있지 않아요. claude.ai의 아티팩트 저장소에 있고, 프로그램의 '직원·설정 → 데이터 백업'으로 받을 수 있어요.
+- **메일 기능(알림·세무사 전달·계약서 사본)은 아직 꺼져 있어요.** 아티팩트에서는 claude.ai의 Gmail 연결을 썼는데, 독립 운영에서는 따로 붙여야 해요. 지금은 누르면 "메일 보내기는 아직 준비 중이에요"라고 안내해요.
+- 아티팩트 시절 사진은 옮기지 않았어요. 그때 기록에는 사진 번호만 남아 있어요.
 - 백업 파일·임금대장·근로계약서에는 개인정보(주민번호·연락처·서명)가 있으니 저장소에 올리지 마세요 (`.gitignore`에 넣어 둠).
 - 계약서 문구와 4대보험 요율·급여 계산은 노무사·세무사 확인을 권해요. 근로소득세(간이세액)와 야간수당은 계산하지 않아요.

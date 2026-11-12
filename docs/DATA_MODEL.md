@@ -1,6 +1,19 @@
-# 저장소 구조 (claude.ai 아티팩트 `db`)
+# 저장소 구조 (Supabase `tc_docs` 테이블)
 
-문서(doc)는 `컬렉션/문서id` 형태의 경로로 저장돼요. 모두 사장님 계정 전용이에요.
+문서(doc)는 `컬렉션/문서id` 형태의 경로로 저장돼요. 타임카드 권한이 있는 계정만 볼 수 있어요 (RLS + `tc_allowed()`: 계정 `app_metadata.apps`에 `"timecard"`).
+장부와 같은 Supabase 프로젝트의 `public.tc_docs` 테이블 한 곳에 들어가요. 경로의 마지막 `/` 앞이 `collection`, 뒤가 `id`, 문서 내용은 `data`(jsonb)예요.
+
+| 컬럼 | 뜻 |
+|---|---|
+| `collection` | 예: `staff`, `config`, `months/2026-11/punches` |
+| `id` | 예: `s123`, `main`, `s123_2026-11-12` |
+| `data` | 문서 내용 (아래 표의 필드) |
+| `updated_at` | 마지막 수정 시각 (실시간 반영 순서 판단에도 씀) |
+| `deleted_at` | 지운 문서 표시 (소프트 삭제, 실제로 지우지 않음) |
+
+- 모든 추가·수정은 `tc_audit_log`에 변경 전/후 내용이 남아요 (`config/sign` 서명 이미지는 내용 생략).
+- SQL로 보기 예: `select id, data->>'name' from docs where collection = 'staff' and deleted_at is null;`
+- 실수 복구: `tc_audit_log`에서 `old_data`를 찾아 앱에서 다시 입력하거나 SQL로 되돌리기.
 
 | 경로 | 내용 |
 |---|---|
@@ -13,8 +26,11 @@
 | `reports/{YYYY-MM}` | 세무사 전달 내역 (고친 금액·보낸 기록) |
 | `status/mail` | 마지막 메일 발송 결과 |
 | `status/backup` | 마지막 백업 시각 |
+| `status/alert` | 마지막 슬랙 알림 결과 `{ at, ok, kind(test/notyet), text, err }` (서버가 씀) |
+| `months/{YYYY-MM}/alerts/{staffId}_{YYYY-MM-DD}` | 슬랙 미출근 알림 중복 방지 표시 (서버가 씀, 직원·날짜당 1개) |
 
-사진은 `db`가 아니라 아티팩트 **파일 보관함(assets)**에 있고, 기록에는 사진 번호(id)만 남아요. 화면에서는 `/_blob/{id}`로 불러와요.
+사진은 `tc_docs`가 아니라 Storage **`tc-photos` 버킷(비공개)**에 `{사진id}.jpg`로 있고, 기록에는 사진 번호(id)만 남아요. 화면에서는 7일짜리 임시 URL로 불러와요.
+아티팩트 시절 사진은 옮기지 않았어요. 그때 기록의 사진 번호는 남아 있지만 사진은 '사진 없음(깨진 그림)'으로 보여요.
 
 ## config/main
 
@@ -34,6 +50,7 @@
 | `biz` | 사업주 정보 `{name, ceo, addr, phone}` | 빈 값 |
 | `contract` | 계약서 `{on, autoOwnerSign, payDay, payMethod, special}` | 꺼짐 |
 | `tax` | 세무사 전달 `{email, auto}` | 빈 값 / 꺼짐 |
+| `slack` | 슬랙 미출근 알림 `{on}` (슬랙 주소는 서버 secret에만 있음) | 꺼짐 |
 
 ## staff/{staffId}
 
@@ -85,3 +102,5 @@
 ## 기기에만 남는 값 (브라우저 localStorage, 앞에 `tc.`)
 
 `mode`(출퇴근/사장님 화면), `tab`, `sound`, `ownerDevice`(이 기기 기억하기), `notified`, `mailed`(오늘 띄운 알림)
+
+storage.js가 쓰는 값: `tc_pending_v1`(서버에 아직 못 보낸 쓰기 목록), `sb-…-auth-token`(Supabase 로그인 정보)
