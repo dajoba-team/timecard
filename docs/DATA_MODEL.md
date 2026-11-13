@@ -51,6 +51,7 @@
 | `contract` | 계약서 `{on, autoOwnerSign, payDay, payMethod, special}` | 꺼짐 |
 | `tax` | 세무사 전달 `{email, auto}` | 빈 값 / 꺼짐 |
 | `slack` | 슬랙 미출근 알림 `{on}` (슬랙 주소는 서버 secret에만 있음) | 꺼짐 |
+| `geo` | 위치 확인 `{on, lat, lng, acc, radius, setAt}` — 가게 좌표와 '가게 밖' 기준 거리(m) (v12) | 꺼짐 / 200m |
 
 ## staff/{staffId}
 
@@ -66,6 +67,7 @@
 | `deduct` | `none` / `biz`(3.3%) / `ins`(4대보험) — `ins`면 세무사 내역에서 4대보험 가입자 |
 | `sched[7]` | 요일별 근무표 `{on, start, end, brk}` (0 = 일요일). `on:false` = 정기 휴무 |
 | `active`, `sample`, `order` | 근무 중 여부, 예시 데이터 여부, 정렬 순서 |
+| `geoExempt` | 외근 직원 — 가게 밖에서 찍어도 '가게 밖'으로 보지 않음 (v13) |
 
 ## months/{ym}/punches/{staffId}_{date}
 
@@ -79,6 +81,7 @@
 | `edited`, `note` | 사장님 수정 여부, 메모 |
 | `inPhoto`, `outPhoto` | 사진 번호 (찍지 못했으면 null) |
 | `inPhotoNote`, `outPhotoNote` | 사진 없음·확인 필요 사유 |
+| `inGeo`, `outGeo` | 위치 `{lat, lng, acc, dist, out}` 또는 `{err}` (위치 확인을 켰을 때만). 외근 직원은 `out:false, ex:true, far` (v12·v13) |
 | `inBy`, `outBy` | `master`면 사장님 마스터 번호로 대리 입력 |
 
 ## contracts/{staffId}_v{n}
@@ -86,6 +89,7 @@
 | 필드 | 뜻 |
 |---|---|
 | `ver`, `prev` | 버전 번호, 이전 계약서 id (변경 계약이면) |
+| `tpl` | 계약서 양식 번호 (1 = 처음 표준 양식, 2 = 가게 종이 양식). 없고 서명돼 있으면 1, 서명 전 초안은 2로 보이고 서명할 때 고정 (v14) |
 | `terms` | 계약 조건 `{startDate, endDate, place, job, sched, holiday, payType, wage, monthly, bonus, extraPay, payDay, payMethod, ins, special}` |
 | `emp` | 근로자가 적은 `{addr, phone, email}` |
 | `empSign`, `empSignedAt` | 근로자 서명(PNG 데이터URL), 시각 |

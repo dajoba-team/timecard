@@ -77,6 +77,7 @@ claude.ai 아티팩트 시절 `window.claude.use(...)`와 같은 모양으로 `w
 | 근무 계산 (`dayCalc`, `dayCost`, `weekHoliday`, `monthSummary`, `costSeries`) | 지각·결근·추가근무·급여 계산 |
 | 알림·메일 (`notify`, `sendMail`, `mailPunch`, `checkNotyetMail`) | 화면 알림, 메일 (메일은 준비 중) |
 | 사진 인증 (`startCam`, `stampPhoto`, `uploadPhoto`, `photoSrcAttr`) | 카메라, 시각 새기기, 업로드, 사진 보여 주기 |
+| 위치 확인 (`getPos`, `distM`, `geoInfo`, `geoNow`, `geoLine`, `geoChip`, `geoCsv`, `GACT`) | 가게 위치 저장, 출퇴근 때 거리·'가게 밖'·외근 판정 |
 | 화면 (`kioskView`, `nowView`, `recordsView`, `timecardView`, `payrollView`, `contractView`, `staffView`) | 탭별 화면 |
 | 전자 근로계약서 (`contractBody`, `kioskContract`, `CACT`) | 계약서 문구, 서명판, 버전 관리 |
 | 세무사 전달 (`reportRows`, `reportText`, `sendReport`, `autoReport`, `RACT`) | 급여 내역 정리·발송 |
