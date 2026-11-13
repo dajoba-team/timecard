@@ -20,7 +20,7 @@ DB 구조를 바꿀 때는 `supabase/` 아래에 `002_무엇.sql`처럼 새 파�
 1. 장부 프로젝트 → SQL Editor에 `supabase/schema.sql` 전체를 붙여넣고 Run.
 2. 타임카드를 쓸 계정에 권한 주기: `schema.sql` 맨 아래 **[계정에 타임카드 권한 주기]** 문장의 이메일을 바꿔 실행해요. 장부에서 쓰던 사장님 계정을 그대로 써도 되고, Users → Add user로 새로 만들어도 돼요 (회원가입은 장부 설정 그대로 막혀 있어야 해요).
 3. `public/storage.js` 맨 위 `SUPABASE_URL`, `SUPABASE_KEY`는 이미 장부 프로젝트 값으로 들어가 있어요 (Publishable key라 공개돼도 괜찮아요. Secret key는 절대 넣지 않기).
-4. Authentication → URL Configuration → **Redirect URLs**에 타임카드 Netlify 주소를 추가해요. (Site URL은 장부 주소 그대로 두기)
+4. Authentication → URL Configuration → **Redirect URLs**에 타임카드 Netlify 주소를 추가해요. (Site URL은 장부 주소 그대로 두기) *(선택: 타임카드는 이메일·비밀번호 직접 로그인만 써서 지금은 필요 없음. 비밀번호 재설정 메일·소셜 로그인을 붙일 때 필요)*
 5. Netlify에서 GitHub 저장소를 연결해요 (빌드 명령 없음, 배포 폴더 `public` — `netlify.toml`에 있어요).
 
 **주의 (같은 프로젝트라서)**
