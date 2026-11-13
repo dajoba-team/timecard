@@ -26,3 +26,8 @@ Thumbs.db
 
 # Supabase CLI 임시 파일
 supabase/.temp/
+
+# 받은 백업·인수인계 자료 (개인정보 포함 가능, 커밋 금지)
+backup_*/
+*backup*.zip
+dajoba-timecard-v15-handoff/
