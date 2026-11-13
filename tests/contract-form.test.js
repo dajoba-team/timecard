@@ -1,0 +1,38 @@
+// 근로계약서 양식: 새 양식(갑·을, 제1~6조), 한글 금액, 옛 서명 계약서는 옛 양식 유지
+const el = { innerHTML:'', textContent:'', prepend(){}, hidden:true, checked:false, value:'' };
+global.document = { addEventListener(){}, querySelector: () => el, createElement: () => ({ ...el, remove(){} }) };
+global.window = {}; global.location = { hash:'' }; global.localStorage = { getItem: () => null, setItem(){} }; global.scrollTo = () => {}; global.setInterval = () => 0;
+let src = require('fs').readFileSync('chk.js', 'utf8').replace(/\nboot\(\);\s*$/, '\n');
+src += `
+const assert = (ok, msg) => { if (!ok) throw new Error('실패: ' + msg); console.log('✓ ' + msg); };
+S.config = { storeName:'반포식스 서울시청점', biz:{ name:'반포식스 서울시청점', ceo:'이진성', addr:'서울 중구 무교로 13, 휘닉스 빌딩 301호', phone:'02-000-0000' } };
+assert(korNum(11000) === '일만일천', '11,000 → 일만일천');
+assert(korNum(10320) === '일만삼백이십', '10,320 → 일만삼백이십');
+assert(korNum(2500000) === '이백오십만', '2,500,000 → 이백오십만');
+assert(korNum(3600000) === '삼백육십만', '3,600,000 → 삼백육십만');
+const sched = Array.from({ length:7 }, (_, i) => ({ on: i >= 1 && i <= 6, start: i === 6 ? '10:00' : '10:00', end: i === 6 ? '20:00' : '15:00', brk: i === 6 ? 60 : 0 }));
+const terms = { startDate:'2026-02-01', endDate:'2026-02-28', place:'반포식스 서울시청점', job:'홀 서빙', sched, holiday:0, payType:'hour', wage:11000, monthly:0, bonus:'없음', extraPay:'없음', payDay:10, payMethod: PAY_METHODS[1], ins:{}, special:'' };
+const fresh = { id:'x_v1', name:'Nguyen', ver:1, terms, emp:{}, tpl:2 };
+const html = contractBody(fresh).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ');
+assert(/표준 근로계약서/.test(html) && !/단시간근로자/.test(html), '제목: 표준 근로계약서');
+assert(/“갑”이라 함/.test(html) && /“을”이라 함/.test(html), '갑·을 표기');
+assert(/제 1 조 【 계약기간 】.*2026년 2월 1일부터 2026년 2월 28일까지로 한다/.test(html), '제1조 계약기간');
+assert(/제 2 조 【 근무지와 업무내용 】.*홀 서빙/.test(html), '제2조 근무지와 업무내용');
+assert(/\\(월·화·수·목·금\\) 10시 00분부터 15시 00분까지 \\(휴게시간: 없음\\)/.test(html) && /\\(토\\) 10시 00분부터 20시 00분까지 \\(휴게시간: 1시간\\)/.test(html), '제3조 요일별 근로시간 묶기');
+assert(/매주 6일 근무, 주휴일 매주 일요일/.test(html), '제3조 근무일·주휴일');
+assert(/시급: 금 일만일천 원정 \\(₩11,000\\)/.test(html), '제4조 한글 금액');
+assert(/휴일의 경우는 익일 지급/.test(html) && /직접지급\\( O \\)/.test(html), '제4조 지급일·지급방법');
+assert(/제 5 조 【 근로계약, 취업규칙 등의 성실한 이행 의무 】/.test(html), '제5조 성실한 이행 의무');
+assert(/제 6 조 【 기타 】 이 계약에 정함이 없는 사항은 근로기준법에 의함/.test(html), '제6조 기타');
+assert(/\\(갑\\) 주 소: 서울 중구 무교로 13/.test(html) && /대 표 자: 이진성 \\(인\\)/.test(html) && /\\(을\\)/.test(html), '갑·을 서명란');
+const withSpecial = contractBody({ ...fresh, terms:{ ...terms, special:'수습 3개월' } }).replace(/<[^>]+>/g, ' ');
+assert(/제 6 조 【 특약사항 】/.test(withSpecial) && /제 7 조 【 기타 】/.test(withSpecial), '특약이 있으면 제6조 특약, 제7조 기타');
+const monthly = contractBody({ ...fresh, terms:{ ...terms, payType:'month', monthly:2500000 } }).replace(/<[^>]+>/g, ' ');
+assert(/월급: 금 이백오십만 원정/.test(monthly), '월급제 문구');
+const oldSigned = { id:'y_v1', name:'옛직원', ver:1, terms, emp:{}, empSign:'data:image/png;base64,QUJD', empSignedAt:Date.now() };
+assert(contractTpl(oldSigned) === 1 && /사회보험 적용 여부/.test(contractBody(oldSigned)), '이미 서명한 옛 계약서는 옛 양식 그대로');
+const oldDraft = { id:'z_v1', name:'초안', ver:1, terms, emp:{} };
+assert(contractTpl(oldDraft) === 2 && /“을”이라 함/.test(contractBody(oldDraft)), '서명 전 옛 초안은 새 양식으로');
+assert(/“을”이라 함/.test(contractFile(fresh)), '인쇄 파일도 새 양식');
+`;
+eval(src);

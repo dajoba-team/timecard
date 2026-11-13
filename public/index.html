@@ -182,6 +182,11 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .contract{font-size:14px;line-height:1.7;color:var(--ink)}
 .contract h1{font-size:20px;text-align:center;letter-spacing:.15em;margin:4px 0 14px}
 .contract .terms{padding-left:20px;margin:8px 0}
+.contract .art{margin:12px 0}
+.contract .art h5{font-size:14px;margin:0 0 4px}
+.contract .art p{margin:2px 0 2px 14px}
+.contract .art p.sub{margin-left:30px}
+.contract .parties.shop p{margin:3px 0}
 .contract .terms li{margin:6px 0}
 .contract .terms ul{padding-left:18px;margin:2px 0}
 .contract table.ct{border-collapse:collapse;margin:6px 0;width:100%;font-size:13px}
@@ -386,8 +391,9 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   slack:{ on:false },
   biz:{ name:'', ceo:'', addr:'', phone:'' },
   contract:{ on:false, autoOwnerSign:true, payDay:10, payMethod:'근로자 명의 예금통장에 입금', special:'' },
-  tax:{ email:'', auto:false } };
-const TABS = [['now','현황'],['records','출퇴근 기록'],['timecard','근무 집계'],['payroll','인건비·급여'],['contract','근로계약'],['staff','직원·설정']];
+  tax:{ email:'', auto:false },
+  geo:{ on:false, lat:null, lng:null, acc:0, radius:200, setAt:0 } };
+const TABS = [['now','현황'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
   db:null, noDb:false, connected:false, connNote:'',
   config:{}, staff:[], ready:{config:false, staff:false, contracts:false, reports:false}, reports:{}, backupStatus:null, contracts:[], ownerSign:'', cDraft:null,
@@ -404,7 +410,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -700,7 +706,7 @@ function mailPunch(st, kind, t, info){
   const m = cfg().mail;
   if (!m.on || S.mode !== 'kiosk') return;
   const photo = info.blob ? { blob: info.blob, name: `${kind === 'in' ? '출근' : '퇴근'}_${st.name}_${ymd(new Date(t)).slice(5).replace('-', '')}_${fmtT(t).replace(':', '')}.jpg` } : null;
-  const tail = [info.master && '사장님 마스터 번호로 대신 기록했어요.', info.blob && '찍은 사진을 첨부했어요.'].filter(Boolean);
+  const tail = [info.geo && `위치: ${geoLine(info.geo)}`, info.master && '사장님 마스터 번호로 대신 기록했어요.', info.blob && '찍은 사진을 첨부했어요.'].filter(Boolean);
   if (kind === 'in'){
     if (info.late ? !m.ev.late : !m.ev.in) return;
     sendMail(`${st.name} ${info.late ? `지각 출근 ${fmtT(t)} (${info.late}분 늦음)` : `출근 ${fmtT(t)}`}`,
@@ -750,20 +756,26 @@ async function startCam(){
   }
   if (k.step === 'photo') render(true);
 }
-function stampPhoto(src, w0, h0, st, kind, t){
+function stampPhoto(src, w0, h0, st, kind, t, geo){
   const sc = Math.min(1, 720 / Math.max(w0, h0)), w = Math.round(w0*sc), h = Math.round(h0*sc);
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d');
   g.drawImage(src, 0, 0, w, h);
-  const u = Math.max(w, h*0.75) / 20, band = u*6;
+  const gl = geoLine(geo), u = Math.max(w, h*0.75) / 20, up = gl ? u : 0, band = u*6 + up;
   const grd = g.createLinearGradient(0, h - band, 0, h);
   grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,.78)');
   g.fillStyle = grd; g.fillRect(0, h - band, w, band);
   g.fillStyle = '#fff';
-  g.font = `600 ${Math.round(u*2.1)}px "IBM Plex Mono", monospace`; g.fillText(fmtClock(t), u*0.8, h - u*2.5);
+  g.font = `600 ${Math.round(u*2.1)}px "IBM Plex Mono", monospace`; g.fillText(fmtClock(t), u*0.8, h - u*2.5 - up);
   g.font = `600 ${Math.round(u*0.85)}px "IBM Plex Sans KR", sans-serif`;
-  g.fillText(fmtDateLong(ymd(new Date(t))), u*0.8, h - u*1.45);
-  g.fillText(`${cfg().storeName} · ${st.name} · ${kind === 'in' ? '출근' : '퇴근'}`, u*0.8, h - u*0.5);
+  g.fillText(fmtDateLong(ymd(new Date(t))), u*0.8, h - u*1.45 - up);
+  g.fillText(`${cfg().storeName} · ${st.name} · ${kind === 'in' ? '출근' : '퇴근'}`, u*0.8, h - u*0.5 - up);
+  if (gl){   // 위치 줄: 길면 글씨를 줄여서 한 줄에 맞춤
+    let fs = u*0.8; g.font = `600 ${Math.round(fs)}px "IBM Plex Sans KR", sans-serif`;
+    while (fs > u*0.5 && g.measureText('📍 ' + gl).width > w - u*1.6){ fs -= u*0.05; g.font = `600 ${Math.round(fs)}px "IBM Plex Sans KR", sans-serif`; }
+    if (geo?.out) g.fillStyle = '#ffb4a8';
+    g.fillText('📍 ' + gl, u*0.8, h - u*0.5);
+  }
   return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('blob')), 'image/jpeg', 0.78));
 }
 async function uploadPhoto(blob){
@@ -788,7 +800,7 @@ async function snapCam(){
   const k = S.kiosk, v = $('#camv'), st = staffById(k.staffId);
   if (k.busy || !st || !v || !v.videoWidth) return;
   const t = Date.now();
-  try { const blob = await stampPhoto(v, v.videoWidth, v.videoHeight, st, k.kind, t); stopCam(); await kioskPunch(k.kind, { blob, t }); }
+  try { const geo = await geoNow(); const blob = await stampPhoto(v, v.videoWidth, v.videoHeight, st, k.kind, t, geo); stopCam(); await kioskPunch(k.kind, { blob, t, geo }); }
   catch { k.camErr = '사진을 만들지 못했어요. 다시 눌러 주세요.'; render(true); }
 }
 async function fileShot(file){
@@ -796,10 +808,10 @@ async function fileShot(file){
   if (k.busy || !st) return;
   const t = Date.now();
   try {
-    const im = await loadImage(file);
-    const blob = await stampPhoto(im, im.width || im.naturalWidth, im.height || im.naturalHeight, st, k.kind, t);
+    const im = await loadImage(file), geo = await geoNow();
+    const blob = await stampPhoto(im, im.width || im.naturalWidth, im.height || im.naturalHeight, st, k.kind, t, geo);
     const old = file.lastModified && t - file.lastModified > 3*60000;   // 앨범에서 고른 옛날 사진일 수 있음
-    await kioskPunch(k.kind, { blob, t, note: old ? `방금 찍은 사진이 아닐 수 있어요 (파일 시각 ${fmtT(file.lastModified)})` : '' });
+    await kioskPunch(k.kind, { blob, t, geo, note: old ? `방금 찍은 사진이 아닐 수 있어요 (파일 시각 ${fmtT(file.lastModified)})` : '' });
   } catch { k.camErr = '사진을 읽지 못했어요. 다시 찍어 주세요.'; render(true); }
 }
 // 사진은 비공개 저장소라 임시 URL로 보여 줘요. 아직 URL이 없으면 storage.js가 받아서 넣어 줘요.
@@ -866,6 +878,7 @@ function statusChips(r){
   if (r.early) c.push(`<span class="chip amber">조퇴 ${r.early}분</span>`);
   if (r.ot && r.status === 'done') c.push(`<span class="chip blue">추가 ${fmtHM(r.ot)}</span>`);
   if (r.p?.inBy === 'master' || r.p?.outBy === 'master') c.push(`<span class="chip amber" title="마스터 번호로 기록: ${[r.p.inBy === 'master' && '출근', r.p.outBy === 'master' && '퇴근'].filter(Boolean).join('·')}">사장님 대리 입력</span>`);
+  c.push(geoChip(r.p?.inGeo, '출근'), geoChip(r.p?.outGeo, '퇴근'));
   if (r.p?.edited) c.push(`<span class="chip faint" title="${esc(r.p.note || '사장님이 수정한 기록')}">수정됨</span>`);
   return c.join(' ');
 }
@@ -900,7 +913,7 @@ function kioskView(){
   const list = activeStaff();
   if (k.step === 'list'){
     if (!list.length) return clock + `<div class="empty"><b>아직 등록된 직원이 없어요</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
-    return clock + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}</p>
+    return clock + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}</p>
       <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now); return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${esc(st.position || '직원')}</small><em>${i.text}</em></button>`; }).join('')}</div>`;
   }
   const st = staffById(k.staffId);
@@ -956,7 +969,7 @@ function pinPad(title, sub, val, ctx, err){
 function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
-  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null });
+  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null });
 }
 function lockView(){
   return `<div class="kpanel ${S.lockErr ? 'shake' : ''}" style="margin-top:24px">${pinPad('사장님 확인', '관리 번호 4자리 (처음 번호는 0000)', S.lockPin, 'owner', S.lockErr)}
@@ -1331,6 +1344,7 @@ function staffForm(st){
         <option value="none" ${s.deduct === 'none' ? 'selected' : ''}>없음</option>
         <option value="biz" ${s.deduct === 'biz' ? 'selected' : ''}>3.3% (사업소득)</option>
         <option value="ins" ${s.deduct === 'ins' ? 'selected' : ''}>4대보험 (근로자 부담분)</option></select></label>
+      <label class="check full"><input type="checkbox" id="f-geoex" ${s.geoExempt ? 'checked' : ''}> 외근 직원 — 가게 밖에서 출퇴근해도 ‘가게 밖’으로 표시하지 않기 (위치는 그대로 기록)</label>
     </div>
     <h3 style="margin-top:18px">요일별 정해진 근무 시간 <small>이 시간을 기준으로 지각·결근·추가근무를 판단해요</small></h3>
     <div class="tscroll"><table class="schedt"><thead><tr><th></th><th>근무날 / 휴무날</th><th>출근</th><th>퇴근</th><th>휴게(분)</th></tr></thead><tbody>
@@ -1364,6 +1378,8 @@ function configForm(){
       <label>고용보험 (%)<input id="c-ei" type="number" step="0.001" value="${c.rates.ei}"></label>
     </div>
     <p class="hint">4대보험 요율은 근로자 부담분이에요. 해마다 바뀌니 세무사 사무실에서 받은 숫자로 맞춰 주세요.</p>
+    <h3 style="margin-top:18px">위치 확인 <small>가게 위치는 ‘가게 설정’에서 저장해요</small></h3>
+    <div class="form"><label>가게 밖으로 볼 거리 (m)<input id="c-georad" type="number" min="30" step="10" value="${c.geo.radius}"></label></div>
     <h3 style="margin-top:18px">사진 인증 <small>출퇴근할 때 태블릿 카메라로 얼굴 사진을 찍어요</small></h3>
     <div class="form"><label class="check full"><input type="checkbox" id="p-on" ${c.photo.on ? 'checked' : ''}> 출퇴근할 때 사진 찍기 (사진에 가게 이름·직원 이름·시각이 찍혀요)</label></div>
     <h3 id="mailSec" style="margin-top:18px">휴대폰 메일 알림 <small>가게 태블릿이 사장님 Gmail로 보내요</small></h3>
@@ -1391,7 +1407,7 @@ function staffView(){
       ${list.length ? `<div class="slist">${list.map(st => { const wk = weeklySchedMin(st); return `<div class="sitem ${st.active === false ? 'off' : ''}"><div>
         <b>${esc(st.name)}</b> <span class="small muted">${esc(st.position || '')}${st.sample ? ' · 예시' : ''}${st.active === false ? ' · 퇴사' : ''}</span>
         <div class="sub">${isMonthly(st) ? `월급 ${num(st.monthly)}원` : `시급 ${num(st.wage)}원`} · ${schedSummary(st.sched)} · 주 ${fmtH(wk)}${wk >= 900 ? ' (주휴 대상)' : ''}</div>
-        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div></div>
+        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div></div>
         <button class="btn sm" data-act="editStaff" data-id="${st.id}">고치기</button></div>`; }).join('')}</div>` : '<p class="muted">아직 직원이 없어요. ‘+ 직원 추가’를 눌러 시작하세요.</p>'}
       ${samples.length ? `<div class="alertbar" style="margin:14px 0 0;background:var(--amber-soft)"><span>지금 보이는 <b style="color:var(--amber)">예시 직원 ${samples.length}명</b>과 그 기록은 둘러보기용이에요.</span><span class="spacer"></span>
         <button class="btn sm danger" data-act="clearSamples">${S.confirmClear ? '정말 지울까요? 한 번 더 누르기' : '예시 데이터 모두 지우기'}</button></div>` : ''}
@@ -1407,6 +1423,10 @@ function staffView(){
         <dt>주휴수당</dt><dd>${c.weeklyHoliday ? '계산함' : '계산 안 함'}</dd>
         <dt>4대보험 요율</dt><dd class="small">연금 ${c.rates.np}% · 건강 ${c.rates.hi}% · 요양 ${c.rates.ltc}% · 고용 ${c.rates.ei}%</dd>
         <dt>메일 알림</dt><dd>${c.mail.on ? `켜짐 · ${esc(mailAddrs(c.mail.to).join(', '))}` : '꺼짐'}</dd>
+        <dt>위치 확인</dt><dd>${c.geo.on ? '<b style="color:var(--green)">켜짐</b> · 출퇴근 때 가게와의 거리를 기록해요' : '꺼짐'}
+          <button class="btn sm ${c.geo.on ? '' : 'pri'}" role="switch" aria-checked="${c.geo.on}" data-act="geoToggle" style="margin-left:6px">${c.geo.on ? '위치 확인 끄기' : '위치 확인 켜기'}</button>
+          <div class="small muted" style="margin-top:4px">${c.geo.lat != null ? `가게 위치 저장됨 (${fmtMD(ymd(new Date(c.geo.setAt)))}, 오차 ±${c.geo.acc}m) · ${c.geo.radius}m 넘게 떨어지면 ‘가게 밖’` : '<span style="color:var(--amber)">가게 위치가 아직 없어요 — 가게에서 태블릿으로 저장해 주세요</span>'}
+            <button class="linkbtn" style="margin:0" data-act="geoSet">지금 위치를 가게 위치로 저장</button></div></dd>
         <dt>사진 인증</dt><dd>${c.photo.on ? '<b style="color:var(--green)">켜짐</b> · 출퇴근 때 얼굴 사진을 찍어요' : '꺼짐'}
           <button class="btn sm ${c.photo.on ? '' : 'pri'}" role="switch" aria-checked="${c.photo.on}" data-act="photoToggle" style="margin-left:6px">${c.photo.on ? '사진 인증 끄기' : '사진 인증 켜기'}</button>
           <div class="small muted" style="margin-top:4px">${S.photoUse ? `사진 저장 공간 ${mb(S.photoUse.bytes)} / ${mb(S.photoUse.maxBytes)} 사용 (${num(S.photoUse.files)} / ${num(S.photoUse.maxFiles)}장)` : ''}
@@ -1450,7 +1470,7 @@ function defaultTerms(st){
 }
 async function createContract(st, terms, prev){
   const ver = (contractsOf(st.id)[0]?.ver || 0) + 1, id = `${st.id}_v${ver}`;
-  const doc = { staffId:st.id, name:st.name, ver, createdAt:Date.now(), terms: terms || defaultTerms(st), emp: prev?.emp || {}, empSign:'', empSignedAt:0, ownerSign:'', ownerSignedAt:0, prev: prev?.id || '' };
+  const doc = { staffId:st.id, name:st.name, ver, createdAt:Date.now(), terms: terms || defaultTerms(st), emp: prev?.emp || {}, empSign:'', empSignedAt:0, ownerSign:'', ownerSignedAt:0, prev: prev?.id || '', tpl: CONTRACT_TPL };
   await write(() => S.db.doc('contracts/' + id).set(doc));
   if (!S.contracts.some(c => c.id === id)) S.contracts.push({ id, ...doc });   // 저장소 소식이 오기 전에도 바로 쓰도록
   return S.contracts.find(c => c.id === id);
@@ -1463,14 +1483,64 @@ async function contractNeeded(st){   // 첫 출근(계약서 없음)이면 표�
 }
 async function contractHash(c){
   try {
-    const data = JSON.stringify([c.staffId, c.ver, c.terms, c.biz, c.emp, c.empSign, c.empSignedAt, c.ownerSign, c.ownerSignedAt]);
+    const data = JSON.stringify([c.staffId, c.ver, c.terms, c.biz, c.emp, c.empSign, c.empSignedAt, c.ownerSign, c.ownerSignedAt, ...(c.tpl ? [c.tpl] : [])]);
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
     return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
   } catch { return ''; }
 }
 function ownerSignFields(){ const b = cfg().biz; return { ownerSign:S.ownerSign, ownerSignedAt:Date.now(), biz:{ ...b, name: b.name || cfg().storeName } }; }
 const sigImg = d => SIG_RE.test(d || '') ? `<img class="sig" src="${d}" alt="서명">` : '<span class="sigph">(서명)</span>';
-function contractBody(c){
+const CONTRACT_TPL = 2;   // 새로 만드는 계약서 양식 (1 = 처음 표준 양식, 2 = 가게 종이 양식)
+function contractTpl(c){ return c.tpl || (c.empSign ? 1 : CONTRACT_TPL); }   // 서명 끝난 옛 계약서는 서명 당시 양식 그대로
+function contractBody(c){ return contractTpl(c) === 1 ? contractBodyStd(c) : contractBodyShop(c); }
+function korNum(n){   // 11000 → 일만일천
+  n = Math.floor(+n || 0);
+  if (!n) return '영';
+  const d = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'], u = ['', '십', '백', '천'], big = ['', '만', '억', '조'];
+  let out = '', g = 0;
+  while (n > 0){
+    const part = n % 10000; n = Math.floor(n / 10000);
+    if (part){ let s = ''; for (let i = 3; i >= 0; i--){ const dg = Math.floor(part / 10 ** i) % 10; if (dg) s += d[dg] + u[i]; } out = s + big[g] + out; }
+    g++;
+  }
+  return out;
+}
+function schedLines(sched){   // 같은 시간끼리 요일을 묶어서 "(월·화·수) 10시 00분부터 15시 00분까지"
+  const groups = new Map();
+  for (const i of WEEK_ORDER){ const s = sched[i]; if (!s?.on) continue; const k = `${s.start}|${s.end}|${+s.brk || 0}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(DAYS[i]); }
+  const hm = x => { const [a, b] = x.split(':'); return `${+a}시 ${b}분`; };
+  return [...groups].map(([k, days]) => { const [a, b, br] = k.split('|'); return `(${days.join('·')}) ${hm(a)}부터 ${hm(b)}까지 (휴게시간: ${+br ? fmtH(+br) : '없음'})`; });
+}
+function contractBodyShop(c){
+  const t = c.terms, b = c.biz || { ...cfg().biz, name: cfg().biz.name || cfg().storeName }, e = c.emp || {};
+  const workDays = t.sched.filter(s => s.on).length, monthly = t.payType === 'month', amt = monthly ? +t.monthly : +t.wage;
+  const signDay = c.empSignedAt ? ymd(new Date(c.empSignedAt)) : '';
+  const direct = t.payMethod === PAY_METHODS[1];
+  const arts = [
+    ['계약기간', `<p>이 계약의 유효기간은 다음과 같다.</p><p>1. ${fmtKDate(t.startDate)}부터 ${t.endDate ? `${fmtKDate(t.endDate)}까지로 한다.` : '기간의 정함이 없는 것으로 한다.'}</p>`],
+    ['근무지와 업무내용', `<p>- 근무지: ${esc(t.place)}</p><p>- 업무내용: ${esc(t.job)}</p>`],
+    ['근로조건', `<p>근로시간과 근무일(휴일) 등은 “근무지 부서(현장)”에서 “갑”이 정한 바에 의하며, 부서(현장)의 상황에 따라 조정될 수 있다.</p>
+      <p>1. 근로시간</p>${schedLines(t.sched).map(l => `<p class="sub">${l}</p>`).join('') || '<p class="sub">(정해진 근로시간 없음)</p>'}
+      <p>2. 매주 ${workDays}일 근무, 주휴일 매주 ${DAYS[+t.holiday]}요일</p>`],
+    ['임금', `<p>1. 임금</p>
+      <p class="sub">1) ${monthly ? '월급' : '시급'}: 금 ${korNum(amt)} 원정 (₩${num(amt)})${monthly ? ' (주휴수당 포함)' : ''}</p>
+      ${t.bonus && t.bonus !== '없음' ? `<p class="sub">2) 상여금: ${esc(t.bonus)}</p>` : ''}${t.extraPay && t.extraPay !== '없음' ? `<p class="sub">${t.bonus && t.bonus !== '없음' ? 3 : 2}) 기타 급여: ${esc(t.extraPay)}</p>` : ''}
+      <p>2. 임금지급일: 매월 ${esc(t.payDay)}일 (휴일의 경우는 익일 지급)</p>
+      <p>3. 지급방법: “을”에게 직접지급( ${direct ? 'O' : '&nbsp;&nbsp;'} ), 예금통장에 입금( ${direct ? '&nbsp;&nbsp;' : 'O'} )</p>`],
+    ['근로계약, 취업규칙 등의 성실한 이행 의무', `<p>“갑”과 “을”은 각자가 근로계약, 취업규칙, 단체협약을 지키고 성실하게 이행하여야 한다.</p>`],
+    ...(t.special ? [['특약사항', `<p>${esc(t.special).replace(/\n/g, '<br>')}</p>`]] : []),
+    ['기타', '<p>이 계약에 정함이 없는 사항은 근로기준법에 의함.</p>']
+  ];
+  return `<h1>표준 근로계약서</h1>
+  <p class="lead"><b>${esc(b.name)}</b>(이하 “갑”이라 함)과(와) <b>${esc(c.name)}</b>(이하 “을”이라 함)은 다음과 같이 근로계약을 체결한다.</p>
+  ${arts.map(([title, body], i) => `<div class="art"><h5>제 ${i + 1} 조 【 ${title} 】</h5>${body}</div>`).join('')}
+  <p class="cdate">계약일자: ${fmtKDate(signDay)}</p>
+  <div class="parties shop">
+    <div><h4>(갑)</h4><p>주 소: ${esc(b.addr || '')}</p><p>회 사 명: ${esc(b.name)}</p><p class="sigline">대 표 자: ${esc(b.ceo || '')} (인) ${sigImg(c.ownerSign)}</p><p>연 락 처: ${esc(b.phone || '')}</p></div>
+    <div><h4>(을)</h4><p>주 소: ${esc(e.addr || '')}</p><p class="sigline">성 명: ${esc(c.name)} (인) ${sigImg(c.empSign)}</p><p>연 락 처: ${esc(e.phone || '')}</p></div>
+  </div>`;
+}
+function contractBodyStd(c){
   const t = c.terms, b = c.biz || { ...cfg().biz, name: cfg().biz.name || cfg().storeName }, e = c.emp || {};
   const weekMin = t.sched.reduce((s, x) => s + (x.on ? shiftMin(x) : 0), 0), part = weekMin < 2400, prem = cfg().otPremium;
   const rows = WEEK_ORDER.map(i => { const s = t.sched[i]; return `<tr><th>${DAYS[i]}</th>${s.on ? `<td>${fmtH(shiftMin(s))}</td><td>${s.start}</td><td>${s.end}</td><td>${s.brk}분</td>` : `<td colspan="4">${i === +t.holiday ? '주휴일' : '휴무일'}</td>`}</tr>`; }).join('');
@@ -1515,6 +1585,8 @@ function contractFile(c){
 body{font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#111;margin:24px auto;max-width:760px;font-size:13px;line-height:1.65}
 h1{font-size:22px;text-align:center;letter-spacing:.2em;margin:0 0 18px}
 .terms{padding-left:20px}.terms li{margin:6px 0}.terms ul{padding-left:18px;margin:2px 0}
+.art{margin:12px 0}.art h5{font-size:13px;margin:0 0 4px}.art p{margin:2px 0 2px 14px}.art p.sub{margin-left:30px}
+.lead{margin:0 0 14px}
 table.ct{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px}table.ct th,table.ct td{border:1px solid #444;padding:3px 6px;text-align:center}table.ct thead th{background:#eee}
 .cdate{text-align:center;margin:18px 0}
 .parties{display:grid;grid-template-columns:1fr 1fr;gap:20px}.parties h4{margin:0 0 4px}.parties p{margin:2px 0}
@@ -1584,7 +1656,7 @@ async function kioskSign(){
   const sig = sigData('sig-emp');
   if (!sig){ toast('서명을 해 주세요', '네모 칸에 손가락으로 이름을 써 주세요.', 'warn'); return; }
   k.busy = true; const btn = document.querySelector?.('[data-act="kSign"]'); if (btn){ btn.disabled = true; btn.textContent = '저장하는 중…'; }
-  const upd = { emp:{ addr, phone, email }, empSign:sig, empSignedAt:Date.now() };
+  const upd = { emp:{ addr, phone, email }, empSign:sig, empSignedAt:Date.now(), tpl: contractTpl(c) };
   if (cfg().contract.autoOwnerSign && S.ownerSign) Object.assign(upd, ownerSignFields());
   try {
     if (upd.ownerSign) upd.hash = await contractHash({ ...c, ...upd });
@@ -1678,7 +1750,7 @@ function contractForm(id){
       <label>기타 급여 (제수당 등)<input id="ce-extra" value="${esc(t.extraPay)}"></label>
       <label>임금지급일 (매월)<input type="number" id="ce-payday" min="1" max="31" value="${esc(t.payDay)}"></label>
       <label>지급방법<select id="ce-paym">${PAY_METHODS.map(m => `<option ${t.payMethod === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
-      <div class="full"><span class="small muted">사회보험</span><div class="row" style="margin-top:4px">${INS.map(([k, l]) => `<label class="check"><input type="checkbox" id="ce-ins-${k}" ${t.ins?.[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
+      <div class="full" ${contractTpl(c) === 1 ? '' : 'hidden'}><span class="small muted">사회보험</span><div class="row" style="margin-top:4px">${INS.map(([k, l]) => `<label class="check"><input type="checkbox" id="ce-ins-${k}" ${t.ins?.[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
       <label class="full">특약 사항<textarea id="ce-special" rows="3" placeholder="예: 수습기간 3개월 (임금은 동일)">${esc(t.special)}</textarea></label>
     </div>
     <h3 style="margin-top:16px">근로일·근로시간 <small>1주 ${fmtH(weekMin)} · ${schedSummary(t.sched)}</small></h3>
@@ -2007,11 +2079,76 @@ const BACT = {
       const rows = Object.values(punches).flat().sort((a, b) => (a.date + (name(a.staffId) || a.name)).localeCompare(b.date + (name(b.staffId) || b.name), 'ko'));
       const lines = rows.map(p => [p.date, DAYS[parseDate(p.date).getDay()], name(p.staffId) || p.name || '', p.kind === 'leave' ? '휴무 처리' : '근무',
         p.in ? fmtT(p.in) : '', p.out ? fmtT(p.out, p.date).replace('⁺¹', ' (다음 날)') : '', p.sched ? `${p.sched.start}-${p.sched.end}` : '', p.lateMin || 0,
-        p.inBy === 'master' || p.outBy === 'master' ? '사장님 대리' : '', p.edited ? '수정됨' : '', p.inPhoto ? '있음' : p.inPhoto === null ? '없음' : '', p.note || ''].map(q).join(','));
-      const csv = '﻿' + ['날짜,요일,직원,구분,출근,퇴근,정해진 시간,지각(분),대리 입력,수정,출근 사진,메모', ...lines].join('\r\n');
+        p.inBy === 'master' || p.outBy === 'master' ? '사장님 대리' : '', p.edited ? '수정됨' : '', p.inPhoto ? '있음' : p.inPhoto === null ? '없음' : '', geoCsv(p.inGeo), geoCsv(p.outGeo), p.note || ''].map(q).join(','));
+      const csv = '﻿' + ['날짜,요일,직원,구분,출근,퇴근,정해진 시간,지각(분),대리 입력,수정,출근 사진,출근 위치,퇴근 위치,메모', ...lines].join('\r\n');
       if (await saveFile(`출퇴근기록_전체_${backupStamp()}.csv`, csv)) await backupMark('csv');
     } catch (e){ toast('기록을 모으지 못했어요', '인터넷 연결을 확인하고 다시 눌러 주세요.', 'warn'); console.warn(e); }
     finally { backupBusy = false; if (note) note.textContent = ''; render(true); }
+  }
+};
+
+/* ===================== 위치 확인 =====================
+   가게 위치를 한 번 저장해 두고, 출퇴근 때 태블릿 위치와의 거리를 재요.
+   사진에는 등록한 가게 주소와 거리를 새겨요. (claude.ai에서는 지도 API를 쓸 수 없었어요.
+   Supabase 서버 함수로 카카오 로컬 API를 붙이면 실제 도로명 주소를 넣을 수 있어요 → docs/결정사항.md ⑬ '나중에 개선할 것') */
+function getPos(timeout){
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej({ code:0 });
+    try { navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy:true, timeout, maximumAge:60000 }); } catch (e){ rej(e); }
+  });
+}
+function geoErrText(e){ return e?.code === 1 ? '위치 사용이 막혀 있음' : e?.code === 2 ? '위치를 찾지 못함' : e?.code === 3 ? '시간 초과' : '위치 기능 없음'; }
+function distM(a1, o1, a2, o2){
+  const r = Math.PI / 180, dA = (a2 - a1) * r, dO = (o2 - o1) * r;
+  const x = Math.sin(dA / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dO / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+const fmtDist = m => m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
+function geoInfo(p, st){
+  const g = cfg().geo, lat = p.coords.latitude, lng = p.coords.longitude, acc = Math.round(p.coords.accuracy || 0);
+  const dist = g.lat != null ? Math.round(distM(lat, lng, g.lat, g.lng)) : null;
+  const far = dist != null && dist - acc > (+g.radius || 200);
+  return st?.geoExempt ? { lat:+lat.toFixed(6), lng:+lng.toFixed(6), acc, dist, out:false, ex:true, far }   // 외근 직원: 가게 밖이어도 문제로 보지 않음
+    : { lat:+lat.toFixed(6), lng:+lng.toFixed(6), acc, dist, out: far };
+}
+function startGeo(){ const k = S.kiosk, st = staffById(k.staffId); k.geoP = cfg().geo.on ? getPos(8000).then(p => geoInfo(p, st), e => ({ err: geoErrText(e) })) : null; }
+async function geoNow(){
+  if (!cfg().geo.on) return null;
+  const k = S.kiosk;
+  if (!k.geoP) startGeo();
+  return Promise.race([k.geoP, new Promise(r => setTimeout(() => r({ err:'시간 초과' }), 9000))]);
+}
+function geoLine(geo){
+  if (!geo) return '';
+  if (geo.err) return `위치 확인 안 됨 (${geo.err})`;
+  if (geo.ex && geo.far) return `외근 · ${geo.lat}, ${geo.lng} (가게에서 ${fmtDist(geo.dist)})`;
+  if (geo.dist == null) return `현재 위치 ${geo.lat}, ${geo.lng}`;
+  if (geo.out) return `가게 밖 · 가게에서 ${fmtDist(geo.dist)} (${geo.lat}, ${geo.lng})`;
+  return `${cfg().biz.addr || cfg().storeName} (가게에서 ${fmtDist(geo.dist)}${geo.acc > 50 ? ` · 오차 ±${geo.acc}m` : ''})`;
+}
+function geoChip(geo, word){
+  if (!geo) return '';
+  if (geo.err) return `<span class="chip faint" title="${esc(geo.err)}">${word} 위치 없음</span>`;
+  if (geo.out) return `<span class="chip red" title="${geo.lat}, ${geo.lng} · 오차 ±${geo.acc}m">${word} 가게 밖 ${fmtDist(geo.dist)}</span>`;
+  if (geo.ex && geo.far) return `<span class="chip faint" title="${geo.lat}, ${geo.lng} · 외근 직원이라 문제로 보지 않아요">${word} 외근 ${fmtDist(geo.dist)}</span>`;
+  return '';
+}
+const geoCsv = geo => !geo ? '' : geo.err ? '확인 안 됨' : geo.dist != null ? `가게에서 ${geo.dist}m${geo.out ? ' (가게 밖)' : geo.ex && geo.far ? ' (외근)' : ''}` : `${geo.lat} ${geo.lng}`;
+const GACT = {
+  async geoToggle(){
+    const g = cfg().geo;
+    await write(() => S.db.doc('config/main').set({ ...S.config, geo:{ ...g, on:!g.on } }));
+    toast(g.on ? '위치 확인을 껐어요' : '위치 확인을 켰어요', g.on ? '' : g.lat == null ? '가게에서 태블릿으로 ‘지금 위치를 가게 위치로 저장’을 눌러 주세요.' : '출퇴근할 때 가게와의 거리가 기록돼요.', 'ok');
+    render(true);
+  },
+  async geoSet(){
+    toast('위치를 찾고 있어요', '잠시만 기다려 주세요. 위치 사용을 묻는 창이 뜨면 ‘허용’을 눌러 주세요.', 'info');
+    try {
+      const p = await getPos(15000), acc = Math.round(p.coords.accuracy || 0);
+      await write(() => S.db.doc('config/main').set({ ...S.config, geo:{ ...cfg().geo, lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6), acc, setAt:Date.now() } }));
+      toast('가게 위치를 저장했어요', acc > 100 ? `오차가 ±${acc}m로 커요. 창가에서 한 번 더 눌러 보세요.` : `오차 ±${acc}m`, acc > 100 ? 'warn' : 'ok');
+    } catch (e){ toast('위치를 가져오지 못했어요', geoErrText(e) + ' — 크롬에서 열고 위치 사용을 허용해 주세요.', 'warn'); }
+    render(true);
   }
 };
 
@@ -2125,7 +2262,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();
@@ -2168,8 +2305,8 @@ function padPress(ctx, v){
   if (k.pin.length === 4){
     const st = staffById(k.staffId);
     const master = String(cfg().masterPin || '');
-    if (st && k.pin === String(st.pin)){ k.step = 'action'; k.pin = ''; k.master = false; }
-    else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; }   // 사장님 마스터 번호: 어느 직원이든 통과
+    if (st && k.pin === String(st.pin)){ k.step = 'action'; k.pin = ''; k.master = false; startGeo(); }
+    else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; startGeo(); }   // 사장님 마스터 번호: 어느 직원이든 통과
     else { k.err = '번호가 맞지 않아요. 다시 입력해 주세요'; k.pin = ''; }
   }
   render(true);
@@ -2193,25 +2330,25 @@ async function kioskPunch(kind, shot){
   const k = S.kiosk, st = staffById(k.staffId);
   if (!st || k.busy) return;
   k.busy = true; render(true);
-  const now = shot?.t || Date.now(), today = todayStr();
+  const now = shot?.t || Date.now(), today = todayStr(), geo = shot && 'geo' in shot ? shot.geo : await geoNow();
   try {
     if (kind === 'in'){
       const sc = schedFor(st, today, null);
       const late = sc && now > at(today, sc.start) + cfg().graceMin*60000 ? Math.round((now - at(today, sc.start))/60000) : 0;
       const ph = await photoFields('in', shot);
-      await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}) }));
+      await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}), ...(geo ? { inGeo:geo } : {}) }));
       k.result = { kind:'in', t:now, late, photoErr: shot?.blob && !ph.inPhoto ? ph.inPhotoNote : '', msg: late ? `예정 ${sc.start}보다 ${late}분 늦었어요. 사장님께 알림이 갔어요.` : sc ? `오늘 퇴근 예정 ${sc.end} · 좋은 하루 보내세요!` : '추가 근무로 기록했어요.' };
-      mailPunch(st, 'in', now, { late, sc, blob: shot?.blob, master: k.master });
+      mailPunch(st, 'in', now, { late, sc, blob: shot?.blob, master: k.master, geo });
       const need = await contractNeeded(st);
       if (need){ k.contractId = need.id; k.nextStep = 'contract'; }
     } else {
       const op = openPunch(st, now);
       if (!op){ toast('출근 기록이 없어요', '사장님께 확인을 요청하세요.', 'warn'); resetKiosk(); render(true); return; }
       const ph = await photoFields('out', shot);
-      await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}) }));
+      await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}), ...(geo ? { outGeo:geo } : {}) }));
       const r = dayCalc(st, op.date, now);
       k.result = { kind:'out', t:now, late:false, photoErr: shot?.blob && !ph.outPhoto ? ph.outPhotoNote : '', msg:`오늘 ${fmtH(r.worked)} 근무했어요. 수고하셨어요!` };
-      mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master });
+      mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master, geo });
     }
     k.step = k.nextStep || 'done'; k.nextStep = null; k.at = Date.now(); beep('ok');
   } catch { if (k.step === 'photo') resetKiosk(); }
@@ -2223,7 +2360,7 @@ async function savePunchEdit(kind){
   if (!st) return;
   const sc = p && p.sched !== undefined ? p.sched : schedFor(st, ds, null);
   const note = $('#ed-note')?.value.trim() || '';
-  const keep = p ? Object.fromEntries(['inPhoto', 'inPhotoNote', 'outPhoto', 'outPhotoNote', 'inBy', 'outBy'].filter(f => p[f] !== undefined).map(f => [f, p[f]])) : {};   // 고쳐도 사진은 그대로
+  const keep = p ? Object.fromEntries(['inPhoto', 'inPhotoNote', 'outPhoto', 'outPhotoNote', 'inBy', 'outBy', 'inGeo', 'outGeo'].filter(f => p[f] !== undefined).map(f => [f, p[f]])) : {};   // 고쳐도 사진은 그대로
   let doc;
   if (kind === 'leave') doc = { ...keep, staffId:sid, name:st.name, date:ds, kind:'leave', in:null, out:null, sched:sc, lateMin:0, edited:true, note: note || '휴무 처리' };
   else {
@@ -2258,7 +2395,7 @@ async function saveStaff(){
   if (!birth && rrn){ const g = +rrn[7], cent = g === 3 || g === 4 || g === 7 || g === 8 ? '20' : '19'; birth = `${cent}${rrn.slice(0, 2)}-${rrn.slice(2, 4)}-${rrn.slice(4, 6)}`; }
   const sched = Array.from({ length:7 }, (_, i) => ({ on: $(`#sc-on-${i}`).checked, start: $(`#sc-start-${i}`).value || '09:00', end: $(`#sc-end-${i}`).value || '18:00', brk: Math.max(0, Math.round(+$(`#sc-brk-${i}`).value || 0)) }));
   const doc = { ...(old ? Object.fromEntries(Object.entries(old).filter(([k]) => k !== 'id')) : { active:true, order:Date.now() }),
-    name, pin, wage, payType: ptype, monthly, rrn, position: $('#f-pos').value.trim(), hireDate: $('#f-hire').value || '', birth, deduct: $('#f-ded').value, sched };
+    name, pin, wage, payType: ptype, monthly, rrn, position: $('#f-pos').value.trim(), hireDate: $('#f-hire').value || '', birth, deduct: $('#f-ded').value, geoExempt: !!$('#f-geoex')?.checked, sched };
   const id = id0 || 's' + Date.now().toString(36);
   await write(() => S.db.doc('staff/' + id).set(doc));
   const low = ptype === 'hour' && wage < MIN_WAGE;
@@ -2276,7 +2413,7 @@ async function saveConfig(){
     graceMin: Math.max(0, Math.round(+$('#c-grace').value || 0)), otUnit: Math.max(1, Math.round(+$('#c-unit').value || 1)),
     earlyClamp: $('#c-early').checked, otPremium: $('#c-prem').checked, weeklyHoliday: $('#c-hol').checked,
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
-    mail: readMailForm(), photo:{ ...cfg().photo, on: $('#p-on').checked } };
+    mail: readMailForm(), photo:{ ...cfg().photo, on: $('#p-on').checked }, geo:{ ...cfg().geo, radius: Math.max(30, Math.round(+$('#c-georad').value || 200)) } };
   if (doc.mail.on && !mailAddrs(doc.mail.to).length){ toast('받을 메일 주소를 넣어 주세요', '메일 알림을 켜려면 주소가 필요해요.', 'warn'); return; }
   await write(() => S.db.doc('config/main').set({ ...S.config, ...doc }));
   toast('설정을 저장했어요', '', 'ok');

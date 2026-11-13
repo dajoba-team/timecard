@@ -1,6 +1,6 @@
 {
   "name": "dajoba-timecard",
-  "version": "12.0.0",
+  "version": "18.0.0",
   "private": true,
   "description": "가게 직원 출퇴근·급여·근로계약 관리 (Supabase + Netlify)",
   "scripts": {
