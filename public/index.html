@@ -1086,16 +1086,33 @@ function buildFeed(today, now){
   }
   return items.sort((a, b) => b.t - a.t);
 }
-function slackBar(){   // 현황 탭의 슬랙 미출근 알림 칸 (직원이 없을 때도 보여서 시험 알림을 먼저 해 볼 수 있게)
-  const k = cfg().slack;
+// 슬랙 알림 종류 (서버 함수 tc-notyet-check가 보냄). config/main slack.ev에 켜기·끄기, 없으면 모두 켜짐
+const SLACK_EV = [['notyet','미출근 (지각)'],['in','출근'],['out','퇴근'],['report','업무 보고 도착'],['due','업무 마감 지남']];
+const slackEv = () => ({ notyet:true, in:true, out:true, report:true, due:true, ...(cfg().slack.ev || {}) });
+function slackBar(){   // 현황 탭의 슬랙 알림 칸 (직원이 없을 때도 보여서 시험 알림을 먼저 해 볼 수 있게)
+  const k = cfg().slack, ev = slackEv();
   return `<div class="alertbar mailbar ${k.on ? 'on' : ''}" id="slackBar">
-    <span>💬 <b>슬랙 미출근 알림 ${k.on ? '켜짐' : '꺼짐'}</b> — 정해진 출근 시각에서 ${num(+cfg().graceMin || 0)}분이 지나도 출근 기록이 없으면 슬랙으로 알려요. 가게 태블릿이 꺼져 있어도 서버가 5분마다 확인해요.
+    <span>💬 <b>슬랙 알림 ${k.on ? '켜짐' : '꺼짐'}</b> — 미출근(출근 시각 + ${num(+cfg().graceMin || 0)}분), 출근·퇴근, 업무 보고 도착, 업무 마감 지남을 슬랙으로 알려요. 출퇴근·보고는 찍는 즉시, 미출근·마감은 서버가 5분마다 확인해요 (가게 태블릿이 꺼져 있어도).
+      <span class="row" style="margin-top:6px;gap:12px">${SLACK_EV.map(([key, label]) => `<label class="check" style="font-size:13px!important"><input type="checkbox" name="slackEv" value="${key}" ${ev[key] ? 'checked' : ''}> ${label}</label>`).join('')}</span>
       <small class="mailst">${alertStatusLine()}</small></span>
     <span class="spacer"></span>
     <button class="btn sm" data-act="slackTest" ${S.slackBusy ? 'disabled' : ''}>${S.slackBusy ? '보내는 중…' : '시험 알림 보내기'}</button>
     <button class="btn sm ${k.on ? '' : 'pri'}" role="switch" aria-checked="${k.on}" data-act="slackToggle">${k.on ? '슬랙 알림 끄기' : '슬랙 알림 켜기'}</button>
   </div>`;
 }
+// 출퇴근을 찍거나 업무 보고를 보낸 직후 서버에 '지금 확인해 줘' (5분 기다리지 않게). 실패해도 5분 뒤 예약 실행이 보냄
+let slackKickT = null;
+function slackKick(){
+  if (!cfg().slack.on || !window.tcStore?.invoke) return;
+  clearTimeout(slackKickT);
+  slackKickT = setTimeout(() => { window.tcStore.invoke('tc-notyet-check', { kick:true }).catch(e => console.warn('slack kick', e)); }, 1500);
+}
+document.addEventListener('change', async e => {
+  if (e.target.name !== 'slackEv' || !S.db) return;
+  const ev = { ...slackEv(), [e.target.value]: !!e.target.checked };
+  await write(() => S.db.doc('config/main').set({ ...S.config, slack:{ ...cfg().slack, ev } }));
+  toast(`슬랙 ${SLACK_EV.find(x => x[0] === e.target.value)?.[1]} 알림을 ${e.target.checked ? '켰어요' : '껐어요'}`, '', 'ok');
+});
 function nowView(){
   const now = Date.now(), today = todayStr();
   if (!S.ready.staff) return loadingNote();
@@ -2668,6 +2685,7 @@ async function phoneSend(){
     await trRef(ds, key).set({ taskId:t.id, staffId:me.id, date:ds, photos:ids, note:P.note, sentAt:Date.now(), status:'sent',
       ownerNote: prev?.ownerNote || '', round:(prev?.round || 0) + 1, oldPhoto: P.shots.some(s => s.old), via:'phone' });
     clearShots(); P.note = ''; P.step = 'done';
+    slackKick();   // 슬랙 '보고 도착' 알림 바로
   } catch (e){
     P.step = '';
     toast('보내지 못했어요', e?.code === 'no_assets' ? e.message : '인터넷을 확인하고 다시 눌러 주세요. 찍은 사진은 그대로 있어요.', 'warn');
@@ -2971,6 +2989,7 @@ async function kioskPunch(kind, shot){
       mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master, geo });
     }
     k.step = k.nextStep || 'done'; k.nextStep = null; k.at = Date.now(); beep('ok');
+    slackKick();   // 슬랙 출근·퇴근 알림 바로
   } catch { if (k.step === 'photo') resetKiosk(); }
   k.busy = false; render(true);
 }

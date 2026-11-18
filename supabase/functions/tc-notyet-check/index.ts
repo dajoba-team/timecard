@@ -1,9 +1,14 @@
-// 미출근 슬랙 알림 (Supabase Edge Function: tc-notyet-check) — 장부와 같은 프로젝트, 타임카드 자원은 tc 접두어
+// 슬랙 알림 (Supabase Edge Function: tc-notyet-check) — 장부와 같은 프로젝트, 타임카드 자원은 tc 접두어
+//   미출근 · 출근 · 퇴근 · 업무 보고 도착 · 업무 마감 지남 (이름은 처음 만든 '미출근 확인' 그대로 둠: 예약 작업이 이 이름을 부름)
 //
 // - 5분마다 pg_cron이 부름 (supabase/002_notyet_alert.sql). 헤더 x-cron-secret = TC_CRON_SECRET
+// - 앱이 출퇴근을 찍거나 업무 보고를 보낼 때 { kick: true }로 바로 한 번 더 부름 (5분 기다리지 않게). 하는 일은 예약 실행과 같음
 // - 앱의 '시험 알림 보내기'는 로그인한 사장님 토큰으로 { test: true }를 보냄 (타임카드 권한 있는 계정만)
-// - 가게 설정(config/main)의 slack.on이 꺼져 있으면 아무것도 안 보냄
-// - 직원·날짜당 한 번만: months/{YYYY-MM}/alerts/{직원id}_{날짜} 표시를 먼저 만들고 보냄
+// - 가게 설정(config/main)의 slack.on이 꺼져 있으면 아무것도 안 보냄. slack.ev로 종류별 켜기·끄기 (없으면 모두 켜짐)
+// - 같은 알림은 한 번만: months/{YYYY-MM}/alerts/{표시 id} 를 먼저 만들고 보냄
+//     미출근 {직원}_{날짜} / 출근 in_{직원}_{날짜} / 퇴근 out_{직원}_{날짜} / 보고 rep_{보고id}_{회차} / 마감 due_{업무}_{날짜}
+// - 출근·퇴근·보고는 최근 1시간 안의 것만 (태블릿 인터넷이 1시간 넘게 끊겼다가 보낸 기록은 알리지 않음)
+// - 판단 규칙은 rules.mjs (tests/notyet.test.js, tests/slack-events.test.js가 앱 규칙과 같은지 확인)
 // - 결과는 status/alert 문서에 남겨서 앱 화면에 보여 줌
 //
 // 필요한 secret (supabase secrets set ...):
@@ -15,7 +20,7 @@
 //       (인증은 아래 코드에서 직접 확인해요)
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
-import { kstDate, notyetList, notyetMessage } from "./rules.mjs";
+import { kstDate, notyetList, notyetMessage, punchEvents, punchMessage, reportEvents, reportMessage, dueEvents, dueMessage } from "./rules.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -81,42 +86,65 @@ Deno.serve(async req => {
     const store = config.storeName || "우리 가게";
 
     if (body.test) {
-      await sendSlack(`*[${store}] 슬랙 알림 시험*\n미출근 알림이 이 채널로 와요. 이 메시지가 휴대폰 알림으로 떴다면 준비 끝이에요.`);
+      await sendSlack(`*[${store}] 슬랙 알림 시험*\n미출근·출근·퇴근·업무 보고 알림이 이 채널로 와요. 이 메시지가 휴대폰 알림으로 떴다면 준비 끝이에요.`);
       await logStatus({ ok: true, kind: "test", text: "시험 알림" });
       return json({ ok: true, sent: "test" });
     }
     if (!config.slack || !config.slack.on) return json({ ok: true, skipped: "off" });
+    // 알림 종류별 켜기·끄기 (사장님 화면 현황 → 슬랙 알림). 없으면 모두 켜짐
+    const ev = { notyet: true, in: true, out: true, report: true, due: true, ...(config.slack.ev || {}) };
 
     const ds = kstDate(now), ym = ds.slice(0, 7);
+    const yds = kstDate(now - 86400000), yym = yds.slice(0, 7);   // 어제 (자정 넘은 퇴근)
     const staff = (await listDocs("staff")).map(d => ({ id: d.id, ...d.data }));
     const punches = Object.fromEntries((await listDocs(`months/${ym}/punches`, `%\\_${ds}`)).map(d => [d.id, d.data]));
-    const due = notyetList({ config, staff, punches, now });
-    if (!due.length) return json({ ok: true, notyet: 0 });
+    const result: Record<string, unknown> = { ok: true };
+    const sentText: string[] = [];
 
-    // 중복 방지: 표시를 먼저 '추가'로 만들어서, 이미 있으면(다른 실행이 보냈으면) 건너뜀
+    // 중복 방지: 표시를 먼저 '추가'로 만들어서, 이미 있으면(다른 실행이 보냈으면) 건너뜀.
+    // 못 보냈으면 표시를 지워서 다음 실행(5분 뒤)에 다시 시도
     const alertsCol = `months/${ym}/alerts`;
-    const fresh = [];
-    for (const item of due) {
-      const id = `${item.st.id}_${ds}`;
-      const { error } = await sb.from(DOCS).insert({ collection: alertsCol, id, data: { at: now, kind: "notyet", ch: "slack" } });
-      if (!error) fresh.push({ ...item, markId: id });
-      else if (error.code !== "23505") throw new Error(error.message);   // 23505 = 이미 보냄
-    }
-    if (!fresh.length) return json({ ok: true, notyet: due.length, sent: 0 });
+    const claim = async (id: string, kind: string) => {
+      const { error } = await sb.from(DOCS).insert({ collection: alertsCol, id, data: { at: now, kind, ch: "slack" } });
+      if (!error) return true;
+      if (error.code === "23505") return false;   // 이미 보냄
+      throw new Error(error.message);
+    };
+    const sendOnce = async <T extends { key: string }>(items: T[], kind: string, message: (fresh: T[]) => string, label: (fresh: T[]) => string) => {
+      const fresh: T[] = [];
+      for (const it of items) if (await claim(it.key, kind)) fresh.push(it);
+      if (!fresh.length) return 0;
+      try { await sendSlack(message(fresh)); }
+      catch (e) { await sb.from(DOCS).delete().eq("collection", alertsCol).in("id", fresh.map(f => f.key)); throw e; }
+      sentText.push(label(fresh));
+      return fresh.length;
+    };
 
-    try {
-      await sendSlack(notyetMessage(store, fresh, now));
-    } catch (e) {
-      // 못 보냈으면 표시를 지워서 다음 실행(5분 뒤)에 다시 시도
-      await sb.from(DOCS).delete().eq("collection", alertsCol).in("id", fresh.map(f => f.markId));
-      throw e;
+    // 1. 미출근 (표시 id는 예전과 같이 {직원}_{날짜})
+    if (ev.notyet) {
+      const due = notyetList({ config, staff, punches, now }).map(i => ({ ...i, key: `${i.st.id}_${ds}` }));
+      result.notyet = await sendOnce(due, "notyet", f => notyetMessage(store, f, now), f => `${f.map(x => x.st.name).join(", ")} 미출근`);
     }
-    await logStatus({ ok: true, kind: "notyet", text: `${fresh.map(f => f.st.name).join(", ")} 미출근` });
-    return json({ ok: true, notyet: due.length, sent: fresh.length });
+    // 2. 출근·퇴근 (최근 1시간 안에 찍힌 것, 직원·날짜·출근/퇴근마다 한 번)
+    if (ev.in || ev.out) {
+      const yPunches = yds === ds ? {} : Object.fromEntries((await listDocs(`months/${yym}/punches`, `%\\_${yds}`)).map(d => [d.id, d.data]));
+      const evs = punchEvents({ staff, punches: { ...yPunches, ...punches }, now }).filter(e => ev[e.kind as "in" | "out"]);
+      result.punch = await sendOnce(evs, "punch", f => punchMessage(store, f), f => f.map(x => `${x.st.name} ${x.kind === "in" ? "출근" : "퇴근"}`).join(", "));
+    }
+    // 3·4. 업무 보고 도착 / 마감 지남
+    if (ev.report || ev.due) {
+      const reports = Object.fromEntries((await listDocs(`months/${ym}/task_reports`)).map(d => [d.id, d.data]));
+      const tasks = Object.fromEntries((await listDocs("tasks")).map(d => [d.id, d.data]));
+      if (ev.report) result.report = await sendOnce(reportEvents({ reports, now }), "report", f => reportMessage(store, f, { tasks, staff }), f => `업무 보고 ${f.length}건`);
+      if (ev.due) result.due = await sendOnce(dueEvents({ tasks, staff, reports, now }), "due", f => dueMessage(store, f), f => `마감 지남: ${f.map(x => x.t.title).join(", ")}`);
+    }
+
+    if (sentText.length) await logStatus({ ok: true, kind: "events", text: sentText.join(" / ") });
+    return json(result);
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e);
     console.error(err);
-    await logStatus({ ok: false, kind: body.test ? "test" : "notyet", err });
+    await logStatus({ ok: false, kind: body.test ? "test" : "events", err });
     return json({ ok: false, error: err }, 500);
   }
 });
