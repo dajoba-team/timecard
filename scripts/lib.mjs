@@ -62,7 +62,8 @@ export const canon = o => JSON.stringify(sortDeep(o));
 const body = o => { const { id, ...rest } = o; return JSON.parse(JSON.stringify(rest)); };
 
 // 타임카드 '전체 백업(.json)' → docs 행 목록 + 검사 결과
-// 백업 모양 (index.html BACT.bkAll): { app, format, exportedAt, config, ownerSign, staff[], punches{ym:[]}, contracts[], reports{ym:{}} }
+// 백업 모양 (index.html BACT.bkAll, 서버 자동 백업 backup.mjs): { app, format, exportedAt, config, ownerSign, staff[], punches{ym:[]}, contracts[], reports{ym:{}},
+//   extra:{ tasks[], task_reads[], task_reports{ym:[]} } }
 export const backupToDocs = backup => {
   const problems = [], notes = [], rows = [];
   if (!backup || backup.app !== "가게 타임카드 백업") problems.push("타임카드 전체 백업 파일이 아니에요 (app 값이 다름)");
@@ -96,13 +97,22 @@ export const backupToDocs = backup => {
   for (const c of backup.contracts || []) add("contracts", c.id, body(c));
   for (const [ym, r] of Object.entries(backup.reports || {})) add("reports", ym, JSON.parse(JSON.stringify(r)));
 
+  // 업무 지시·사진 보고 (v19부터 extra에 들어감, 예전 백업에는 없음)
+  const ex = backup.extra || {};
+  for (const t of ex.tasks || []) add("tasks", t.id, body(t));
+  for (const r of ex.task_reads || []) add("task_reads", r.id, body(r));
+  for (const [ym, list] of Object.entries(ex.task_reports || {})) {
+    if (!/^\d{4}-\d{2}$/.test(ym)) { problems.push("잘못된 달: " + ym); continue; }
+    for (const r of list || []) add(`months/${ym}/task_reports`, r.id, body(r));
+  }
+
   // 중복 검사
   const seen = new Set();
   for (const r of rows) { const k = r.collection + "/" + r.id; if (seen.has(k)) problems.push("중복 문서: " + k); seen.add(k); }
 
   // 백업 안의 개수와 맞는지
   const c = backup.counts || {};
-  const punchCount = rows.filter(r => r.collection.startsWith("months/")).length;
+  const punchCount = rows.filter(r => /^months\/\d{4}-\d{2}\/punches$/.test(r.collection)).length;
   if (c.staff != null && c.staff !== (backup.staff || []).length) problems.push(`직원 수가 백업 표시(${c.staff})와 달라요`);
   if (c.punches != null && c.punches !== punchCount) problems.push(`출퇴근 기록 수가 백업 표시(${c.punches})와 달라요 (${punchCount})`);
   if (c.contracts != null && c.contracts !== (backup.contracts || []).length) problems.push(`계약서 수가 백업 표시(${c.contracts})와 달라요`);

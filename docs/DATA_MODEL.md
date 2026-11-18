@@ -31,6 +31,10 @@
 | `tasks/{taskId}` | 업무 지시·공지 (아래 표, v19) |
 | `task_reads/{taskId}_{staffId}` | 공지 읽음 `{ taskId, staffId, at, where('tablet'/'phone') }` |
 | `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
+| `backups/{YYYY-MM-DD}` | 자동 백업 목록 `{ at, ok, date, size, counts, removed, manual, keepDays }` (서버가 씀, v20) |
+| `status/autobackup` | 마지막 자동 백업 결과 `{ at, ok, date, size, counts, err }` (서버가 씀) |
+
+자동 백업 파일은 `tc_docs`가 아니라 Storage **`tc-backups` 버킷(비공개, 서버만 열 수 있음)**에 `{YYYY-MM-DD}.json`으로 있어요. 90일 지나면 서버가 지워요. 모양은 '전체 백업'과 같아요 (`supabase/functions/tc-notyet-check/backup.mjs`).
 
 사진은 `tc_docs`가 아니라 Storage **`tc-photos` 버킷(비공개)**에 있고, 기록에는 사진 번호(id)만 남아요. 화면에서는 7일짜리 임시 URL로 불러와요.
 사진 번호 앞머리로 폴더가 나뉘어요 (`public/storage.js`의 `FOLDERS`):

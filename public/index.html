@@ -2123,13 +2123,13 @@ function backupMonths(){   // 가장 이른 입사일·기록 달부터 이번 �
   for (let ym = from; ym <= cur && out.length < 120; ym = shiftYM(ym, 1)) out.push(ym);
   return out;
 }
-async function readAllPunches(onStep){
+async function readAllPunches(onStep, kind = 'punches'){   // kind: 'punches' 출퇴근 / 'task_reports' 업무 보고
   const out = {};
   const months = backupMonths();
   for (let i = 0; i < months.length; i++){
     const ym = months[i];
     onStep?.(i + 1, months.length);
-    const snap = await S.db.collection(`months/${ym}/punches`).limit(1000).get();
+    const snap = await S.db.collection(`months/${ym}/${kind}`).limit(1000).get();
     if (snap.docs.length) out[ym] = snap.docs.map(d => ({ id:d.id, ...d.data() }));
   }
   return out;
@@ -2152,8 +2152,54 @@ function backupPanel(){
     </div>
     <p class="hint">전체 백업에는 가게 설정, 직원 정보, 모든 달의 출퇴근 기록, 근로계약서와 서명, 세무사 전달 내역이 들어가요. 사진은 크기 때문에 빠지고 사진 번호만 남아요.<br>
     <b>백업 파일에는 주민번호·연락처·서명이 들어 있어요.</b> 카톡 등으로 함부로 보내지 말고, 사장님만 쓰는 PC나 USB, 클라우드에 보관하세요. 한 달에 한 번 받아 두시길 권해요.</p>
+    ${autoBackupBox()}
   </section>`;
 }
+// ----- 매일 자동 백업 (서버 함수 tc-notyet-check, supabase/functions/tc-notyet-check/backup.mjs) -----
+// 서버가 한국시간 새벽 4시 이후 하루 한 번 비공개 보관함(tc-backups)에 저장하고 90일 지난 것은 지워요.
+// 목록은 backups/{날짜} 문서, 마지막 결과는 status/autobackup. 내려받기는 서버가 만든 1분짜리 주소로.
+const AUTO_BACKUP_DAYS = 90;
+function autoBackupLine(){
+  const s = S.autoBackup;
+  if (!s) return '<span style="color:var(--amber)">아직 자동 백업 기록이 없어요. 새벽 4시가 지나면 첫 백업이 생겨요 (‘지금 백업하기’로 바로 만들 수도 있어요).</span>';
+  const when = `${fmtMD(ymd(new Date(s.at)))} ${fmtT(s.at)}`;
+  if (!s.ok) return `<span style="color:var(--red)">${when} 자동 백업에 실패했어요 — ${esc(s.err || '')} (5분 뒤 다시 시도해요)</span>`;
+  const days = Math.floor((Date.now() - s.at) / 86400000);
+  return `${days >= 2 ? `<span style="color:var(--amber)">마지막 자동 백업 ${when} (${days}일 전) — 서버 예약 작업을 확인해 주세요.</span>` : `마지막 자동 백업 ${when}`} · 직원 ${num(s.counts?.staff)}명 · 출퇴근 ${num(s.counts?.punches)}건 · ${mb(s.size)}`;
+}
+function autoBackupBox(){
+  const list = [...(S.backups || [])].filter(b => b.ok).sort((a, b) => (a.id < b.id ? 1 : -1));
+  const shown = S.showAllBackups ? list : list.slice(0, 7);
+  return `<h3 style="margin-top:18px">매일 자동 백업 <small>새벽 4시 · ${AUTO_BACKUP_DAYS}일 보관 · 서버의 비공개 보관함</small></h3>
+    <p class="small" style="margin:0 0 10px">${autoBackupLine()}</p>
+    ${shown.length ? `<div class="slist">${shown.map(b => `<div class="sitem"><div><b class="mono">${esc(b.id)}</b> <span class="small muted">${fmtT(b.at)}${b.manual ? ' · 직접 만든 백업' : ''}</span>
+      <div class="sub">직원 ${num(b.counts?.staff)}명 · 출퇴근 ${num(b.counts?.punches)}건 · 계약서 ${num(b.counts?.contracts)}건 · 업무 보고 ${num(b.counts?.task_reports)}건 · ${mb(b.size)}</div></div>
+      <button class="btn sm" data-act="abGet" data-id="${esc(b.id)}" ${S.abBusy ? 'disabled' : ''}>내려받기</button></div>`).join('')}</div>` : ''}
+    ${list.length > 7 ? `<button class="linkbtn" data-act="abMore">${S.showAllBackups ? '접기' : `전체 ${list.length}개 보기`}</button>` : ''}
+    <div class="row" style="margin-top:8px"><button class="btn sm" data-act="abNow" ${S.abBusy ? 'disabled' : ''}>${S.abBusy === 'now' ? '백업하는 중…' : '지금 백업하기'}</button></div>
+    <p class="hint">자동 백업은 실수로 지우거나 잘못 고친 기록을 되살릴 때 써요. 같은 서버 안에 있으니, 한 달에 한 번은 하나를 내려받아 사장님 PC나 USB에도 보관하세요.</p>`;
+}
+const ABACT = {
+  async abNow(){
+    if (S.abBusy || !window.tcStore?.invoke) return;
+    S.abBusy = 'now'; render(true);
+    try { const r = await window.tcStore.invoke('tc-notyet-check', { backupNow:true }); toast('백업을 만들었어요', `직원 ${num(r?.counts?.staff)}명 · 출퇴근 ${num(r?.counts?.punches)}건`, 'ok'); }
+    catch (e){ toast('백업하지 못했어요', e?.code === 'unavailable' ? '인터넷 연결을 확인해 주세요.' : (e?.message || ''), 'warn'); }
+    finally { S.abBusy = false; render(true); }
+  },
+  async abGet(d){
+    if (S.abBusy || !window.tcStore?.invoke) return;
+    S.abBusy = 'get'; render(true);
+    try {
+      const r = await window.tcStore.invoke('tc-notyet-check', { backupUrl:d.id });
+      if (!r?.url) throw new Error(r?.error || '주소를 받지 못했어요');
+      const a = document.createElement('a'); a.href = r.url; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+      toast('백업 파일을 내려받아요', `타임카드_자동백업_${d.id}.json · 개인정보가 들어 있으니 안전한 곳에 보관하세요.`, 'ok');
+    } catch (e){ toast('내려받지 못했어요', e?.message || '', 'warn'); }
+    finally { S.abBusy = false; render(true); }
+  },
+  abMore(){ S.showAllBackups = !S.showAllBackups; render(true); },
+};
 async function backupMark(kind){ try { await S.db.doc('status/backup').set({ at:Date.now(), kind }); } catch {} }
 const BACT = {
   async bkAll(){
@@ -2162,10 +2208,13 @@ const BACT = {
     const note = $('#bkNote'), step = (i, n) => { if (note) note.textContent = `기록 모으는 중… (${i}/${n}달)`; };
     try {
       const punches = await readAllPunches(step);
+      const taskReports = await readAllPunches(null, 'task_reports');   // 업무 사진 보고 (사진은 번호만)
       const data = {
         app:'가게 타임카드 백업', format:1, exportedAt:new Date().toISOString(), store: cfg().storeName,
         config: S.config, ownerSign: S.ownerSign || '', staff: S.staff, punches, contracts: S.contracts, reports: S.reports,
-        counts:{ staff: S.staff.length, punches: Object.values(punches).reduce((t, a) => t + a.length, 0), months: Object.keys(punches).length, contracts: S.contracts.length },
+        extra:{ tasks: S.tasks, task_reads: [...S.treads].map(([id, r]) => ({ id, ...r })), task_reports: taskReports },
+        counts:{ staff: S.staff.length, punches: Object.values(punches).reduce((t, a) => t + a.length, 0), months: Object.keys(punches).length, contracts: S.contracts.length,
+          tasks: S.tasks.length, task_reports: Object.values(taskReports).reduce((t, a) => t + a.length, 0) },
         note:'사진 파일은 포함되지 않았어요 (기록의 inPhoto/outPhoto는 사진 번호).'
       };
       if (note) note.textContent = '파일 만드는 중…';
@@ -2888,7 +2937,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();
@@ -3142,6 +3191,8 @@ async function boot(){
   db.collection('reports').onSnapshot(s => { S.reports = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); S.ready.reports = true; scheduleRender(); }, e => { S.ready.reports = true; console.warn('reports', e); });
   db.doc('config/sign').onSnapshot(s => { const d = s.exists ? s.data().data : ''; S.ownerSign = SIG_RE.test(d || '') ? d : ''; scheduleRender(); }, e => console.warn('sign', e));
   db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
+  db.doc('status/autobackup').onSnapshot(s => { S.autoBackup = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('autobackup', e));
+  db.collection('backups').onSnapshot(s => { S.backups = s.docs.map(d => ({ id:d.id, ...d.data() })); if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backups', e));
   db.doc('status/alert').onSnapshot(s => { S.alertStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('alert', e));
   db.doc('status/mail').onSnapshot(s => { S.mailStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('mail', e));
   needMonth(ymOf(todayStr()));

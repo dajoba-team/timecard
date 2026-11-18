@@ -17,19 +17,20 @@ export async function load(url, ctx, next){ if (url === '${FAKE}') return { form
 const rows = new Map();   // "collection|id" → { collection, id, data, deleted_at }
 const K = (c, id) => c + '|' + id;
 function query() {
-  const f = []; let op = 'select', payload = null, lim = 0;
+  const f = []; let op = 'select', payload = null, lim = 0, off = 0;
   const run = () => {
     const match = r => f.every(([k, kind, v]) => kind === 'eq' ? r[k] === v : kind === 'is' ? (r[k] ?? null) === v : kind === 'in' ? v.includes(r[k])
       : kind === 'like' ? new RegExp('^' + v.replace(/[.*+?^${}()|[\]]/g, m => m === '%' ? m : '\\' + m).replace(/\\\\_/g, '_').replace(/%/g, '.*') + '$').test(r[k]) : true);
     if (op === 'insert') { const k = K(payload.collection, payload.id); if (rows.has(k)) return { data:null, error:{ code:'23505', message:'duplicate' } }; rows.set(k, { deleted_at:null, ...payload }); return { data:null, error:null }; }
     if (op === 'upsert') { rows.set(K(payload.collection, payload.id), { deleted_at:null, ...payload }); return { data:null, error:null }; }
-    const hit = [...rows.values()].filter(match);
+    const hit = [...rows.values()].filter(match).sort((a, b) => K(a.collection, a.id) < K(b.collection, b.id) ? -1 : 1);
     if (op === 'delete') { hit.forEach(r => rows.delete(K(r.collection, r.id))); return { data:null, error:null }; }
-    return { data: (lim ? hit.slice(0, lim) : hit).map(r => ({ ...r })), error:null };
+    return { data: (lim ? hit.slice(off, off + lim) : hit).map(r => ({ ...r })), error:null };
   };
   const b = {
     select(){ return b; }, eq(k, v){ f.push([k, 'eq', v]); return b; }, is(k, v){ f.push([k, 'is', v]); return b; },
     in(k, v){ f.push([k, 'in', v]); return b; }, like(k, v){ f.push([k, 'like', v]); return b; }, limit(n){ lim = n; return b; },
+    order(){ return b; }, range(a, z){ off = a; lim = z - a + 1; return b; },
     insert(p){ op = 'insert'; payload = p; return b; }, upsert(p){ op = 'upsert'; payload = p; return b; }, delete(){ op = 'delete'; return b; },
     maybeSingle: async () => { const r = run(); return { data: r.data?.[0] || null, error: r.error }; },
     then(res, rej){ return Promise.resolve(run()).then(res, rej); },
@@ -37,7 +38,20 @@ function query() {
   return b;
 }
 const users = { 'owner-token': { id:'u1', app_metadata:{ apps:['timecard'] } }, 'jangbu-token': { id:'u2', app_metadata:{ apps:['jangbu'] } } };
-globalThis.__fakeClient = { from: () => query(), auth: { getUser: async t => users[t] ? { data:{ user:users[t] }, error:null } : { data:{ user:null }, error:{ message:'bad' } } } };
+// 가짜 Storage (자동 백업 보관함 tc-backups)
+const buckets = new Map(), files = new Map();   // 'tc-backups/이름' → { body, opt }
+let bucketCreated = 0;
+const storage = {
+  getBucket: async id => buckets.has(id) ? { data:{ id }, error:null } : { data:null, error:{ message:'Bucket not found' } },
+  createBucket: async (id, opt) => { buckets.set(id, opt); bucketCreated++; return { data:{ name:id }, error:null }; },
+  from: bucket => ({
+    upload: async (name, body, opt) => { if (!buckets.has(bucket)) return { error:{ message:'Bucket not found' } }; files.set(bucket + '/' + name, { body, opt }); return { data:{}, error:null }; },
+    list: async () => ({ data: [...files.keys()].filter(k => k.startsWith(bucket + '/')).map(k => ({ name: k.slice(bucket.length + 1) })), error:null }),
+    remove: async names => { names.forEach(n => files.delete(bucket + '/' + n)); return { data:[], error:null }; },
+    createSignedUrl: async (name, sec, opt) => files.has(bucket + '/' + name) ? { data:{ signedUrl:`https://s/${bucket}/${name}?download=${encodeURIComponent(opt?.download || '')}&t=${sec}` }, error:null } : { data:null, error:{ message:'not found' } },
+  }),
+};
+globalThis.__fakeClient = { from: () => query(), storage, auth: { getUser: async t => users[t] ? { data:{ user:users[t] }, error:null } : { data:{ user:null }, error:{ message:'bad' } } } };
 
 // ----- 가짜 Deno·슬랙 -----
 let handler = null, slack = [], slackFail = false;
@@ -124,6 +138,56 @@ const put = (c, id, data) => rows.set(K(c, id), { collection:c, id, data, delete
   assert.strictEqual((await call({ kick:true }, {})).status, 401, '로그인 없으면 거절');
   await call({ test:true }, { Authorization:'Bearer owner-token' });
   assert.ok(/알림 시험/.test(slack.at(-1)) && /출근·퇴근·업무 보고/.test(slack.at(-1)), '시험 알림');
+  // 7. 매일 자동 백업 (새벽 4시 이후 첫 실행, 비공개 보관함, 90일 보관)
+  const B = await import('../supabase/functions/tc-notyet-check/backup.mjs');
+  const today = B.kstDay(now), file = 'tc-backups/' + today + '.json';
+  if (B.kstHour(now) >= 4) {
+    assert.ok(files.has(file), '예약 실행 때 오늘 백업 파일 생김');
+    assert.strictEqual(bucketCreated, 1, '보관함은 처음 한 번 만들고 비공개');
+    assert.strictEqual(buckets.get('tc-backups').public, false);
+    assert.ok(rows.get(K('backups', today)).data.ok, '백업 목록 문서');
+    const before = files.get(file).body; await call(); assert.strictEqual(files.get(file).body, before, '하루 한 번만');
+  } else console.log('(새벽 4시 전이라 예약 백업 시각 확인은 건너뜀)');
+  // 지금 백업하기 + 90일 지난 것 지우기
+  buckets.set('tc-backups', { public:false });
+  files.set('tc-backups/2025-01-01.json', { body:'{}' }); put('backups', '2025-01-01', { ok:true, at:1 });
+  const keep = B.kstDay(now - 30 * 86400000); files.set('tc-backups/' + keep + '.json', { body:'{}' });
+  assert.strictEqual((await call({ backupNow:true })).status, 403, '예약 비밀값으로는 지금 백업 못 함');
+  r = await call({ backupNow:true }, { Authorization:'Bearer owner-token' });
+  assert.strictEqual(r.status, 200); assert.ok(r.body.ok && r.body.manual, '지금 백업하기');
+  assert.ok(!files.has('tc-backups/2025-01-01.json') && !rows.has(K('backups', '2025-01-01')), '90일 지난 백업 지움');
+  assert.ok(files.has('tc-backups/' + keep + '.json'), '30일 전 백업은 남김');
+  assert.strictEqual(r.body.removed, 1);
+  const bk = JSON.parse(files.get(file).body);
+  assert.strictEqual(files.get(file).opt.contentType, 'application/json');
+  assert.ok(bk.app === '가게 타임카드 백업' && bk.format === 1 && bk.auto, '앱 전체 백업과 같은 모양');
+  assert.strictEqual(bk.staff.length, 3); assert.strictEqual(bk.extra.tasks.length, 2); assert.strictEqual(bk.counts.task_reports, 1);
+  assert.ok(bk.punches[ym].some(p => p.id === `a_${ds}` && p.staffId === 'a'), '출퇴근 기록 들어감');
+  const L = await import('../scripts/lib.mjs');
+  const back = L.backupToDocs(bk);
+  assert.deepStrictEqual(back.problems, [], '되살리기 도구가 읽을 수 있음: ' + back.problems.join(', '));
+  assert.ok(back.rows.some(x => x.collection === 'tasks') && back.rows.some(x => x.collection === `months/${ym}/task_reports`), '업무 지시·보고도 되살림');
+  assert.strictEqual(rows.get(K('status', 'autobackup')).data.ok, true, '현황 기록');
+  // 내려받기 주소
+  r = await call({ backupUrl: today }, { Authorization:'Bearer owner-token' });
+  assert.ok(r.status === 200 && /download=.*%EC%9E%90%EB%8F%99%EB%B0%B1%EC%97%85/.test(r.body.url) && /t=60/.test(r.body.url), '1분짜리 내려받기 주소: ' + r.body.url);
+  assert.strictEqual((await call({ backupUrl: '../x' }, { Authorization:'Bearer owner-token' })).status, 404, '이상한 이름 거절');
+  assert.strictEqual((await call({ backupUrl: today }, { Authorization:'Bearer jangbu-token' })).status, 401, '장부 계정 거절');
+  assert.strictEqual((await call({ backupUrl: today })).status, 403, '예약 비밀값으로는 내려받기 못 함');
+  // 백업이 실패해도 알림은 계속 감
+  const saveUpload = storage.from;
+  storage.from = b => ({ ...saveUpload(b), upload: async () => ({ error:{ message:'disk full' } }) });
+  rows.delete(K('backups', today));
+  put(P, `b2_${ds}`, { staffId:'b', date:ds, kind:'work', in: now - min, out:null, lateMin:0 });
+  const n4 = slack.length; r = await call();
+  if (B.kstHour(now) >= 4) {
+    assert.strictEqual(r.body.backup.ok, false); assert.ok(!rows.has(K('backups', today)), '실패하면 5분 뒤 다시 하게 표시 지움');
+    assert.strictEqual(rows.get(K('status', 'autobackup')).data.ok, false, '실패 기록');
+  }
+  assert.ok(slack.length > n4, '백업이 실패해도 출근 알림은 보냄');
+  storage.from = saveUpload;
+  console.log('자동 백업 시험 통과');
+
   // 슬랙 꺼짐 → 아무것도 안 보냄
   put('config', 'main', { slack:{ on:false } });
   put(P, `a2_${ds}`, { staffId:'a', date:ds, kind:'work', in: now - min });

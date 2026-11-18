@@ -9,6 +9,8 @@
 //     미출근 {직원}_{날짜} / 출근 in_{직원}_{날짜} / 퇴근 out_{직원}_{날짜} / 보고 rep_{보고id}_{회차} / 마감 due_{업무}_{날짜}
 // - 출근·퇴근·보고는 최근 1시간 안의 것만 (태블릿 인터넷이 1시간 넘게 끊겼다가 보낸 기록은 알리지 않음)
 // - 판단 규칙은 rules.mjs (tests/notyet.test.js, tests/slack-events.test.js가 앱 규칙과 같은지 확인)
+// - 매일 자동 백업도 여기서 해요 (backup.mjs): 한국시간 새벽 4시 이후 첫 실행 때 하루 한 번, 비공개 버킷 tc-backups/{날짜}.json,
+//   90일 지난 파일은 지움. 슬랙을 꺼 둬도 돌아요. 사장님 화면: { backupNow: true } 지금 백업, { backupUrl: 날짜 } 내려받기 주소(1분)
 // - 결과는 status/alert 문서에 남겨서 앱 화면에 보여 줌
 //
 // 필요한 secret (supabase secrets set ...):
@@ -21,6 +23,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { kstDate, notyetList, notyetMessage, punchEvents, punchMessage, reportEvents, reportMessage, dueEvents, dueMessage } from "./rules.mjs";
+import { BACKUP_BUCKET, BACKUP_HOUR, BACKUP_KEEP_DAYS, backupName, buildBackup, kstDay, kstHour, oldBackupNames } from "./backup.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -62,6 +65,76 @@ async function sendSlack(text: string) {
   if (!r.ok) throw new Error(`슬랙이 거절했어요 (${r.status} ${(await r.text()).slice(0, 100)})`);
 }
 
+// ===== 매일 자동 백업 (backup.mjs) =====
+// 비공개 버킷 tc-backups 는 서버(service_role)만 열 수 있어요. 처음 한 번 이 함수가 버킷을 만들어요 (SQL 필요 없음).
+// 사장님 화면은 backups/{날짜} 문서로 목록을 보고, 내려받을 때 { backupUrl: 날짜 }로 1분짜리 주소를 받아요.
+const allRows = async () => {
+  const out: { collection: string; id: string; data: Record<string, unknown> }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb.from(DOCS).select("collection,id,data").is("deleted_at", null)
+      .order("collection").order("id").range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data as typeof out));
+    if (!data || data.length < 1000) return out;
+  }
+};
+async function ensureBucket() {
+  const { error } = await sb.storage.getBucket(BACKUP_BUCKET);
+  if (!error) return;
+  const { error: e2 } = await sb.storage.createBucket(BACKUP_BUCKET, { public: false, fileSizeLimit: 52428800, allowedMimeTypes: ["application/json"] });
+  if (e2 && !/exist/i.test(e2.message)) throw new Error("백업 보관함을 만들지 못했어요: " + e2.message);
+}
+async function cleanOldBackups(now: number) {
+  const names: string[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await sb.storage.from(BACKUP_BUCKET).list("", { limit: 1000, offset });
+    if (error) throw new Error(error.message);
+    names.push(...(data || []).map((o: { name: string }) => o.name));
+    if (!data || data.length < 1000) break;
+  }
+  const old = oldBackupNames(names, now);
+  if (old.length) {
+    const { error } = await sb.storage.from(BACKUP_BUCKET).remove(old);
+    if (error) throw new Error(error.message);
+    const ids = old.map(n => n.slice(0, 10));
+    await sb.from(DOCS).delete().eq("collection", "backups").in("id", ids);
+  }
+  return old.length;
+}
+// force: 사장님 화면 '지금 백업하기' (시각·하루 한 번 확인 없이, 오늘 파일을 새로 씀)
+async function runBackup(now: number, store: string, force = false) {
+  const ds = kstDay(now);
+  if (!force) {
+    if (kstHour(now) < BACKUP_HOUR) return null;
+    const { error } = await sb.from(DOCS).insert({ collection: "backups", id: ds, data: { at: now, running: true } });
+    if (error) { if (error.code === "23505") return null; throw new Error(error.message); }   // 오늘 이미 함
+  }
+  try {
+    const b = buildBackup(await allRows(), now, store);
+    const text = JSON.stringify(b);
+    await ensureBucket();
+    const { error } = await sb.storage.from(BACKUP_BUCKET).upload(backupName(ds), text, { contentType: "application/json", upsert: true });
+    if (error) throw new Error("백업 파일을 저장하지 못했어요: " + error.message);
+    const removed = await cleanOldBackups(now);
+    const info = { at: now, ok: true, date: ds, size: text.length, counts: b.counts, removed, manual: force, keepDays: BACKUP_KEEP_DAYS };
+    await setDoc("backups", ds, info);
+    await setDoc("status", "autobackup", info);
+    return info;
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    if (!force) await sb.from(DOCS).delete().eq("collection", "backups").eq("id", ds);   // 5분 뒤 다시 시도
+    await setDoc("status", "autobackup", { at: now, ok: false, date: ds, err }).catch(() => {});
+    console.error("backup", err);
+    return { ok: false, err };
+  }
+}
+async function backupLink(ds: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return { error: "날짜가 올바르지 않아요" };
+  const { data, error } = await sb.storage.from(BACKUP_BUCKET).createSignedUrl(backupName(ds), 60, { download: `타임카드_자동백업_${ds}.json` });
+  if (error || !data) return { error: "백업 파일을 찾지 못했어요" };
+  return { url: data.signedUrl };
+}
+
 async function authorized(req: Request) {
   const secret = Deno.env.get("TC_CRON_SECRET");
   if (secret && req.headers.get("x-cron-secret") === secret) return "cron";
@@ -77,8 +150,11 @@ Deno.serve(async req => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   const who = await authorized(req);
   if (!who) return json({ error: "unauthorized" }, 401);
-  let body: { test?: boolean } = {};
+  let body: { test?: boolean; backupUrl?: string; backupNow?: boolean } = {};
   try { body = await req.json(); } catch { /* 빈 본문 */ }
+  // 백업 내려받기·지금 백업은 사장님 화면에서만 (예약 작업 비밀값으로는 안 됨)
+  if ((body.backupUrl || body.backupNow) && who !== "user") return json({ error: "사장님 계정으로만 할 수 있어요" }, 403);
+  if (body.backupUrl) { const r = await backupLink(String(body.backupUrl)); return json(r, r.error ? 404 : 200); }
 
   const now = Date.now();
   try {
@@ -90,7 +166,10 @@ Deno.serve(async req => {
       await logStatus({ ok: true, kind: "test", text: "시험 알림" });
       return json({ ok: true, sent: "test" });
     }
-    if (!config.slack || !config.slack.on) return json({ ok: true, skipped: "off" });
+    if (body.backupNow) { const r = await runBackup(now, store, true); return json(r, r && r.ok ? 200 : 500); }
+    // 매일 자동 백업: 슬랙을 꺼 둬도 돌아요. 실패해도 알림은 계속 보냄
+    const backup = await runBackup(now, store).catch(e => ({ ok: false, err: e instanceof Error ? e.message : String(e) }));
+    if (!config.slack || !config.slack.on) return json({ ok: true, skipped: "off", backup });
     // 알림 종류별 켜기·끄기 (사장님 화면 현황 → 슬랙 알림). 없으면 모두 켜짐
     const ev = { notyet: true, in: true, out: true, report: true, due: true, ...(config.slack.ev || {}) };
 
@@ -98,7 +177,7 @@ Deno.serve(async req => {
     const yds = kstDate(now - 86400000), yym = yds.slice(0, 7);   // 어제 (자정 넘은 퇴근)
     const staff = (await listDocs("staff")).map(d => ({ id: d.id, ...d.data }));
     const punches = Object.fromEntries((await listDocs(`months/${ym}/punches`, `%\\_${ds}`)).map(d => [d.id, d.data]));
-    const result: Record<string, unknown> = { ok: true };
+    const result: Record<string, unknown> = { ok: true, backup };
     const sentText: string[] = [];
 
     // 중복 방지: 표시를 먼저 '추가'로 만들어서, 이미 있으면(다른 실행이 보냈으면) 건너뜀.
