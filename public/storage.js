@@ -360,12 +360,19 @@
     sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") relogin(); });
   };
 
-  // ===== assets: 출퇴근 사진 =====
-  const photoPath = id => id + ".jpg";
+  // ===== assets: 출퇴근 사진 + 업무 보고 사진 =====
+  // 사진 번호 앞머리로 폴더를 나눠요 (같은 tc-photos 버킷, 서버 설정 추가 없음)
+  //   (없음) 출퇴근 얼굴 사진 → 맨 위       {id}.jpg
+  //   w_     업무 보고 사진   → work/     (60일 지나면 사장님 화면이 지움)
+  //   r_     지시·공지 참고 사진 → taskref/ (지시를 지울 때 함께 지움)
+  // 나중에 직원 계정을 열면 업무 사진은 따로 버킷으로 옮길 수 있게 앞머리로만 구분해 둬요.
+  const FOLDERS = { w_: "work/", r_: "taskref/" };
+  const photoPath = id => (FOLDERS[String(id).slice(0, 2)] || "") + id + ".jpg";
   const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(16) + Math.random().toString(16).slice(2)).replace(/-/g, "");
   const assets = {
+    // opt.prefix: 'w_'(업무 보고) / 'r_'(참고 사진) / 없음(출퇴근)
     upload: async (blob, opt = {}) => {
-      const id = newId();
+      const id = (FOLDERS[opt.prefix] ? opt.prefix : "") + newId();
       const { error } = await sb.storage.from(PHOTO_BUCKET).upload(photoPath(id), blob, { contentType: opt.type || "image/jpeg", upsert: false });
       if (error) throw toErr(error, "assets");
       return { id };
@@ -390,6 +397,23 @@
       const { error } = await sb.storage.from(PHOTO_BUCKET).remove([photoPath(id)]);
       if (error) throw toErr(error, "assets");
       photoCache.delete(id);
+    },
+    // 폴더 안에서 days일 지난 사진 지우기 (업무 보고 사진 보관 기간). 지운 장수를 돌려줌
+    cleanOld: async (prefix, days) => {
+      const folder = (FOLDERS[prefix] || "").replace(/\/$/, "");
+      if (!folder) return 0;
+      const cut = Date.now() - days * 86400000, old = [];
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await sb.storage.from(PHOTO_BUCKET).list(folder, { limit: PAGE, offset, sortBy: { column: "created_at", order: "asc" } });
+        if (error) throw toErr(error, "assets");
+        data.filter(o => o.id && o.name.endsWith(".jpg") && Date.parse(o.created_at) < cut).forEach(o => old.push(folder + "/" + o.name));
+        if (data.length < PAGE) break;
+      }
+      for (let i = 0; i < old.length; i += 100) {
+        const { error } = await sb.storage.from(PHOTO_BUCKET).remove(old.slice(i, i + 100));
+        if (error) throw toErr(error, "assets");
+      }
+      return old.length;
     },
   };
 

@@ -338,6 +338,92 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 #modal[hidden]{display:none}
 #modal .box{background:var(--card);border-radius:12px;padding:18px;width:min(520px,100%)}
 #modal textarea{width:100%;min-height:140px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;padding:8px;font-family:var(--f-mono);font-size:13px}
+
+/* ===== 업무 지시·사진 보고 (시험판 task-report-demo와 같은 모양) =====
+   사장님 = 확인할 보고 → 보고 현황 → 지시·공지 / 태블릿 = 출근 뒤 공지·오늘 할 일 / 직원 휴대폰 = 폭 좁은 한 줄 흐름 */
+.stat.green b{color:var(--green)}
+.tr textarea,.tr input[type=text],.tr input[type=time],.tr input[type=date],.tr select{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 10px;color:var(--ink);width:100%;min-width:0;font:inherit}
+.tr textarea{min-height:76px;resize:vertical}
+.tr .f{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.trform{display:grid;gap:12px;margin-bottom:14px;background:var(--paper)}
+.reps{display:grid;gap:12px}
+.rep{border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;background:var(--card)}
+.rep header{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rep header b{font-size:16px}
+.rep header .mono{color:var(--muted);font-size:13px;margin-left:auto}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.photos button{border:0;padding:0;background:var(--soft);border-radius:8px;overflow:hidden;aspect-ratio:3/4;cursor:zoom-in;max-width:100%;position:relative}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.photos button.gone::after,.refs button.gone::after{content:"지워진 사진";position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:var(--muted);background:var(--soft)}
+.quote{background:var(--soft);border-radius:8px;padding:8px 10px;font-size:14px}
+.quote.red{background:var(--red-soft);color:var(--red)}
+.quote.green{background:var(--green-soft);color:var(--green)}
+.trow{border:1px solid var(--soft);border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.trow .ttop{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.trow .ttop b{font-size:15px}
+.trow .ttop .mono{color:var(--muted);font-size:13px}
+.people{display:flex;gap:6px;flex-wrap:wrap}
+.people button.chip{border:0;cursor:pointer}
+.tlist{display:grid;gap:10px}
+.titem{border:1px solid var(--soft);border-radius:10px;padding:12px;display:grid;gap:6px}
+.titem.off{opacity:.55}
+.titem .ttop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.titem .ttop b{font-size:15px;margin-right:auto}
+.titem p{margin:0;font-size:14px;color:var(--muted);white-space:pre-wrap}
+.refs{display:flex;gap:6px;flex-wrap:wrap}
+.refs button{border:1px solid var(--line);padding:0;background:var(--soft);border-radius:6px;overflow:hidden;width:64px;height:64px;cursor:zoom-in;position:relative}
+.refs img{width:100%;height:100%;object-fit:cover;display:block}
+.opts{display:flex;gap:6px;flex-wrap:wrap}
+.opt{position:relative}
+.opt input{position:absolute;opacity:0;width:1px;height:1px}
+.opt span{display:block;padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:600;color:var(--muted);background:var(--card);cursor:pointer}
+.opt input:checked + span{background:var(--stamp);border-color:var(--stamp);color:#fff}
+.opt input:focus-visible + span{outline:3px solid var(--stamp);outline-offset:2px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);font-size:14px}
+.drop.on{border-color:var(--stamp);background:var(--stamp-soft)}
+.drop .filebtn{display:inline-flex}
+.pv{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pv div{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;background:var(--soft)}
+.pv img{width:100%;height:100%;object-fit:cover;display:block}
+.pv button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(10,14,20,.6);color:#fff;font-size:13px;line-height:22px;padding:0}
+.ncard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:10px;align-content:start;min-width:0;text-align:left}
+.ncard h3{font-size:18px;margin:0}
+.ncard p{margin:0;white-space:pre-wrap;color:var(--ink)}
+.ncard .ref{border:0;padding:0;background:none;cursor:zoom-in;border-radius:10px;overflow:hidden;max-width:100%;position:relative}
+.ncard .ref img{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.ncard footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+.ncards{display:grid;gap:12px;text-align:left;margin-top:14px}
+.nbadge{grid-column:1/3;justify-self:start;font-style:normal;font-size:12px;font-weight:700;color:#fff;background:var(--red);border-radius:999px;padding:2px 8px;margin-top:6px}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:6px;text-align:left;width:100%}
+.pcard .ttop{display:flex;gap:8px;align-items:center}
+.pcard .ttop b{font-size:16px;margin-right:auto}
+.pcard .sub{font-size:13px;color:var(--muted)}
+.pcards{display:grid;gap:10px;margin-top:14px}
+.phone{max-width:440px;margin:0 auto;display:grid;gap:14px}
+.phead{display:flex;align-items:center;gap:10px}
+.phead b{font-size:20px}
+.phead .linkbtn{margin-left:auto;font-size:13px}
+.ptabs{display:flex;border-bottom:1px solid var(--line)}
+.ptabs button{flex:1;border:0;background:none;padding:10px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent}
+.ptabs button[aria-selected="true"]{color:var(--ink);border-color:var(--stamp)}
+.rdot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block}
+.shots{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.shot{position:relative;border-radius:10px;overflow:hidden;background:var(--soft);aspect-ratio:3/4}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot button{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(10,14,20,.6);color:#fff;font-size:15px;padding:0}
+.punch{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:2px solid var(--stamp);border-radius:14px;padding:14px}
+.punch b{font-size:17px}
+.punch.on{border-color:var(--green)}
+.punch.done{border-color:var(--line)}
+.punch.muted-card{border:1px dashed var(--line);color:var(--muted)}
+.bigbtn.ghost{background:var(--card);color:var(--stamp);border:2px solid var(--stamp)}
+.bigbtn.sm{height:auto;min-height:60px;font-size:19px}
+.btn.okb{background:var(--green);border-color:var(--green);color:#fff}
+.btn.big{padding:12px 18px;font-size:16px}
+.who{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.who button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:14px;text-align:left;display:grid;gap:2px}
+.who button b{font-size:18px}
+.who button small{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -393,7 +479,7 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   contract:{ on:false, autoOwnerSign:true, payDay:10, payMethod:'근로자 명의 예금통장에 입금', special:'' },
   tax:{ email:'', auto:false },
   geo:{ on:false, lat:null, lng:null, acc:0, radius:200, setAt:0 } };
-const TABS = [['now','현황'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
+const TABS = [['now','현황'],['tasks','업무 보고'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
   db:null, noDb:false, connected:false, connNote:'',
   config:{}, staff:[], ready:{config:false, staff:false, contracts:false, reports:false}, reports:{}, backupStatus:null, contracts:[], ownerSign:'', cDraft:null,
@@ -405,7 +491,11 @@ const S = {
   recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
   sound: store.get('sound') === '1', audio:null, confirmClear:false,
   mailStatus:null, mailed:new Set(), mailBusy:false, alertStatus:null, slackBusy:false,
-  photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0
+  photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0,
+  // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
+  tasks:[], treads:new Map(), trep:{}, trSubs:{}, trLoaded:{}, trPrimed:{}, trDate:todayStr(), tform:null, redoFor:null, confirmTDel:null,
+  // 직원 휴대폰 화면 (mode 'phone'): 이 휴대폰에 연결된 직원, 연결할 때 고른 직원·번호, 연 업무, 찍은 사진
+  phone:{ staffId: store.get('phoneStaff'), pickId:null, pin:'', err:'', tab:'tasks', open:null, shots:[], note:'', busy:false, step:'' }
 };
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
@@ -843,11 +933,12 @@ let renderQueued = false;
 function scheduleRender(){ if (renderQueued) return; renderQueued = true; setTimeout(() => { renderQueued = false; render(false); }, 40); }
 function render(force){
   renderTop(); renderBanner();
-  if (!force && (S.editing || (S.mode === 'kiosk' && ['photo', 'contract'].includes(S.kiosk.step)))) return;   // 사진 찍는 중에는 카메라 화면을 다시 그리지 않음
+  if (!force && (S.editing || ((S.mode === 'kiosk' || S.mode === 'phone') && ['photo', 'contract'].includes(S.kiosk.step)))) return;   // 사진 찍는 중에는 카메라 화면을 다시 그리지 않음
   const v = $('#view');
+  if (S.mode === 'phone'){ v.innerHTML = phoneView(); attachCam(); initSigs(); return; }
   if (S.mode === 'kiosk'){ v.innerHTML = kioskView(); attachCam(); initSigs(); }
   else if (!S.unlocked) v.innerHTML = lockView();
-  else v.innerHTML = ({ now:nowView, records:recordsView, timecard:timecardView, payroll:payrollView, contract:contractView, staff:staffView }[S.tab] || nowView)();
+  else v.innerHTML = ({ now:nowView, tasks:tasksView, records:recordsView, timecard:timecardView, payroll:payrollView, contract:contractView, staff:staffView }[S.tab] || nowView)();
   initSigs();
 }
 function attentionCount(){
@@ -857,9 +948,9 @@ function attentionCount(){
 function renderTop(){
   const c = cfg(), owner = S.mode === 'owner' && S.unlocked, att = owner ? attentionCount() : 0;
   $('#top').innerHTML = `
-    <div class="brand"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? '출퇴근 화면' : '사장님 화면'}</small></div></div>
-    ${owner ? `<nav class="tabs">${TABS.map(([k, l]) => `<button data-act="tab" data-v="${k}" class="${S.tab === k ? 'on' : ''}">${l}${k === 'now' && att ? `<i class="badge">${att}</i>` : ''}</button>`).join('')}</nav>` : ''}
-    ${S.mode === 'kiosk' ? `<button class="ghost" data-act="toOwner">사장님 화면</button>` : `<button class="ghost" data-act="toKiosk">출퇴근 화면으로</button>`}`;
+    <div class="brand"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? '출퇴근 화면' : S.mode === 'phone' ? '직원 휴대폰' : '사장님 화면'}</small></div></div>
+    ${owner ? `<nav class="tabs">${TABS.map(([k, l]) => { const n = k === 'now' ? att : k === 'tasks' && S.ready.tasks ? trWaiting().length : 0; return `<button data-act="tab" data-v="${k}" class="${S.tab === k ? 'on' : ''}">${l}${n ? `<i class="badge">${n}</i>` : ''}</button>`; }).join('')}</nav>` : ''}
+    ${S.mode !== 'owner' ? `<button class="ghost" data-act="toOwner">사장님 화면</button>` : `<button class="ghost" data-act="toKiosk">${deviceMode() === 'phone' ? '직원 휴대폰 화면으로' : '출퇴근 화면으로'}</button>`}`;
 }
 function renderBanner(){
   let msg = '';
@@ -877,6 +968,7 @@ function statusChips(r){
   if (r.status !== 'done' || !r.late) c.push(`<span class="chip ${m[1]}">${m[0]}</span>`);
   if (r.early) c.push(`<span class="chip amber">조퇴 ${r.early}분</span>`);
   if (r.ot && r.status === 'done') c.push(`<span class="chip blue">추가 ${fmtHM(r.ot)}</span>`);
+  if (r.p?.inVia === 'phone' || r.p?.outVia === 'phone') c.push(`<span class="chip blue" title="직원이 자기 휴대폰으로 기록: ${[r.p.inVia === 'phone' && '출근', r.p.outVia === 'phone' && '퇴근'].filter(Boolean).join('·')}">휴대폰</span>`);
   if (r.p?.inBy === 'master' || r.p?.outBy === 'master') c.push(`<span class="chip amber" title="마스터 번호로 기록: ${[r.p.inBy === 'master' && '출근', r.p.outBy === 'master' && '퇴근'].filter(Boolean).join('·')}">사장님 대리 입력</span>`);
   c.push(geoChip(r.p?.inGeo, '출근'), geoChip(r.p?.outGeo, '퇴근'));
   if (r.p?.edited) c.push(`<span class="chip faint" title="${esc(r.p.note || '사장님이 수정한 기록')}">수정됨</span>`);
@@ -914,7 +1006,7 @@ function kioskView(){
   if (k.step === 'list'){
     if (!list.length) return clock + `<div class="empty"><b>아직 등록된 직원이 없어요</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
     return clock + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}</p>
-      <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now); return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${esc(st.position || '직원')}</small><em>${i.text}</em></button>`; }).join('')}</div>`;
+      <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length; return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${esc(st.position || '직원')}</small><em>${i.text}</em>${nn ? `<i class="nbadge">새 공지 ${nn}</i>` : ''}</button>`; }).join('')}</div>`;
   }
   const st = staffById(k.staffId);
   if (!st){ resetKiosk(); return kioskView(); }
@@ -935,6 +1027,7 @@ function kioskView(){
     return clock + `<div class="kpanel"><h2>${esc(st.name)}님</h2>${k.master ? '<p><span class="chip amber">사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요</span></p>' : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">처음으로</button></div>`;
   }
   if (k.step === 'contract'){ const html = kioskContract(st); if (html) return html; resetKiosk(); return kioskView(); }
+  if (['notices', 'remind', 'outwarn', 'end'].includes(k.step)) return kioskTaskStep(st, clock);   // 업무 지시·사진 보고
   if (k.step === 'photo'){
     const word = k.kind === 'in' ? '출근' : '퇴근', live = k.cam === 'live', fail = k.cam === 'fail';
     return clock + `<div class="kpanel"><h2>${esc(st.name)}님 ${word} 사진</h2>
@@ -955,7 +1048,7 @@ function kioskView(){
       <div class="stamp ${res.late ? 'red' : ''}">${res.kind === 'in' ? '출근' : res.kind === 'contract' ? '서명' : '퇴근'}<b>${fmtT(res.t)}</b></div>
       <p class="${res.late ? 'err' : ''}">${res.msg || ''}</p>
       ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${res.photoErr ? `<p class="err">사진: ${esc(res.photoErr)} — 기록은 저장됐어요.</p>` : ''}${mySummary(st)}
-      <button class="linkbtn" data-act="kCancel">확인</button></div>`;
+      ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? `새 공지 ${unreadFor(st).length}건 확인하기` : '오늘 할 일 보기'}</button><p class="hint">잠시 뒤 자동으로 넘어가요.</p>` : `<button class="linkbtn" data-act="kCancel">확인</button>`}</div>`;
   }
   return clock;
 }
@@ -969,7 +1062,7 @@ function pinPad(title, sub, val, ctx, err){
 function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
-  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null });
+  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
 }
 function lockView(){
   return `<div class="kpanel ${S.lockErr ? 'shake' : ''}" style="margin-top:24px">${pinPad('사장님 확인', '관리 번호 4자리 (처음 번호는 0000)', S.lockPin, 'owner', S.lockErr)}
@@ -1345,6 +1438,7 @@ function staffForm(st){
         <option value="biz" ${s.deduct === 'biz' ? 'selected' : ''}>3.3% (사업소득)</option>
         <option value="ins" ${s.deduct === 'ins' ? 'selected' : ''}>4대보험 (근로자 부담분)</option></select></label>
       <label class="check full"><input type="checkbox" id="f-geoex" ${s.geoExempt ? 'checked' : ''}> 외근 직원 — 가게 밖에서 출퇴근해도 ‘가게 밖’으로 표시하지 않기 (위치는 그대로 기록)</label>
+      <label class="check full"><input type="checkbox" id="f-phone" ${s.phonePunch ? 'checked' : ''}> 휴대폰 출퇴근 허용 — 직원 휴대폰 화면(주소 끝 #phone)에 출근·퇴근 단추가 생겨요</label>
     </div>
     <h3 style="margin-top:18px">요일별 정해진 근무 시간 <small>이 시간을 기준으로 지각·결근·추가근무를 판단해요</small></h3>
     <div class="tscroll"><table class="schedt"><thead><tr><th></th><th>근무날 / 휴무날</th><th>출근</th><th>퇴근</th><th>휴게(분)</th></tr></thead><tbody>
@@ -1407,7 +1501,7 @@ function staffView(){
       ${list.length ? `<div class="slist">${list.map(st => { const wk = weeklySchedMin(st); return `<div class="sitem ${st.active === false ? 'off' : ''}"><div>
         <b>${esc(st.name)}</b> <span class="small muted">${esc(st.position || '')}${st.sample ? ' · 예시' : ''}${st.active === false ? ' · 퇴사' : ''}</span>
         <div class="sub">${isMonthly(st) ? `월급 ${num(st.monthly)}원` : `시급 ${num(st.wage)}원`} · ${schedSummary(st.sched)} · 주 ${fmtH(wk)}${wk >= 900 ? ' (주휴 대상)' : ''}</div>
-        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div></div>
+        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${st.phonePunch ? ' · 휴대폰 출퇴근' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div></div>
         <button class="btn sm" data-act="editStaff" data-id="${st.id}">고치기</button></div>`; }).join('')}</div>` : '<p class="muted">아직 직원이 없어요. ‘+ 직원 추가’를 눌러 시작하세요.</p>'}
       ${samples.length ? `<div class="alertbar" style="margin:14px 0 0;background:var(--amber-soft)"><span>지금 보이는 <b style="color:var(--amber)">예시 직원 ${samples.length}명</b>과 그 기록은 둘러보기용이에요.</span><span class="spacer"></span>
         <button class="btn sm danger" data-act="clearSamples">${S.confirmClear ? '정말 지울까요? 한 번 더 누르기' : '예시 데이터 모두 지우기'}</button></div>` : ''}
@@ -2152,17 +2246,531 @@ const GACT = {
   }
 };
 
+/* ===================== 업무 지시·사진 보고 (개발 요청서 3번) =====================
+   기준 화면: 시험판 task-report-demo.html (v3). 사장님이 지시·공지를 올리면 직원은 출근 때 공지를 확인하고,
+   업무 사진은 자기 휴대폰(직원 휴대폰 화면, 주소 끝 #phone)으로 찍어 보내요. 사장님은 [확인] 또는 [다시 해 주세요].
+   저장 (tc_docs)
+     tasks/{id}                                         지시·공지 { kind:'task'|'notice', title, body, refPhotos[], target{mode:'all'|'pos'|'staff', pos, ids[]},
+                                                          repeat:'once'|'daily'|'days', days[], due:'HH:MM', minPhotos, active, start, createdAt }
+     task_reads/{taskId}_{staffId}                      읽음 { taskId, staffId, at, where:'tablet'|'phone' }
+     months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{날짜}  보고 { taskId, staffId, date, photos[], note, sentAt, status:'sent'|'ok'|'redo', ownerNote, round, oldPhoto, checkedAt }
+   - '아직'·'마감 지남'은 저장하지 않고 화면에서 계산해요.
+   - 직원은 지금 개인 번호로 구분해요. 나중에 직원 계정을 열면 문서마다 있는 staffId로 서버 규칙을 붙이면 돼요 (화면·데이터는 그대로).
+   - 사진: 업무 보고 → tc-photos/work (60일 지나면 지움), 참고 사진 → tc-photos/taskref (storage.js FOLDERS) */
+const WORK_PHOTO_DAYS = 60;
+const TR_STATUS = { ok:['ok','확인 완료'], sent:['blue','확인 대기'], redo:['red','다시 요청함'], late:['red','마감 지남'], todo:['amber','아직'] };
+const taskById = id => S.tasks.find(t => t.id === id);
+const trKey = (taskId, staffId, ds) => `${taskId}_${staffId}_${ds}`;
+const trCol = ym => `months/${ym}/task_reports`;
+const trRef = (ds, key) => S.db.collection(trCol(ymOf(ds))).doc(key);
+function getRep(taskId, staffId, ds){ return S.trep[ymOf(ds)]?.get(trKey(taskId, staffId, ds)); }
+const positions = () => [...new Set(activeStaff().map(s => s.position).filter(Boolean))];
+const deviceMode = () => store.get('device') === 'phone' ? 'phone' : 'kiosk';
+function assignees(t){
+  const tg = t.target || { mode:'all' }, list = activeStaff();
+  if (tg.mode === 'pos') return list.filter(s => s.position === tg.pos);
+  if (tg.mode === 'staff') return list.filter(s => (tg.ids || []).includes(s.id));
+  return list;
+}
+function targetText(t){
+  const tg = t.target || { mode:'all' };
+  if (tg.mode === 'pos') return `${tg.pos} 전체`;
+  if (tg.mode === 'staff') return assignees(t).map(s => s.name).join(', ') || '담당 없음';
+  return '전체 직원';
+}
+function repeatText(t){
+  if (t.repeat === 'daily') return '매일';
+  if (t.repeat === 'days') return (t.days || []).length ? WEEK_ORDER.filter(d => t.days.includes(d)).map(d => DAYS[d]).join('·') + '요일' : '요일 미정';
+  return `${fmtMD(t.start || todayStr())} 하루`;
+}
+function appliesOn(t, ds){
+  if (t.kind !== 'task' || !t.start || ds < t.start) return false;
+  if (t.repeat === 'daily') return true;
+  if (t.repeat === 'days') return (t.days || []).includes(parseDate(ds).getDay());
+  return ds === t.start;
+}
+// 그날 그 직원의 보고 상태: ok 확인 완료 / sent 확인 대기 / redo 다시 요청 / late 마감 지남 / todo 아직
+function trStatus(t, st, ds){
+  const r = getRep(t.id, st.id, ds);
+  if (r) return { s:r.status || 'sent', r };
+  const today = todayStr();
+  if (ds < today || (ds === today && t.due && Date.now() > at(ds, t.due))) return { s:'late' };
+  return { s:'todo' };
+}
+const isRead = (t, st) => S.treads.has(`${t.id}_${st.id}`);
+const liveTasks = () => S.tasks.filter(t => t.active !== false).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+const mineAll = st => liveTasks().filter(t => assignees(t).some(a => a.id === st.id));
+const unreadFor = st => S.ready.tasks && S.ready.treads ? mineAll(st).filter(t => !isRead(t, st)) : [];
+const todayTasksFor = st => mineAll(st).filter(t => appliesOn(t, todayStr()));
+const unsentFor = st => todayTasksFor(st).filter(t => ['todo', 'late', 'redo'].includes(trStatus(t, st, todayStr()).s));
+function trWaiting(){
+  const out = [];
+  for (const m of Object.values(S.trep)) for (const [id, r] of m) if ((r.status || 'sent') === 'sent') out.push({ id, ...r });
+  return out.sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0));
+}
+const trImg = (id, cap, cls = '') => `<button type="button" class="${cls}" data-act="photo" data-id="${esc(id)}" data-cap="${esc(cap)}" aria-label="${esc(cap)} 크게 보기"><img data-photo="${esc(id)}"${photoSrcAttr(id)} alt="" loading="lazy" onerror="this.parentNode.classList.add('gone')"></button>`;
+
+// ----- 불러오기 -----
+function ensureTR(ym){
+  if (!S.db || S.trSubs[ym]) return;
+  S.trep[ym] = S.trep[ym] || new Map();
+  S.trSubs[ym] = S.db.collection(trCol(ym)).onSnapshot(snap => {
+    const next = new Map(snap.docs.map(d => [d.id, d.data()]));
+    if (S.trPrimed[ym]) for (const [k, r] of next){   // 새로 들어온 보고 알림 (사장님 화면을 열어 둔 동안)
+      const old = S.trep[ym].get(k);
+      if ((r.status || 'sent') === 'sent' && (!old || old.sentAt !== r.sentAt)) notify(`${staffById(r.staffId)?.name || '직원'}님 업무 보고 도착`, taskById(r.taskId)?.title || '', 'ok');
+    }
+    S.trep[ym] = next; S.trLoaded[ym] = true; S.trPrimed[ym] = true; scheduleRender();
+  }, e => { S.trLoaded[ym] = true; console.warn('task_reports', ym, e); scheduleRender(); });
+}
+function needTR(ym){ ensureTR(ym); ensureTR(shiftYM(ym, -1)); }
+function bootTasks(db){
+  db.collection('tasks').onSnapshot(s => { S.tasks = s.docs.map(d => ({ id:d.id, ...d.data() })); S.ready.tasks = true; scheduleRender(); },
+    e => { S.ready.tasks = true; console.warn('tasks', e); scheduleRender(); });
+  db.collection('task_reads').onSnapshot(s => { S.treads = new Map(s.docs.map(d => [d.id, d.data()])); S.ready.treads = true; scheduleRender(); },
+    e => { S.ready.treads = true; console.warn('task_reads', e); scheduleRender(); });
+  needTR(ymOf(todayStr()));
+}
+async function markRead(taskId, staffId){
+  if (!staffId || S.treads.has(`${taskId}_${staffId}`)) return;
+  await write(() => S.db.collection('task_reads').doc(`${taskId}_${staffId}`).set({ taskId, staffId, at:Date.now(), where: S.mode === 'phone' ? 'phone' : 'tablet' }));
+}
+
+// ----- 사진: 줄이기·시각/이름/업무 새기기 (긴 변 1280px, JPEG 0.82 — 시험판과 같음) -----
+async function toJpeg(file, label){
+  const im = await loadImage(file), t0 = Date.now();
+  const w0 = im.width || im.naturalWidth, h0 = im.height || im.naturalHeight;
+  const sc = Math.min(1, 1280 / Math.max(w0, h0)), w = Math.round(w0 * sc), h = Math.round(h0 * sc);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+  if (label){
+    const u = Math.max(w, h * 0.75) / 22, band = u * 5.2;
+    const grd = g.createLinearGradient(0, h - band, 0, h); grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,.78)');
+    g.fillStyle = grd; g.fillRect(0, h - band, w, band);
+    g.fillStyle = '#fff';
+    g.font = `600 ${Math.round(u * 1.9)}px "IBM Plex Mono", monospace`; g.fillText(fmtT(t0), u * 0.7, h - u * 2.4);
+    const tw = g.measureText(fmtT(t0)).width;
+    g.font = `500 ${Math.round(u * 0.8)}px "IBM Plex Sans KR", sans-serif`; g.fillText(fmtDateLong(ymd(new Date(t0))), u * 0.7 + tw + u * 0.5, h - u * 2.5);
+    let fs = u * 0.85;
+    g.font = `600 ${Math.round(fs)}px "IBM Plex Sans KR", sans-serif`;
+    while (fs > u * 0.5 && g.measureText(label).width > w - u * 1.4){ fs -= u * 0.05; g.font = `600 ${Math.round(fs)}px "IBM Plex Sans KR", sans-serif`; }
+    g.fillText(label, u * 0.7, h - u * 0.9);
+  }
+  const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('blob')), 'image/jpeg', 0.82));
+  return { blob, url: URL.createObjectURL(blob), old: !!(file.lastModified && t0 - file.lastModified > 10 * 60000) };   // 찍은 지 10분 넘은 사진 = 앨범 사진일 수 있음
+}
+async function uploadWork(blob, prefix){
+  const a = await getAssets();
+  if (!a) throw Object.assign(new Error('사진 저장을 쓸 수 없는 화면이에요'), { code:'no_assets' });
+  for (let i = 0; ; i++){
+    try { return (await a.upload(blob, { type:'image/jpeg', prefix })).id; }
+    catch (e){ if (e?.code === 'store_unavailable' && i === 0){ await new Promise(r => setTimeout(r, 900)); continue; } throw e; }
+  }
+}
+// 60일 지난 업무 사진 지우기: 서버 대신 이 앱이 하루 한 번 (사장님 화면·태블릿·직원 휴대폰 어디서든 먼저 연 기기가)
+let workCleanBusy = false;
+async function cleanWorkPhotos(){
+  if (workCleanBusy || !S.db || store.get('workClean') === todayStr()) return;
+  workCleanBusy = true;
+  try {
+    const a = await getAssets();
+    if (!a?.cleanOld) return;
+    const n = await a.cleanOld('w_', WORK_PHOTO_DAYS);
+    store.set('workClean', todayStr());
+    if (n) console.info(`[업무 사진] ${WORK_PHOTO_DAYS}일 지난 사진 ${n}장을 지웠어요`);
+  } catch (e){ console.warn('work photo clean', e); }
+  finally { workCleanBusy = false; }
+}
+
+// ----- 사장님 화면: 업무 보고 탭 -----
+function tasksView(){
+  if (!S.ready.tasks || !S.ready.staff) return loadingNote();
+  const ds = S.trDate, today = todayStr();
+  needTR(ymOf(ds));
+  const waiting = trWaiting();
+  const due = S.tasks.filter(t => appliesOn(t, ds) && (t.active !== false || ds < today));
+  let n = 0; const c = { ok:0, sent:0, redo:0, late:0, todo:0 };
+  for (const t of due) for (const st of assignees(t)){ n++; c[trStatus(t, st, ds).s]++; }
+  const phoneStaff = activeStaff();
+  return `<div class="tr">
+  <div class="stats">
+    <div class="stat"><small>${ds === today ? '오늘' : fmtDateLong(ds)} 보고할 일</small><b>${n}</b></div>
+    <div class="stat blue"><small>확인 기다리는 보고</small><b>${waiting.length}</b></div>
+    <div class="stat green"><small>확인 완료</small><b>${c.ok}</b></div>
+    <div class="stat ${c.late ? 'red' : 'amber'}"><small>${c.late ? '마감 지남' : '아직 안 보냄'}</small><b>${c.late || c.todo}</b></div>
+  </div>
+  <div class="cols">
+    <div class="stack">
+      <section class="panel"><h3>확인할 보고 <small>직원이 휴대폰으로 보낸 사진</small></h3>
+        ${waiting.length ? `<div class="reps">${waiting.map(repCard).join('')}</div>` : `<div class="empty"><b>확인할 보고가 없어요</b>직원이 휴대폰에서 사진을 보내면 여기에 바로 떠요.</div>`}
+      </section>
+      <section class="panel"><h3>보고 현황<span class="spacer"></span>
+        <input type="date" id="trDate" value="${ds}" max="${today}" aria-label="날짜 고르기" style="width:auto">
+        ${ds !== today ? `<button class="btn sm" data-act="trToday">오늘</button>` : ''}</h3>
+        ${due.length ? `<div class="board">${due.map(t => trRow(t, ds)).join('')}</div>` : `<div class="empty"><b>${ds === today ? '오늘' : '이날'} 보고할 업무가 없어요</b>‘새 지시 만들기’에서 사진 보고 업무를 만들어 보세요.</div>`}
+      </section>
+    </div>
+    <div class="stack">
+      <section class="panel"><h3>지시·공지<span class="spacer"></span><button class="btn pri sm" data-act="trNew">새 지시 만들기</button></h3>
+        ${S.tform ? taskForm() : ''}
+        ${S.tasks.length ? `<div class="tlist">${[...S.tasks].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(taskItem).join('')}</div>` : `<div class="empty"><b>아직 지시가 없어요</b>‘새 지시 만들기’로 첫 지시를 써 보세요.</div>`}
+      </section>
+      <section class="panel"><h3>직원 휴대폰 <small>사진 보고·공지 확인</small></h3>
+        <p class="small" style="margin:0 0 8px">직원 휴대폰에서 <b class="mono">${esc(location.host || 'timecard.dajoba.kr')}/#phone</b> 을 열어요. 처음 한 번 사장님 계정으로 로그인하고, 직원이 자기 이름과 개인 번호를 넣으면 그 휴대폰은 그 직원 것으로 기억돼요.</p>
+        <div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="toPhone">이 기기를 직원 휴대폰 화면으로</button></div>
+        <h3 style="margin-top:6px">휴대폰 출퇴근 허용 <small>외근 직원만 켜요</small></h3>
+        <div class="srows" style="display:grid;gap:6px">${phoneStaff.map(s => `<label class="check" for="pp-${esc(s.id)}"><input type="checkbox" id="pp-${esc(s.id)}" name="pp" data-id="${esc(s.id)}" ${s.phonePunch ? 'checked' : ''}> ${esc(s.name)} <span class="small muted">${esc(s.position || '')}</span></label>`).join('') || '<p class="muted small">직원이 없어요</p>'}</div>
+        <p class="hint">켜 둔 직원은 휴대폰 맨 위에 출근·퇴근 단추가 생겨요 (사진·위치는 태블릿과 같아요). 꺼 둔 매장 직원은 가게 태블릿에서만 출퇴근하고, 휴대폰으로는 사진 보고와 공지만 봐요.</p>
+        <p class="hint">업무 사진은 ${WORK_PHOTO_DAYS}일이 지나면 자동으로 지워져요. 보고 기록(보낸 시각·메모·확인 여부)은 그대로 남아요.</p>
+      </section>
+    </div>
+  </div></div>`;
+}
+function repCard(r){
+  const t = taskById(r.taskId), st = staffById(r.staffId), redo = S.redoFor === r.id;
+  return `<article class="rep">
+    <header><b>${esc(st?.name || '직원')}</b>${st?.position ? `<span class="chip faint">${esc(st.position)}</span>` : ''}<span>${esc(t?.title || '지워진 지시')}</span><span class="mono">${fmtMD(r.date)} · ${fmtT(r.sentAt)} 보냄${r.round > 1 ? ` · ${r.round}번째` : ''}</span></header>
+    <div class="photos">${(r.photos || []).map((p, i) => trImg(p, `${st?.name || ''} 보고 사진 ${i + 1}`)).join('')}</div>
+    ${r.note ? `<div class="quote">“${esc(r.note)}”</div>` : ''}
+    ${r.oldPhoto ? `<div class="quote red">방금 찍은 사진이 아닐 수 있어요 (휴대폰 앨범에서 고른 사진)</div>` : ''}
+    ${redo ? `<label class="f" for="redoTxt">무엇을 다시 해야 하는지 적어 주세요 (직원 휴대폰에 떠요)
+      <textarea id="redoTxt" placeholder="예) 촉수가 아직 보여요. 한 번 더 제거하고 다시 찍어 주세요."></textarea></label>
+      <div class="row"><button class="btn danger" data-act="trRedoSend" data-id="${esc(r.id)}" data-ds="${esc(r.date)}">다시 해 달라고 보내기</button><button class="btn" data-act="trRedoCancel">취소</button></div>`
+    : `<div class="row"><button class="btn okb" data-act="trOk" data-id="${esc(r.id)}" data-ds="${esc(r.date)}">확인했어요</button><button class="btn" data-act="trRedoOpen" data-id="${esc(r.id)}">다시 요청</button></div>`}
+  </article>`;
+}
+function trRow(t, ds){
+  const list = assignees(t);
+  return `<div class="trow"><div class="ttop"><b>${esc(t.title)}</b><span class="mono">${t.due ? `${t.due}까지` : '마감 없음'} · ${esc(targetText(t))}</span></div>
+    <div class="people">${list.length ? list.map(st => { const x = trStatus(t, st, ds), [cls, label] = TR_STATUS[x.s];
+      return x.r?.photos?.length ? `<button class="chip ${cls}" data-act="photo" data-id="${esc(x.r.photos[0])}" data-cap="${esc(`${st.name} · ${t.title} · ${fmtMD(ds)}`)}">${esc(st.name)} · ${label}${x.r.sentAt ? ' ' + fmtT(x.r.sentAt) : ''}</button>` : `<span class="chip ${cls}">${esc(st.name)} · ${label}</span>`; }).join('') : '<span class="small muted">담당 직원이 없어요</span>'}</div></div>`;
+}
+function taskItem(t){
+  const list = assignees(t), unread = list.filter(st => !isRead(t, st)), del = S.confirmTDel === t.id;
+  return `<div class="titem ${t.active === false ? 'off' : ''}">
+    <div class="ttop"><b>${esc(t.title)}</b><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
+    ${t.body ? `<p>${esc(t.body)}</p>` : ''}
+    ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}
+    <div class="small muted">${esc(targetText(t))} · ${t.kind === 'task' ? `${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''} · 사진 ${t.minPhotos || 1}장 이상 · ` : ''}읽음 ${list.length - unread.length}/${list.length}${unread.length ? ` (${esc(unread.map(s => s.name).join(', '))} 안 읽음)` : ''}</div>
+    <div class="row">${del
+      ? `<span class="small">이 지시를 지울까요? 받은 보고 기록은 남아요.</span><button class="btn danger sm" data-act="trDelDo" data-id="${esc(t.id)}">지우기</button><button class="btn sm" data-act="trDelNo">취소</button>`
+      : `<button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button><button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
+  </div>`;
+}
+function freshTForm(){ return { kind:'task', title:'', body:'', refPhotos:[], target:{ mode:'all', ids:[] }, repeat:'daily', days:[], due:'15:00', minPhotos:1, uploading:false }; }
+function taskForm(){
+  const f = S.tform, pos = positions();
+  const opt = (name, val, label, checked, type = 'radio') => `<label class="opt"><input type="${type}" name="${name}" value="${esc(val)}" ${checked ? 'checked' : ''}><span>${esc(label)}</span></label>`;
+  return `<div class="panel trform" id="trForm">
+    <div class="opts" role="radiogroup" aria-label="종류">${opt('tkind', 'task', '사진 보고 업무', f.kind === 'task')}${opt('tkind', 'notice', '공지만 (읽기)', f.kind === 'notice')}</div>
+    <label class="f" for="trTitle">제목<input type="text" id="trTitle" value="${esc(f.title)}" placeholder="예) 그린홍합 손질 확인" maxlength="60"></label>
+    <label class="f" for="trBody">내용<textarea id="trBody" placeholder="예) 앞으로 그린홍합을 깨끗이 씻고 촉수를 제거해서 사진으로 보내 주세요.">${esc(f.body)}</textarea></label>
+    <div class="f"><span>참고 사진 (리뷰 캡처 등, 4장까지)</span>
+      <div class="drop" id="trDrop">캡처 사진을 여기에 끌어다 놓거나 <b>붙여넣기(Ctrl+V)</b> 하세요<br>
+        <label class="btn sm filebtn" style="margin-top:8px">사진 고르기<input type="file" id="trFile" accept="image/*" multiple></label></div>
+      <div class="pv">${f.refPhotos.map((p, i) => `<div><img data-photo="${esc(p)}"${photoSrcAttr(p)} alt="참고 사진 ${i + 1}"><button type="button" data-act="trRefDel" data-i="${i}" aria-label="참고 사진 빼기">✕</button></div>`).join('')}${f.uploading ? `<div style="display:grid;place-items:center;font-size:12px;color:var(--muted)">올리는 중</div>` : ''}</div>
+    </div>
+    <div class="f"><span>담당</span>
+      <div class="opts">${opt('tgt', 'all', '전체 직원', f.target.mode === 'all')}${pos.map(p => opt('tgt', 'pos:' + p, p + ' 전체', f.target.mode === 'pos' && f.target.pos === p)).join('')}${opt('tgt', 'staff', '직원 고르기', f.target.mode === 'staff')}</div>
+      ${f.target.mode === 'staff' ? `<div class="opts" style="margin-top:8px">${activeStaff().map(s => opt('tids', s.id, `${s.name}${s.position ? ` (${s.position})` : ''}`, (f.target.ids || []).includes(s.id), 'checkbox')).join('')}</div>` : ''}
+    </div>
+    ${f.kind === 'task' ? `
+    <div class="f"><span>반복</span>
+      <div class="opts">${opt('trep', 'once', '한 번만 (오늘)', f.repeat === 'once')}${opt('trep', 'daily', '매일', f.repeat === 'daily')}${opt('trep', 'days', '요일 고르기', f.repeat === 'days')}</div>
+      ${f.repeat === 'days' ? `<div class="opts" style="margin-top:8px">${WEEK_ORDER.map(d => opt('tdays', d, DAYS[d], f.days.includes(d), 'checkbox')).join('')}</div>` : ''}
+    </div>
+    <div class="row" style="align-items:end">
+      <label class="f" for="trDue" style="flex:1;min-width:130px">마감 시각<input type="time" id="trDue" value="${esc(f.due)}"></label>
+      <label class="f" for="trMin" style="flex:1;min-width:130px">필요한 사진 수<select id="trMin">${[1,2,3,4].map(n => `<option value="${n}" ${f.minPhotos === n ? 'selected' : ''}>${n}장 이상</option>`).join('')}</select></label>
+    </div>` : ''}
+    <div class="row"><button class="btn pri" data-act="trSave" ${f.uploading ? 'disabled' : ''}>${f.kind === 'task' ? '지시 보내기' : '공지 올리기'}</button><button class="btn" data-act="trCancel">취소</button></div>
+    <p class="hint">${f.kind === 'task' ? '담당 직원의 휴대폰 ‘오늘 할 일’에 뜨고, 출근할 때 태블릿에서 공지로 한 번 보여 줘요.' : '출근할 때 태블릿(또는 휴대폰)에서 공지로 보여 주고, 누가 읽었는지 여기서 볼 수 있어요.'}</p>
+  </div>`;
+}
+function readTForm(){
+  const f = S.tform, fm = $('#trForm');
+  if (!f || !fm || !fm.querySelector) return;
+  const val = sel => fm.querySelector(sel)?.value;
+  const all = sel => [...(fm.querySelectorAll(sel) || [])].map(i => i.value);
+  f.kind = val('input[name=tkind]:checked') || 'task';
+  f.title = $('#trTitle')?.value ?? f.title; f.body = $('#trBody')?.value ?? f.body;
+  const tg = val('input[name=tgt]:checked') || 'all';
+  f.target = tg === 'all' ? { mode:'all', ids:[] } : tg === 'staff' ? { mode:'staff', ids: all('input[name=tids]:checked') } : { mode:'pos', pos: tg.slice(4), ids:[] };
+  if (f.kind === 'task'){
+    f.repeat = val('input[name=trep]:checked') || 'daily';
+    f.days = all('input[name=tdays]:checked').map(Number);
+    f.due = $('#trDue')?.value ?? f.due; f.minPhotos = +($('#trMin')?.value || 1);
+  }
+}
+async function saveTask(){
+  readTForm();
+  const f = S.tform;
+  if (!f) return;
+  if (!f.title.trim()){ toast('제목을 넣어 주세요', '', 'warn'); return; }
+  if (f.target.mode === 'staff' && !f.target.ids.length){ toast('담당 직원을 골라 주세요', '', 'warn'); return; }
+  if (f.kind === 'task' && f.repeat === 'days' && !f.days.length){ toast('요일을 골라 주세요', '', 'warn'); return; }
+  const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const doc = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), refPhotos:f.refPhotos, target:f.target, active:true, createdAt:Date.now(), start:todayStr(),
+    ...(f.kind === 'task' ? { repeat:f.repeat, days:f.days, due:f.due, minPhotos:f.minPhotos } : {}) };
+  await write(() => S.db.collection('tasks').doc(id).set(doc));
+  toast(f.kind === 'task' ? '지시를 보냈어요' : '공지를 올렸어요', doc.title, 'ok');
+  S.tform = null; S.editing = null; render(true);
+}
+async function addRefFiles(files){
+  const f = S.tform; if (!f) return;
+  readTForm();
+  const imgs = [...files].filter(x => /^image\//.test(x.type)).slice(0, 4 - f.refPhotos.length);
+  if (!imgs.length) return;
+  f.uploading = true; render(true);
+  try { for (const file of imgs){ const j = await toJpeg(file, ''); URL.revokeObjectURL(j.url); f.refPhotos.push(await uploadWork(j.blob, 'r_')); } }
+  catch (e){ toast('사진을 올리지 못했어요', e?.code === 'no_assets' ? e.message : '잠시 후 다시 해 주세요.', 'warn'); }
+  finally { f.uploading = false; render(true); }
+}
+
+// ----- 태블릿·휴대폰 출퇴근 흐름에 끼워 넣기 -----
+// 출근 도장 → (2.5초 뒤) 안 읽은 공지 → 오늘 휴대폰으로 보낼 사진 보고 → 처음 / 퇴근: 안 보낸 보고 안내(막지 않음) → 퇴근
+function kNextStep(st){ return !st ? null : unreadFor(st).length ? 'notices' : todayTasksFor(st).length ? 'remind' : null; }
+function noticeCard(t, st){
+  const list = assignees(t), read = list.filter(s => isRead(t, s)).length;
+  return `<article class="ncard">
+    <div class="row"><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고 업무' : '공지'}</span><span class="small muted">${esc(targetText(t))}</span></div>
+    <h3>${esc(t.title)}</h3>
+    ${t.body ? `<p>${esc(t.body)}</p>` : ''}
+    ${(t.refPhotos || []).map((p, i) => trImg(p, `참고 사진 ${i + 1}`, 'ref')).join('')}
+    <footer>${t.kind === 'task' ? `<span class="chip amber">📷 ${esc(repeatText(t))}${t.due ? ` ${t.due}까지` : ''} 휴대폰으로 사진 보고</span>` : ''}${st ? (isRead(t, st) ? '<span class="chip ok" style="margin-left:auto">읽음</span>' : `<button class="btn okb" data-act="trReadOne" data-id="${esc(t.id)}" style="margin-left:auto">확인했어요</button>`) : `<span style="margin-left:auto">읽음 ${read}/${list.length}</span>`}</footer>
+  </article>`;
+}
+function trCards(st, list, act){
+  return `<div class="pcards">${list.map(t => { const x = trStatus(t, st, todayStr()), [cls, label] = TR_STATUS[x.s];
+    const tag = act ? 'button' : 'div';
+    return `<${tag} class="pcard" ${act ? `data-act="${act}" data-id="${esc(t.id)}"` : ''}><div class="ttop"><b>${esc(t.title)}</b><span class="chip ${cls}">${x.s === 'redo' ? '다시 해 주세요' : label}</span></div>
+      <div class="sub">📷 ${t.due ? `${t.due}까지 · ` : ''}사진 ${t.minPhotos || 1}장 이상 · ${act ? '눌러서 지금 보내기' : '내 휴대폰 ‘오늘 할 일’에서 보내요'}</div>
+      ${x.s === 'redo' && x.r?.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</${tag}>`; }).join('')}</div>`;
+}
+// kioskView에서 부르는 단계: notices / remind / outwarn
+function kioskTaskStep(st, clock){
+  const k = S.kiosk, phone = S.mode === 'phone';
+  if (k.step === 'notices'){
+    const unread = unreadFor(st);
+    if (!unread.length){ k.step = todayTasksFor(st).length ? 'remind' : 'end'; return kioskTaskStep(st, clock); }
+    return clock + `<div class="kpanel wide"><h2>${esc(st.name)}님, 새 공지 ${unread.length}건</h2>
+      <p>읽고 [확인했어요]를 눌러 주세요. 사장님 화면에 ‘읽음’으로 남아요.</p>
+      <div class="ncards">${unread.map(t => noticeCard(t, st)).join('')}</div>
+      <button class="bigbtn" data-act="trReadAll">모두 확인했어요</button></div>`;
+  }
+  if (k.step === 'remind'){
+    const list = todayTasksFor(st);
+    if (!list.length){ k.step = 'end'; return kioskTaskStep(st, clock); }
+    return clock + `<div class="kpanel"><h2>오늘 휴대폰으로 보낼 사진 보고</h2>${trCards(st, list, phone ? 'phOpen' : '')}
+      <button class="bigbtn" data-act="kCancel">${phone ? '오늘 할 일 보기' : '알겠어요 (처음으로)'}</button></div>`;
+  }
+  if (k.step === 'outwarn'){
+    return clock + `<div class="kpanel"><h2>아직 보내지 않은 보고가 있어요</h2>
+      <p>퇴근해도 괜찮아요. ${phone ? '지금 보내려면 눌러 주세요.' : '휴대폰에서 사진을 보내 주세요.'}</p>${trCards(st, unsentFor(st), phone ? 'phOpen' : '')}
+      <button class="bigbtn out" data-act="kOutGo" ${k.busy ? 'disabled' : ''}>그래도 퇴근하기</button><button class="linkbtn" data-act="kCancel">취소하고 처음으로</button></div>`;
+  }
+  resetKiosk(); return phone ? phoneView() : kioskView();
+}
+
+// ----- 직원 휴대폰 화면 (mode 'phone') -----
+// 매장 직원: 오늘 할 일(사진 보고)과 공지만, 출퇴근은 가게 태블릿에서.
+// 외근 직원(휴대폰 출퇴근 허용): 맨 위 출근·퇴근 → 사진 → 도장 → 새 공지 → 오늘 할 일 / 퇴근 때 안 보낸 보고 안내
+function phoneView(){
+  const P = S.phone, k = S.kiosk;
+  if (S.noDb) return `<div class="empty"><b>기록을 불러올 수 없어요</b>인터넷 연결을 확인하고 새로고침해 주세요.</div>`;
+  if (!S.ready.staff || !S.ready.tasks) return loadingNote();
+  const me = P.staffId ? staffById(P.staffId) : null;
+  if (!me || me.active === false) return `<div class="phone">${phoneConnect()}</div>`;
+  if (k.step !== 'list') return kioskView();
+  if (P.open) return `<div class="phone tr">${phoneTask(me, taskById(P.open))}</div>`;
+  const ds = todayStr(), mine = mineAll(me), todo = todayTasksFor(me), unread = unreadFor(me).length;
+  const lab = { ok:'사장님 확인 완료', sent:'보냄 · 확인 기다리는 중', redo:'다시 해 주세요', late:'마감 지남 · 지금 보내기', todo:'사진 보내기 전' };
+  return `<div class="phone tr">
+    <div class="phead"><span class="mark">IN</span><div><b>${esc(me.name)}님</b><div class="small muted">${fmtDateLong(ds)}${me.position ? ` · ${esc(me.position)}` : ''}</div></div><button class="linkbtn" data-act="phSwitch">다른 사람</button></div>
+    ${phonePunchCard(me)}
+    <div class="ptabs" role="tablist">
+      <button role="tab" aria-selected="${P.tab === 'tasks'}" data-act="phTab" data-v="tasks">오늘 할 일 ${todo.length ? `(${todo.length})` : ''}</button>
+      <button role="tab" aria-selected="${P.tab === 'notices'}" data-act="phTab" data-v="notices">공지 ${unread ? '<span class="rdot" aria-label="안 읽음"></span>' : ''}</button>
+    </div>
+    ${P.tab === 'tasks'
+      ? (todo.length ? todo.map(t => { const x = trStatus(t, me, ds), [cls] = TR_STATUS[x.s];
+          return `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${esc(t.title)}</b><span class="chip ${cls}">${lab[x.s]}</span></div><div class="sub">${t.due ? `${t.due}까지 · ` : ''}사진 ${t.minPhotos || 1}장 이상${x.r?.sentAt ? ` · ${fmtT(x.r.sentAt)} 보냄` : ''}</div>${x.s === 'redo' && x.r.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</button>`; }).join('')
+        : `<div class="empty"><b>오늘 할 일이 없어요</b>사장님이 사진 보고 업무를 보내면 여기에 떠요.</div>`)
+      : (mine.length ? mine.map(t => `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${esc(t.title)}</b>${isRead(t, me) ? '' : '<span class="rdot" aria-label="안 읽음"></span>'}<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span></div>${t.body ? `<div class="sub">${esc(t.body.length > 60 ? t.body.slice(0, 60) + '…' : t.body)}</div>` : ''}</button>`).join('')
+        : `<div class="empty"><b>공지가 없어요</b></div>`)}
+  </div>`;
+}
+const phoneCanPunch = st => !!(st && st.phonePunch && st.active !== false);
+function phonePunchCard(me){
+  const today = todayStr(), op = openPunch(me), tp = getPunch(me.id, today);
+  if (!S.monthLoaded[ymOf(today)]) return `<div class="punch muted-card"><span class="small">출퇴근 기록을 불러오는 중이에요…</span></div>`;
+  if (!phoneCanPunch(me)){
+    return `<div class="punch muted-card"><span class="small">출퇴근은 <b>가게 태블릿</b>에서 찍어요${tp?.in ? ` · 오늘 ${fmtT(tp.in)} 출근${tp.out ? `, ${fmtT(tp.out, today)} 퇴근` : ''}` : ''}</span></div>`;
+  }
+  if (op) return `<div class="punch on"><div><b>근무 중</b><div class="small muted">${fmtT(op.in)} 출근${op.inVia === 'phone' ? ' (휴대폰)' : ''}</div></div><button class="btn big" style="background:var(--ink);color:var(--card);border-color:var(--ink)" data-act="phOut">퇴근하기</button></div>`;
+  if (tp && (tp.out || tp.kind === 'leave')) return `<div class="punch done"><div><b>오늘 근무 끝</b><div class="small muted">${tp.in ? `${fmtT(tp.in)} 출근 · ${fmtT(tp.out, today)} 퇴근` : '휴무 처리'}</div></div></div>`;
+  return `<div class="punch"><div><b>출근 전</b><div class="small muted">외근 직원 · 휴대폰으로 출퇴근${cfg().photo.on ? ' · 얼굴 사진' : ''}</div></div><button class="btn pri big" data-act="phIn">출근하기</button></div>`;
+}
+function phoneConnect(){
+  const P = S.phone, pick = P.pickId ? staffById(P.pickId) : null;
+  if (!pick) return `<h2 style="font-size:20px">내 휴대폰 연결</h2><p class="small muted" style="margin:0">처음 한 번만 이름을 고르고 개인 번호를 넣으면, 이 휴대폰에서는 계속 바로 들어와요.</p>
+    <div class="who">${activeStaff().map(s => `<button data-act="phPick" data-id="${esc(s.id)}"><b>${esc(s.name)}</b><small>${esc(s.position || '직원')}${s.phonePunch ? ' · 휴대폰 출퇴근' : ''}</small></button>`).join('') || '<div class="empty">아직 등록된 직원이 없어요</div>'}</div>`;
+  return `<div class="kpanel ${P.err ? 'shake' : ''}">${pinPad(`${esc(pick.name)}님`, '출퇴근 때 쓰는 개인 번호 4자리', P.pin, 'phone', P.err)}
+    <button class="linkbtn" data-act="phPickBack">다른 이름 고르기</button></div>`;
+}
+function phoneTask(me, t){
+  const P = S.phone;
+  if (!t){ P.open = null; S.editing = null; return phoneView(); }
+  const ds = todayStr(), x = t.kind === 'task' ? trStatus(t, me, ds) : null, min = t.minPhotos || 1;
+  const head = `<div class="phead"><button class="btn sm" data-act="phBack">← 목록</button></div>
+    <h2 style="font-size:22px">${esc(t.title)}</h2>
+    <div class="row"><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고 업무' : '공지'}</span>${t.kind === 'task' ? `<span class="small muted">${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''}</span>` : ''}</div>
+    ${t.body ? `<p style="margin:0;white-space:pre-wrap">${esc(t.body)}</p>` : ''}
+    ${(t.refPhotos || []).length ? `<div class="photos">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}`;
+  if (t.kind !== 'task') return head + `<div class="quote green">읽음으로 남았어요. 사장님 화면에서 볼 수 있어요.</div><button class="bigbtn ghost sm" data-act="phBack">목록으로</button>`;
+  if (!appliesOn(t, ds)) return head + `<div class="quote">오늘은 보고하는 날이 아니에요 (${esc(repeatText(t))}).</div><button class="bigbtn ghost sm" data-act="phBack">목록으로</button>`;
+  if (P.step === 'done') return head + `<div class="stamp"><b>${fmtT(Date.now())}</b>보냈어요</div><p class="small muted" style="text-align:center;margin:0">사장님이 확인하면 ‘오늘 할 일’에 초록색으로 바뀌어요.</p><button class="bigbtn ghost sm" data-act="phBack">목록으로</button>`;
+  const r = x.r;
+  let state = '';
+  if (x.s === 'ok') state = `<div class="quote green">사장님이 ${r.checkedAt ? fmtT(r.checkedAt) + '에 ' : ''}확인했어요. 오늘 할 일 끝!</div>`;
+  else if (x.s === 'sent') state = `<div class="quote">${fmtT(r.sentAt)}에 보냈어요. 사장님 확인을 기다리는 중이에요.</div>`;
+  else if (x.s === 'redo') state = `<div class="quote red"><b>다시 해 주세요</b><br>${esc(r.ownerNote || '사장님이 다시 요청했어요.')}</div>`;
+  else if (x.s === 'late') state = `<div class="quote red">마감(${esc(t.due)})이 지났어요. 지금이라도 찍어서 보내 주세요.</div>`;
+  const sent = r && x.s !== 'redo' ? `<div class="photos">${(r.photos || []).map((p, i) => trImg(p, `보낸 사진 ${i + 1}`)).join('')}</div>` : '';
+  const canSend = P.shots.length >= min && !P.busy;
+  const capture = x.s === 'ok' ? '' : `
+    <div class="shots">${P.shots.map((s, i) => `<div class="shot"><img src="${s.url}" alt="찍은 사진 ${i + 1}"><button data-act="phShotDel" data-i="${i}" aria-label="이 사진 빼기" ${P.busy ? 'disabled' : ''}>✕</button></div>`).join('')}</div>
+    ${P.shots.length < 4 ? `<label class="bigbtn ghost sm filebtn">📷 ${P.shots.length ? '한 장 더 찍기' : '사진 찍기'}<input type="file" id="trCam" accept="image/*" capture="environment" ${P.busy ? 'disabled' : ''}></label>` : ''}
+    <label class="f" for="trNote">한마디 (선택)<textarea id="trNote" placeholder="예) 오늘 홍합 3kg 손질했어요" ${P.busy ? 'disabled' : ''}>${esc(P.note)}</textarea></label>
+    <button class="bigbtn sm" data-act="phSend" ${canSend ? '' : 'disabled'}>${P.busy ? esc(P.step || '보내는 중…') : x.s === 'sent' ? '다시 보내기' : '사장님께 보내기'}</button>
+    ${P.shots.length < min ? `<p class="hint" style="text-align:center">사진을 ${min}장 이상 찍어야 보낼 수 있어요. 사진에 시각·이름·업무${me.geoExempt || me.phonePunch ? '·외근' : ''}이 새겨져요.</p>` : ''}`;
+  return head + state + sent + capture;
+}
+function clearShots(){ S.phone.shots.forEach(s => URL.revokeObjectURL(s.url)); S.phone.shots = []; }
+function phoneStart(kind){
+  const me = staffById(S.phone.staffId);
+  if (S.mode !== 'phone' || !phoneCanPunch(me)) return;
+  resetKiosk();
+  Object.assign(S.kiosk, { staffId:me.id, step:'action', at:Date.now() });
+  startGeo();
+  return kind === 'in' ? ACT.kIn() : ACT.kOut();
+}
+async function phoneSend(){
+  const P = S.phone, me = staffById(P.staffId), t = taskById(P.open);
+  if (!me || !t || P.busy || P.shots.length < (t.minPhotos || 1) || !S.db) return;
+  P.note = ($('#trNote')?.value ?? P.note).trim();
+  P.busy = true;
+  const ds = todayStr(), key = trKey(t.id, me.id, ds), prev = getRep(t.id, me.id, ds);
+  try {
+    const ids = [];
+    for (let i = 0; i < P.shots.length; i++){ P.step = `사진 올리는 중 ${i + 1}/${P.shots.length}`; render(true); ids.push(await uploadWork(P.shots[i].blob, 'w_')); }
+    P.step = '보내는 중…'; render(true);
+    await trRef(ds, key).set({ taskId:t.id, staffId:me.id, date:ds, photos:ids, note:P.note, sentAt:Date.now(), status:'sent',
+      ownerNote: prev?.ownerNote || '', round:(prev?.round || 0) + 1, oldPhoto: P.shots.some(s => s.old), via:'phone' });
+    clearShots(); P.note = ''; P.step = 'done';
+  } catch (e){
+    P.step = '';
+    toast('보내지 못했어요', e?.code === 'no_assets' ? e.message : '인터넷을 확인하고 다시 눌러 주세요. 찍은 사진은 그대로 있어요.', 'warn');
+  } finally { P.busy = false; render(true); }
+}
+
+const TRACT = {
+  // 사장님
+  trNew(){ S.tform = S.tform || freshTForm(); S.editing = 'tform'; render(true); $('#trTitle')?.focus?.(); },
+  trCancel(){ S.tform = null; S.editing = null; render(true); },
+  trSave(){ return saveTask(); },
+  trRefDel(d){ readTForm(); S.tform.refPhotos.splice(+d.i, 1); render(true); },
+  trToday(){ S.trDate = todayStr(); render(true); },
+  async trOk(d){ await write(() => trRef(d.ds, d.id).update({ status:'ok', checkedAt:Date.now() })); toast('확인했어요', '', 'ok'); render(true); },
+  trRedoOpen(d){ S.redoFor = d.id; S.editing = 'redo'; render(true); $('#redoTxt')?.focus?.(); },
+  trRedoCancel(){ S.redoFor = null; S.editing = null; render(true); },
+  async trRedoSend(d){
+    const note = ($('#redoTxt')?.value || '').trim();
+    if (!note){ toast('무엇을 다시 해야 하는지 적어 주세요', '', 'warn'); return; }
+    S.redoFor = null; S.editing = null;
+    await write(() => trRef(d.ds, d.id).update({ status:'redo', ownerNote:note, checkedAt:Date.now() }));
+    toast('다시 해 달라고 보냈어요', '직원 휴대폰 ‘오늘 할 일’ 맨 위에 떠요.', 'ok'); render(true);
+  },
+  async trToggle(d){ const t = taskById(d.id); if (!t) return; await write(() => S.db.collection('tasks').doc(d.id).update({ active: t.active === false })); render(true); },
+  trDelAsk(d){ S.confirmTDel = d.id; render(true); },
+  trDelNo(){ S.confirmTDel = null; render(true); },
+  async trDelDo(d){
+    const t = taskById(d.id); S.confirmTDel = null;
+    await write(() => S.db.collection('tasks').doc(d.id).delete());
+    toast('지시를 지웠어요', '받은 보고 기록은 남아요.', 'ok'); render(true);
+    const a = await getAssets();   // 참고 사진도 정리 (실패해도 괜찮음)
+    for (const p of t?.refPhotos || []) { try { await a?.delete(p); } catch {} }
+  },
+  // 태블릿·휴대폰 공통: 공지 확인, 다음 단계
+  async trReadOne(d){ const st = staffById(S.kiosk.staffId || S.phone.staffId); if (st) await markRead(d.id, st.id); S.kiosk.at = Date.now(); render(true); },
+  async trReadAll(){
+    const st = staffById(S.kiosk.staffId); if (!st) return;
+    for (const t of unreadFor(st)) await markRead(t.id, st.id);
+    S.kiosk.step = todayTasksFor(st).length ? 'remind' : 'end'; S.kiosk.at = Date.now(); render(true);
+  },
+  kNext(){ const k = S.kiosk, st = staffById(k.staffId), nx = kNextStep(st); if (nx){ k.step = nx; k.at = Date.now(); render(true); } else { resetKiosk(); render(true); } },
+  // 휴대폰
+  phPick(d){ Object.assign(S.phone, { pickId:d.id, pin:'', err:'' }); render(true); },
+  phPickBack(){ Object.assign(S.phone, { pickId:null, pin:'', err:'' }); render(true); },
+  phSwitch(){ clearShots(); Object.assign(S.phone, { staffId:null, pickId:null, open:null, pin:'', err:'', step:'' }); store.del('phoneStaff'); S.editing = null; resetKiosk(); render(true); },
+  phTab(d){ S.phone.tab = d.v; render(true); },
+  phOpen(d){
+    const me = staffById(S.phone.staffId), t = taskById(d.id);
+    if (S.kiosk.step !== 'list') resetKiosk();
+    clearShots(); Object.assign(S.phone, { open:d.id, note:'', step:'' }); S.editing = 'phone'; render(true); scrollTo(0, 0);
+    if (me && t && !isRead(t, me)) markRead(t.id, me.id).catch(() => {});
+  },
+  phBack(){ clearShots(); Object.assign(S.phone, { open:null, step:'', note:'' }); S.editing = null; render(true); },
+  phShotDel(d){ const s = S.phone.shots.splice(+d.i, 1)[0]; if (s) URL.revokeObjectURL(s.url); render(true); },
+  phSend(){ return phoneSend(); },
+  phIn(){ return phoneStart('in'); },
+  phOut(){ return phoneStart('out'); },
+};
+document.addEventListener('change', async e => {
+  const el = e.target;
+  if (el.id === 'trDate'){ S.trDate = el.value || todayStr(); render(true); return; }
+  if (el.id === 'trFile'){ await addRefFiles(el.files || []); return; }
+  if (el.closest?.('#trForm') && (el.type === 'radio' || el.type === 'checkbox')){ readTForm(); if (el.type === 'radio') render(true); return; }
+  if (el.id === 'trCam' && el.files?.[0]){
+    const P = S.phone, me = staffById(P.staffId), t = taskById(P.open);
+    if (!me || !t) return;
+    P.note = $('#trNote')?.value ?? P.note;
+    try { P.shots.push(await toJpeg(el.files[0], `${me.name} · ${t.title} · 업무 보고${me.geoExempt || me.phonePunch ? ' · 외근' : ''}`)); }
+    catch { toast('사진을 읽지 못했어요', '다시 찍어 주세요.', 'warn'); }
+    render(true); return;
+  }
+  if (el.name === 'pp' && el.dataset?.id){
+    await write(() => S.db.doc('staff/' + el.dataset.id).update({ phonePunch: !!el.checked }));
+    toast(el.checked ? '휴대폰 출퇴근을 허용했어요' : '휴대폰 출퇴근을 껐어요', staffById(el.dataset.id)?.name || '', 'ok');
+  }
+});
+document.addEventListener('input', e => { if (e.target.id === 'trNote') S.phone.note = e.target.value; if (e.target.closest?.('#trForm') && S.tform) readTForm(); });
+document.addEventListener('dragover', e => { const d = e.target.closest?.('#trDrop'); if (d){ e.preventDefault(); d.classList.add('on'); } });
+document.addEventListener('dragleave', e => { const d = e.target.closest?.('#trDrop'); if (d) d.classList.remove('on'); });
+document.addEventListener('drop', e => { const d = e.target.closest?.('#trDrop'); if (d){ e.preventDefault(); d.classList.remove('on'); addRefFiles(e.dataTransfer?.files || []); } });
+// 열어 둔 채 주소 끝만 #phone / #kiosk로 바꿔도 바로 전환
+window.addEventListener?.('hashchange', () => { const h = (location.hash || '').slice(1); if (h === 'phone') ACT.toPhone(); else if (h === 'kiosk') ACT.toTablet(); });
+document.addEventListener('paste', e => { if (S.mode !== 'owner' || !S.tform) return; const files = [...(e.clipboardData?.files || [])]; if (files.length){ e.preventDefault(); addRefFiles(files); } });
+
 /* ===================== 동작 ===================== */
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
   toOwner(){ S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },
-  toKiosk(){ S.mode = 'kiosk'; S.editing = null; S.unlocked = false; resetKiosk(); store.set('mode', 'kiosk'); render(true); requestWake(); },
+  toKiosk(){ S.mode = deviceMode(); S.editing = null; S.unlocked = false; resetKiosk(); store.set('mode', S.mode); render(true); requestWake(); scrollTo(0, 0); },
+  // 사장님 화면 '업무 보고' → 이 기기를 직원 휴대폰 화면으로 (직원 휴대폰에서 한 번만)
+  toPhone(){ store.set('device', 'phone'); ACT.toKiosk(); },
+  toTablet(){ store.set('device', 'kiosk'); ACT.toKiosk(); },
   sound(){ initAudio(); S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); if (S.sound){ beep('ok'); toast('소리 알림을 켰어요', '이 화면을 열어 두면 출퇴근·지각 때 소리가 나요.', 'ok'); } render(true); },
   kPick(d){ const st = staffById(d.id); Object.assign(S.kiosk, { staffId:d.id, pin:'', err:'', step: st && st.pin ? 'pin' : 'action' }); requestWake(); render(true); },
   kCancel(){ resetKiosk(); render(true); },
   pad(d){ padPress(d.ctx, d.v); },
   async kIn(){ if (cfg().photo.on) kPhoto('in'); else await kioskPunch('in'); },
-  async kOut(){ if (cfg().photo.on) kPhoto('out'); else await kioskPunch('out'); },
+  async kOut(){   // 오늘 안 보낸 업무 보고가 있으면 먼저 안내 (퇴근을 막지는 않음)
+    const k = S.kiosk, st = staffById(k.staffId);
+    if (st && openPunch(st) && unsentFor(st).length){ k.step = 'outwarn'; k.at = Date.now(); render(true); return; }
+    return ACT.kOutGo();
+  },
+  async kOutGo(){ if (cfg().photo.on) kPhoto('out'); else await kioskPunch('out'); },
   async kSnap(){ await snapCam(); },
   async kNoPhoto(){ const k = S.kiosk; stopCam(); await kioskPunch(k.kind, { t:Date.now(), note: k.camErr || '카메라가 켜지지 않음' }); },
   recSub(d){ S.recSub = d.v; render(true); },
@@ -2262,7 +2870,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, GACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();
@@ -2280,7 +2888,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'camFile' && e.target.files?.[0]) fileShot(e.target.files[0]).catch(err => console.warn(err));
 });
 document.addEventListener('keydown', e => {
-  const ctx = S.mode === 'owner' && !S.unlocked ? 'owner' : S.mode === 'kiosk' && S.kiosk.step === 'pin' ? 'staff' : null;
+  const ctx = S.mode === 'owner' && !S.unlocked ? 'owner' : S.mode === 'kiosk' && S.kiosk.step === 'pin' ? 'staff' : S.mode === 'phone' && !S.phone.staffId && S.phone.pickId ? 'phone' : null;
   if (!ctx || e.target.matches('input,textarea,select')) return;
   if (/^[0-9]$/.test(e.key)) padPress(ctx, e.key);
   else if (e.key === 'Backspace') padPress(ctx, 'back');
@@ -2295,6 +2903,17 @@ function padPress(ctx, v){
     if (S.lockPin.length === 4){
       if (S.lockPin === String(cfg().ownerPin)){ S.unlocked = true; if (S.remember) store.set('ownerDevice', '1'); S.lockPin = ''; checkNotyet(); }
       else { S.lockErr = '번호가 맞지 않아요'; S.lockPin = ''; }
+    }
+    render(true); return;
+  }
+  if (ctx === 'phone'){   // 직원 휴대폰 처음 연결: 이름 고른 뒤 개인 번호
+    const P = S.phone, st = staffById(P.pickId);
+    if (v === 'cancel'){ Object.assign(P, { pickId:null, pin:'', err:'' }); render(true); return; }
+    P.pin = v === 'back' ? P.pin.slice(0, -1) : (P.pin + v).slice(0, 4);
+    P.err = '';
+    if (P.pin.length === 4){
+      if (st && P.pin === String(st.pin)){ Object.assign(P, { staffId:st.id, pickId:null, pin:'', tab:'tasks' }); store.set('phoneStaff', st.id); }
+      else { P.err = '번호가 맞지 않아요. 다시 넣어 주세요'; P.pin = ''; }
     }
     render(true); return;
   }
@@ -2336,7 +2955,8 @@ async function kioskPunch(kind, shot){
       const sc = schedFor(st, today, null);
       const late = sc && now > at(today, sc.start) + cfg().graceMin*60000 ? Math.round((now - at(today, sc.start))/60000) : 0;
       const ph = await photoFields('in', shot);
-      await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}), ...(geo ? { inGeo:geo } : {}) }));
+      await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}), ...(geo ? { inGeo:geo } : {}), ...(S.mode === 'phone' ? { inVia:'phone' } : {}) }));
+      k.didIn = true;   // 출근 도장 다음에 새 공지·오늘 할 일로 넘어감
       k.result = { kind:'in', t:now, late, photoErr: shot?.blob && !ph.inPhoto ? ph.inPhotoNote : '', msg: late ? `예정 ${sc.start}보다 ${late}분 늦었어요. 사장님께 알림이 갔어요.` : sc ? `오늘 퇴근 예정 ${sc.end} · 좋은 하루 보내세요!` : '추가 근무로 기록했어요.' };
       mailPunch(st, 'in', now, { late, sc, blob: shot?.blob, master: k.master, geo });
       const need = await contractNeeded(st);
@@ -2345,7 +2965,7 @@ async function kioskPunch(kind, shot){
       const op = openPunch(st, now);
       if (!op){ toast('출근 기록이 없어요', '사장님께 확인을 요청하세요.', 'warn'); resetKiosk(); render(true); return; }
       const ph = await photoFields('out', shot);
-      await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}), ...(geo ? { outGeo:geo } : {}) }));
+      await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}), ...(geo ? { outGeo:geo } : {}), ...(S.mode === 'phone' ? { outVia:'phone' } : {}) }));
       const r = dayCalc(st, op.date, now);
       k.result = { kind:'out', t:now, late:false, photoErr: shot?.blob && !ph.outPhoto ? ph.outPhotoNote : '', msg:`오늘 ${fmtH(r.worked)} 근무했어요. 수고하셨어요!` };
       mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master, geo });
@@ -2395,7 +3015,7 @@ async function saveStaff(){
   if (!birth && rrn){ const g = +rrn[7], cent = g === 3 || g === 4 || g === 7 || g === 8 ? '20' : '19'; birth = `${cent}${rrn.slice(0, 2)}-${rrn.slice(2, 4)}-${rrn.slice(4, 6)}`; }
   const sched = Array.from({ length:7 }, (_, i) => ({ on: $(`#sc-on-${i}`).checked, start: $(`#sc-start-${i}`).value || '09:00', end: $(`#sc-end-${i}`).value || '18:00', brk: Math.max(0, Math.round(+$(`#sc-brk-${i}`).value || 0)) }));
   const doc = { ...(old ? Object.fromEntries(Object.entries(old).filter(([k]) => k !== 'id')) : { active:true, order:Date.now() }),
-    name, pin, wage, payType: ptype, monthly, rrn, position: $('#f-pos').value.trim(), hireDate: $('#f-hire').value || '', birth, deduct: $('#f-ded').value, geoExempt: !!$('#f-geoex')?.checked, sched };
+    name, pin, wage, payType: ptype, monthly, rrn, position: $('#f-pos').value.trim(), hireDate: $('#f-hire').value || '', birth, deduct: $('#f-ded').value, geoExempt: !!$('#f-geoex')?.checked, phonePunch: !!$('#f-phone')?.checked, sched };
   const id = id0 || 's' + Date.now().toString(36);
   await write(() => S.db.doc('staff/' + id).set(doc));
   const low = ptype === 'hour' && wage < MIN_WAGE;
@@ -2456,13 +3076,14 @@ function tick1(){
   const t = $('#ktime'); if (t) t.textContent = fmtClock(now);
   const ct = $('#camtime'); if (ct) ct.textContent = fmtClock(now);
   const k = S.kiosk;
-  if (S.mode === 'kiosk' && k.step !== 'list' && !k.busy){
-    const idle = now - (k.at || now);
-    if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : 30000)){ resetKiosk(); render(true); }
+  if ((S.mode === 'kiosk' || S.mode === 'phone') && k.step !== 'list' && !k.busy){
+    const idle = now - (k.at || now), st = staffById(k.staffId);
+    if (k.step === 'done' && k.didIn && idle > 2500 && kNextStep(st)){ k.step = kNextStep(st); k.at = now; render(true); }   // 출근 도장 → 새 공지·오늘 할 일
+    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
   }
   if (todayStr() !== lastDay){
     lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();
-    const ym = ymOf(lastDay); needMonth(ym);
+    const ym = ymOf(lastDay); needMonth(ym); needTR(ym);
     const kd = $('#kdate'); if (kd) kd.textContent = fmtDateLong(lastDay);
     scheduleRender();
   }
@@ -2471,13 +3092,16 @@ function tick30(){
   checkNotyet();
   checkNotyetMail().catch(err => console.warn(err));
   autoReport().catch(err => console.warn(err));
-  if (S.mode === 'owner' && S.unlocked && ['now','payroll'].includes(S.tab)) render(false);
-  else if (S.mode === 'kiosk' && S.kiosk.step === 'list') render(false);
+  cleanWorkPhotos();
+  if (S.mode === 'owner' && S.unlocked && ['now','payroll','tasks'].includes(S.tab)) render(false);
+  else if ((S.mode === 'kiosk' || S.mode === 'phone') && S.kiosk.step === 'list') render(false);
   else renderTop();
 }
 async function boot(){
   const h = (location.hash || '').slice(1);
-  S.mode = h === 'kiosk' ? 'kiosk' : TABS.some(t => t[0] === h) ? 'owner' : (store.get('mode') || 'kiosk');
+  if (h === 'phone' || h === 'kiosk') store.set('device', h);   // 주소 끝 #phone = 직원 휴대폰, #kiosk = 가게 태블릿
+  S.mode = h === 'kiosk' || h === 'phone' ? h : TABS.some(t => t[0] === h) ? 'owner' : (store.get('mode') || deviceMode());
+  if (S.mode === 'kiosk' || S.mode === 'phone') S.mode = deviceMode();
   S.tab = TABS.some(t => t[0] === h) ? h : (store.get('tab') || 'now');
   S.unlocked = S.mode === 'owner' && store.get('ownerDevice') === '1';
   loadNotified(); loadMailed();
@@ -2502,6 +3126,8 @@ async function boot(){
   db.doc('status/alert').onSnapshot(s => { S.alertStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('alert', e));
   db.doc('status/mail').onSnapshot(s => { S.mailStatus = s.exists ? s.data() : null; if (S.mode === 'owner') scheduleRender(); }, e => console.warn('mail', e));
   needMonth(ymOf(todayStr()));
+  bootTasks(db);
+  setTimeout(cleanWorkPhotos, 5000);
 }
 boot();
 </script>

@@ -28,9 +28,42 @@
 | `status/backup` | 마지막 백업 시각 |
 | `status/alert` | 마지막 슬랙 알림 결과 `{ at, ok, kind(test/notyet), text, err }` (서버가 씀) |
 | `months/{YYYY-MM}/alerts/{staffId}_{YYYY-MM-DD}` | 슬랙 미출근 알림 중복 방지 표시 (서버가 씀, 직원·날짜당 1개) |
+| `tasks/{taskId}` | 업무 지시·공지 (아래 표, v19) |
+| `task_reads/{taskId}_{staffId}` | 공지 읽음 `{ taskId, staffId, at, where('tablet'/'phone') }` |
+| `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
 
-사진은 `tc_docs`가 아니라 Storage **`tc-photos` 버킷(비공개)**에 `{사진id}.jpg`로 있고, 기록에는 사진 번호(id)만 남아요. 화면에서는 7일짜리 임시 URL로 불러와요.
+사진은 `tc_docs`가 아니라 Storage **`tc-photos` 버킷(비공개)**에 있고, 기록에는 사진 번호(id)만 남아요. 화면에서는 7일짜리 임시 URL로 불러와요.
+사진 번호 앞머리로 폴더가 나뉘어요 (`public/storage.js`의 `FOLDERS`):
+
+| 앞머리 | 폴더 | 내용 | 지우기 |
+|---|---|---|---|
+| (없음) | 맨 위 `{id}.jpg` | 출퇴근 얼굴 사진 | 사장님이 '3개월 지난 사진 지우기' |
+| `w_` | `work/` | 업무 보고 사진 | **60일 지나면 자동** (앱이 하루 한 번, 사장님 화면·태블릿·직원 휴대폰 중 먼저 연 기기가) |
+| `r_` | `taskref/` | 지시·공지 참고 사진 (리뷰 캡처 등) | 지시를 지울 때 |
 아티팩트 시절 사진은 옮기지 않았어요. 그때 기록의 사진 번호는 남아 있지만 사진은 '사진 없음(깨진 그림)'으로 보여요.
+
+## tasks/{taskId} (업무 지시·공지, v19)
+
+| 필드 | 뜻 |
+|---|---|
+| `kind` | `task`(사진 보고 업무) / `notice`(공지만) |
+| `title`, `body` | 제목, 내용 |
+| `refPhotos` | 참고 사진 번호들 (`r_…`, 4장까지) |
+| `target` | 담당 `{mode:'all'(전체) / 'pos'(담당별) / 'staff'(직원 고르기), pos, ids[]}` |
+| `repeat`, `days` | `once`(만든 날 하루) / `daily`(매일) / `days`(요일, `days`에 0=일요일…) — 사진 보고 업무만 |
+| `due`, `minPhotos` | 마감 시각 `HH:MM`, 필요한 사진 수 |
+| `active`, `start`, `createdAt` | 켜짐 여부(멈추기), 시작 날짜, 만든 시각 |
+
+## months/{ym}/task_reports/{taskId}_{staffId}_{date} (업무 사진 보고)
+
+| 필드 | 뜻 |
+|---|---|
+| `taskId`, `staffId`, `date` | 업무, 직원, 날짜 |
+| `photos`, `note` | 보낸 사진 번호들(`w_…`), 직원 한마디 |
+| `sentAt`, `round`, `via` | 보낸 시각, 회차(다시 보내면 +1), `phone` |
+| `oldPhoto` | 찍은 지 10분 넘은 사진(앨범 사진)이 섞였으면 `true` |
+| `status` | `sent`(확인 대기) / `ok`(확인 완료) / `redo`(다시 요청) — '아직'·'마감 지남'은 저장하지 않고 화면에서 계산 |
+| `ownerNote`, `checkedAt` | 사장님 '다시 해 주세요' 메모, 확인한 시각 |
 
 ## config/main
 
@@ -68,6 +101,7 @@
 | `sched[7]` | 요일별 근무표 `{on, start, end, brk}` (0 = 일요일). `on:false` = 정기 휴무 |
 | `active`, `sample`, `order` | 근무 중 여부, 예시 데이터 여부, 정렬 순서 |
 | `geoExempt` | 외근 직원 — 가게 밖에서 찍어도 '가게 밖'으로 보지 않음 (v13) |
+| `phonePunch` | 휴대폰 출퇴근 허용 — 직원 휴대폰 화면에 출근·퇴근 단추 (v19) |
 
 ## months/{ym}/punches/{staffId}_{date}
 
@@ -83,6 +117,7 @@
 | `inPhotoNote`, `outPhotoNote` | 사진 없음·확인 필요 사유 |
 | `inGeo`, `outGeo` | 위치 `{lat, lng, acc, dist, out}` 또는 `{err}` (위치 확인을 켰을 때만). 외근 직원은 `out:false, ex:true, far` (v12·v13) |
 | `inBy`, `outBy` | `master`면 사장님 마스터 번호로 대리 입력 |
+| `inVia`, `outVia` | `phone`이면 직원 휴대폰 화면에서 기록 (v19). 없으면 가게 태블릿 |
 
 ## contracts/{staffId}_v{n}
 
@@ -105,6 +140,6 @@
 
 ## 기기에만 남는 값 (브라우저 localStorage, 앞에 `tc.`)
 
-`mode`(출퇴근/사장님 화면), `tab`, `sound`, `ownerDevice`(이 기기 기억하기), `notified`, `mailed`(오늘 띄운 알림)
+`mode`(출퇴근/직원 휴대폰/사장님 화면), `device`(`kiosk` 가게 태블릿 / `phone` 직원 휴대폰), `phoneStaff`(이 휴대폰에 연결된 직원), `tab`, `sound`, `ownerDevice`(이 기기 기억하기), `notified`, `mailed`(오늘 띄운 알림), `workClean`(업무 사진 정리한 날)
 
 storage.js가 쓰는 값: `tc_pending_v1`(서버에 아직 못 보낸 쓰기 목록), `sb-…-auth-token`(Supabase 로그인 정보)

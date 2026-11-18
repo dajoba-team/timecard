@@ -56,7 +56,7 @@ claude.ai 아티팩트 시절 `window.claude.use(...)`와 같은 모양으로 `w
 | 이름 | 하는 일 |
 |---|---|
 | `use('db')` | 로그인 확인 후 `collection(path).doc(id).get/set/update/delete/onSnapshot`, `doc(path)`, `collection(path).limit(n).get()` |
-| `use('assets')` | 사진 `upload / list / delete` (Storage `tc-photos` 버킷) |
+| `use('assets')` | 사진 `upload / list / delete / cleanOld` (Storage `tc-photos` 버킷). `upload(blob, { prefix })`: `w_` 업무 보고 → `work/`, `r_` 참고 사진 → `taskref/`, 없으면 맨 위(출퇴근). `cleanOld('w_', 60)`: 60일 지난 업무 사진 지우기 |
 | `use('downloads')` | 파일 저장 `save({ filename, data })` |
 | `use('mcp')` | 메일: 아직 없음 → `null` (앱은 "메일 보내기는 아직 준비 중이에요"로 안내) |
 | `photoUrl(id)` | 사진 임시 URL (없으면 받아서 `<img data-photo>`에 넣어 줌) |
@@ -79,6 +79,7 @@ claude.ai 아티팩트 시절 `window.claude.use(...)`와 같은 모양으로 `w
 | 사진 인증 (`startCam`, `stampPhoto`, `uploadPhoto`, `photoSrcAttr`) | 카메라, 시각 새기기, 업로드, 사진 보여 주기 |
 | 위치 확인 (`getPos`, `distM`, `geoInfo`, `geoNow`, `geoLine`, `geoChip`, `geoCsv`, `GACT`) | 가게 위치 저장, 출퇴근 때 거리·'가게 밖'·외근 판정 |
 | 화면 (`kioskView`, `nowView`, `recordsView`, `timecardView`, `payrollView`, `contractView`, `staffView`) | 탭별 화면 |
+| 업무 지시·사진 보고 (`tasksView`, `taskForm`, `repCard`, `trStatus`, `kioskTaskStep`, `phoneView`, `phoneTask`, `TRACT`) | 사장님 '업무 보고' 탭, 태블릿 출근 뒤 공지·퇴근 안내(`notices`/`remind`/`outwarn` 단계), 직원 휴대폰 화면(mode `phone`, 주소 끝 `#phone`), 60일 사진 정리(`cleanWorkPhotos`) |
 | 전자 근로계약서 (`contractBody`, `kioskContract`, `CACT`) | 계약서 문구, 서명판, 버전 관리 |
 | 세무사 전달 (`reportRows`, `reportText`, `sendReport`, `autoReport`, `RACT`) | 급여 내역 정리·발송 |
 | 백업 (`readAllPunches`, `BACT`) | 전체 백업·엑셀 |
