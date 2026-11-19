@@ -57,6 +57,7 @@
 | `repeat`, `days` | `once`(만든 날 하루) / `daily`(매일) / `days`(요일, `days`에 0=일요일…) — 사진 보고 업무만 |
 | `due`, `minPhotos` | 마감 시각 `HH:MM`, 필요한 사진 수 |
 | `active`, `start`, `createdAt` | 켜짐 여부(멈추기), 시작 날짜, 만든 시각 |
+| `pinned` | 공지만: `true`면 가게 태블릿·직원 휴대폰 첫 화면에 고정 (공고, v21) |
 
 ## months/{ym}/task_reports/{taskId}_{staffId}_{date} (업무 사진 보고)
 

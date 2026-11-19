@@ -132,6 +132,29 @@ needMonth(ym); bootTasks(S.db);
   assert.strictEqual(getRep(task.id, A.id, today).status, 'ok'); assert.strictEqual(trWaiting().length, 0);
   console.log('확인·다시 요청 통과');
 
+  // ----- 첫 화면 공고 (공지 + 고정) -----
+  S.mode = 'owner'; S.tform = null; ACT.trNew();
+  ACT.trTpl({ v:'attendance' });
+  assert.strictEqual(S.tform.kind, 'notice'); assert.ok(S.tform.pinned, '예시 문구는 공고로 고정');
+  assert.ok(/무단 지각이 3회/.test(S.tform.body) && /무단결근이 2회/.test(S.tform.body), '예시 문구 내용');
+  await ACT.trSave();
+  const pin = S.tasks.find(t => t.title === '지각·결근 규정 안내');
+  assert.ok(pin && pin.pinned === true && pin.kind === 'notice', '공고 저장');
+  S.mode = 'kiosk'; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('📌 공고') && view.innerHTML.includes('무단결근이 2회'), '태블릿 첫 화면에 공고');
+  assert.ok(view.innerHTML.indexOf('📌 공고') < view.innerHTML.indexOf('kPick'), '이름 카드보다 위');
+  S.mode = 'phone'; S.phone.staffId = B.id; S.phone.open = null; S.editing = null; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('지각·결근 규정 안내'), '직원 휴대폰 첫 화면에도');
+  assert.ok(unreadFor(B).some(t => t.id === pin.id), '출근 뒤 공지 확인에도 들어감 (읽음 기록)');
+  S.mode = 'owner'; await ACT.trPinToggle({ id: pin.id });
+  assert.strictEqual(taskById(pin.id).pinned, false);
+  S.mode = 'kiosk'; render(true); assert.ok(!view.innerHTML.includes('📌 공고'), '내리면 첫 화면에서 빠짐');
+  // 쓰던 내용이 있으면 예시 문구로 바로 덮지 않음
+  S.mode = 'owner'; ACT.trNew(); S.tform.title = '내 공지'; ACT.trTpl({ v:'attendance' });
+  assert.strictEqual(S.tform.title, '내 공지', '한 번 누르면 확인만'); ACT.trTpl({ v:'attendance' }); assert.strictEqual(S.tform.title, '지각·결근 규정 안내');
+  S.tform = null; S.editing = null;
+  console.log('첫 화면 공고 통과');
+
   // ----- 지시 멈추기 / 60일 사진 정리 / 휴대폰 표시 -----
   await ACT.trToggle({ id: task.id });
   assert.strictEqual(taskById(task.id).active, false); assert.strictEqual(todayTasksFor(A).length, 0, '멈춘 지시는 오늘 할 일에서 빠짐');

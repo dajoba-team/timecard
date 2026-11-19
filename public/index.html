@@ -420,6 +420,14 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .bigbtn.sm{height:auto;min-height:60px;font-size:19px}
 .btn.okb{background:var(--green);border-color:var(--green);color:#fff}
 .btn.big{padding:12px 18px;font-size:16px}
+.pinboard{max-width:960px;margin:0 auto 14px;display:grid;gap:10px}
+.pin{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--red);border-radius:12px;padding:14px 16px;display:grid;gap:8px;text-align:left}
+.pinhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pinhead b{font-size:17px;margin-right:auto}
+.pin p{margin:0;white-space:pre-wrap;font-size:15px;line-height:1.65;color:var(--ink)}
+.pin p.clamp{display:-webkit-box;-webkit-line-clamp:4;line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.phone .pinboard{margin:0}
+.phone .pin p{font-size:14px}
 .who{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
 .who button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:14px;text-align:left;display:grid;gap:2px}
 .who button b{font-size:18px}
@@ -1005,7 +1013,7 @@ function kioskView(){
   const list = activeStaff();
   if (k.step === 'list'){
     if (!list.length) return clock + `<div class="empty"><b>아직 등록된 직원이 없어요</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
-    return clock + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}</p>
+    return clock + pinBoard() + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}</p>
       <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length; return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${esc(st.position || '직원')}</small><em>${i.text}</em>${nn ? `<i class="nbadge">새 공지 ${nn}</i>` : ''}</button>`; }).join('')}</div>`;
   }
   const st = staffById(k.staffId);
@@ -1063,6 +1071,7 @@ function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
   Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
+  S.pinOpen?.clear();   // 첫 화면 공고는 다시 접어 둠
 }
 function lockView(){
   return `<div class="kpanel ${S.lockErr ? 'shake' : ''}" style="margin-top:24px">${pinPad('사장님 확인', '관리 번호 4자리 (처음 번호는 0000)', S.lockPin, 'owner', S.lockErr)}
@@ -2514,21 +2523,42 @@ function trRow(t, ds){
 function taskItem(t){
   const list = assignees(t), unread = list.filter(st => !isRead(t, st)), del = S.confirmTDel === t.id;
   return `<div class="titem ${t.active === false ? 'off' : ''}">
-    <div class="ttop"><b>${esc(t.title)}</b><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
+    <div class="ttop"><b>${esc(t.title)}</b><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.pinned ? '<span class="chip red">📌 첫 화면 고정</span>' : ''}${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
     ${t.body ? `<p>${esc(t.body)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}
     <div class="small muted">${esc(targetText(t))} · ${t.kind === 'task' ? `${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''} · 사진 ${t.minPhotos || 1}장 이상 · ` : ''}읽음 ${list.length - unread.length}/${list.length}${unread.length ? ` (${esc(unread.map(s => s.name).join(', '))} 안 읽음)` : ''}</div>
     <div class="row">${del
       ? `<span class="small">이 지시를 지울까요? 받은 보고 기록은 남아요.</span><button class="btn danger sm" data-act="trDelDo" data-id="${esc(t.id)}">지우기</button><button class="btn sm" data-act="trDelNo">취소</button>`
-      : `<button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button><button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
+      : `<button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button>${t.kind === 'notice' ? `<button class="btn sm" data-act="trPinToggle" data-id="${esc(t.id)}">${t.pinned ? '첫 화면에서 내리기' : '📌 첫 화면에 고정'}</button>` : ''}<button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
   </div>`;
 }
-function freshTForm(){ return { kind:'task', title:'', body:'', refPhotos:[], target:{ mode:'all', ids:[] }, repeat:'daily', days:[], due:'15:00', minPhotos:1, uploading:false }; }
+function freshTForm(){ return { kind:'task', title:'', body:'', refPhotos:[], target:{ mode:'all', ids:[] }, repeat:'daily', days:[], due:'15:00', minPhotos:1, pinned:false, uploading:false }; }
+// 공지 예시 문구 (사장님이 고쳐서 올려요). 법적인 효력은 근로계약서·취업규칙과 노무사 확인이 필요해요.
+const NOTICE_TEMPLATES = {
+  attendance: { title:'지각·결근 규정 안내', body:
+`직원 여러분, 서로 믿고 일할 수 있도록 근무 규정을 안내합니다.
+
+1. 무단 지각
+ - 미리 연락 없이 정해진 출근 시각보다 늦게 오는 것을 무단 지각으로 봅니다.
+ - 무단 지각이 3회가 되면 퇴사 처리될 수 있습니다.
+
+2. 무단결근
+ - 미리 연락 없이 출근하지 않는 것을 무단결근으로 봅니다.
+ - 무단결근이 2회가 되면 퇴사 처리될 수 있습니다.
+
+3. 늦거나 쉬어야 할 때
+ - 부득이한 사정이 있으면 반드시 출근 시각 전에 사장님께 연락해 주세요.
+ - 미리 연락하고 허락받은 경우는 무단으로 보지 않습니다.
+
+출퇴근 시각은 타임카드에 자동으로 기록됩니다. 모두 협조 부탁드립니다.` },
+};
 function taskForm(){
   const f = S.tform, pos = positions();
   const opt = (name, val, label, checked, type = 'radio') => `<label class="opt"><input type="${type}" name="${name}" value="${esc(val)}" ${checked ? 'checked' : ''}><span>${esc(label)}</span></label>`;
   return `<div class="panel trform" id="trForm">
     <div class="opts" role="radiogroup" aria-label="종류">${opt('tkind', 'task', '사진 보고 업무', f.kind === 'task')}${opt('tkind', 'notice', '공지만 (읽기)', f.kind === 'notice')}</div>
+    ${f.kind === 'notice' ? `<label class="check"><input type="checkbox" id="trPin" ${f.pinned ? 'checked' : ''}> 📌 출퇴근 첫 화면에 고정 (공고) — 가게 태블릿과 직원 휴대폰 첫 화면에 늘 보여요</label>
+    <div class="row small muted">예시 문구: <button type="button" class="btn sm" data-act="trTpl" data-v="attendance">지각·결근 규정</button></div>` : ''}
     <label class="f" for="trTitle">제목<input type="text" id="trTitle" value="${esc(f.title)}" placeholder="예) 그린홍합 손질 확인" maxlength="60"></label>
     <label class="f" for="trBody">내용<textarea id="trBody" placeholder="예) 앞으로 그린홍합을 깨끗이 씻고 촉수를 제거해서 사진으로 보내 주세요.">${esc(f.body)}</textarea></label>
     <div class="f"><span>참고 사진 (리뷰 캡처 등, 4장까지)</span>
@@ -2560,6 +2590,7 @@ function readTForm(){
   const all = sel => [...(fm.querySelectorAll(sel) || [])].map(i => i.value);
   f.kind = val('input[name=tkind]:checked') || 'task';
   f.title = $('#trTitle')?.value ?? f.title; f.body = $('#trBody')?.value ?? f.body;
+  f.pinned = f.kind === 'notice' && !!$('#trPin')?.checked;
   const tg = val('input[name=tgt]:checked') || 'all';
   f.target = tg === 'all' ? { mode:'all', ids:[] } : tg === 'staff' ? { mode:'staff', ids: all('input[name=tids]:checked') } : { mode:'pos', pos: tg.slice(4), ids:[] };
   if (f.kind === 'task'){
@@ -2577,9 +2608,9 @@ async function saveTask(){
   if (f.kind === 'task' && f.repeat === 'days' && !f.days.length){ toast('요일을 골라 주세요', '', 'warn'); return; }
   const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const doc = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), refPhotos:f.refPhotos, target:f.target, active:true, createdAt:Date.now(), start:todayStr(),
-    ...(f.kind === 'task' ? { repeat:f.repeat, days:f.days, due:f.due, minPhotos:f.minPhotos } : {}) };
+    ...(f.kind === 'task' ? { repeat:f.repeat, days:f.days, due:f.due, minPhotos:f.minPhotos } : { pinned: !!f.pinned }) };
   await write(() => S.db.collection('tasks').doc(id).set(doc));
-  toast(f.kind === 'task' ? '지시를 보냈어요' : '공지를 올렸어요', doc.title, 'ok');
+  toast(f.kind === 'task' ? '지시를 보냈어요' : doc.pinned ? '공고를 첫 화면에 올렸어요' : '공지를 올렸어요', doc.title, 'ok');
   S.tform = null; S.editing = null; render(true);
 }
 async function addRefFiles(files){
@@ -2591,6 +2622,20 @@ async function addRefFiles(files){
   try { for (const file of imgs){ const j = await toJpeg(file, ''); URL.revokeObjectURL(j.url); f.refPhotos.push(await uploadWork(j.blob, 'r_')); } }
   catch (e){ toast('사진을 올리지 못했어요', e?.code === 'no_assets' ? e.message : '잠시 후 다시 해 주세요.', 'warn'); }
   finally { f.uploading = false; render(true); }
+}
+
+// ----- 첫 화면 공고 (공지 + 📌 첫 화면 고정) -----
+// 가게 태블릿 첫 화면(이름 카드 위)과 직원 휴대폰 첫 화면에 늘 보여요. 직원별 '읽음'은 출근 뒤 공지 확인 단계에서 남아요.
+const pinnedNotices = st => liveTasks().filter(t => t.kind === 'notice' && t.pinned && (!st || assignees(t).some(a => a.id === st.id)));
+function pinBoard(st){
+  const list = pinnedNotices(st);
+  if (!list.length) return '';
+  return `<section class="pinboard" aria-label="공고">${list.map(t => `<article class="pin">
+    <div class="pinhead"><span class="chip red">📌 공고</span><b>${esc(t.title)}</b><span class="small muted">${fmtMD(ymd(new Date(t.createdAt || Date.now())))}</span></div>
+    ${t.body ? `<p class="${S.pinOpen?.has(t.id) ? '' : 'clamp'}">${esc(t.body)}</p>` : ''}
+    ${t.body && (t.body.split('\n').length > 4 || t.body.length > 160) ? `<button class="linkbtn" style="justify-self:start;padding:0" data-act="pinMore" data-id="${esc(t.id)}">${S.pinOpen?.has(t.id) ? '접기' : '전체 보기'}</button>` : ''}
+    ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
+  </article>`).join('')}</section>`;
 }
 
 // ----- 태블릿·휴대폰 출퇴근 흐름에 끼워 넣기 -----
@@ -2653,6 +2698,7 @@ function phoneView(){
   const lab = { ok:'사장님 확인 완료', sent:'보냄 · 확인 기다리는 중', redo:'다시 해 주세요', late:'마감 지남 · 지금 보내기', todo:'사진 보내기 전' };
   return `<div class="phone tr">
     <div class="phead"><span class="mark">IN</span><div><b>${esc(me.name)}님</b><div class="small muted">${fmtDateLong(ds)}${me.position ? ` · ${esc(me.position)}` : ''}</div></div><button class="linkbtn" data-act="phSwitch">다른 사람</button></div>
+    ${pinBoard(me)}
     ${phonePunchCard(me)}
     <div class="ptabs" role="tablist">
       <button role="tab" aria-selected="${P.tab === 'tasks'}" data-act="phTab" data-v="tasks">오늘 할 일 ${todo.length ? `(${todo.length})` : ''}</button>
@@ -2747,6 +2793,17 @@ const TRACT = {
   trCancel(){ S.tform = null; S.editing = null; render(true); },
   trSave(){ return saveTask(); },
   trRefDel(d){ readTForm(); S.tform.refPhotos.splice(+d.i, 1); render(true); },
+  trTpl(d){   // 예시 문구 넣기 (공고로 고정까지 켬)
+    const t = NOTICE_TEMPLATES[d.v]; if (!t || !S.tform) return;
+    readTForm();
+    if ((S.tform.title || S.tform.body) && !S.confirmTpl){ S.confirmTpl = true; toast('쓰던 내용이 있어요', '예시 문구로 바꾸려면 한 번 더 눌러 주세요.', 'warn'); setTimeout(() => { S.confirmTpl = false; }, 5000); return; }
+    S.confirmTpl = false;
+    Object.assign(S.tform, { kind:'notice', title:t.title, body:t.body, pinned:true, target:{ mode:'all', ids:[] } });
+    render(true);
+    toast('예시 문구를 넣었어요', '가게 사정에 맞게 고친 뒤 ‘공지 올리기’를 눌러 주세요.', 'ok');
+  },
+  pinMore(d){ S.pinOpen = S.pinOpen || new Set(); S.pinOpen.has(d.id) ? S.pinOpen.delete(d.id) : S.pinOpen.add(d.id); render(true); },
+  async trPinToggle(d){ const t = taskById(d.id); if (!t) return; await write(() => S.db.collection('tasks').doc(d.id).update({ pinned: !t.pinned })); toast(t.pinned ? '첫 화면에서 내렸어요' : '첫 화면에 고정했어요', t.title, 'ok'); render(true); },
   trToday(){ S.trDate = todayStr(); render(true); },
   async trOk(d){ await write(() => trRef(d.ds, d.id).update({ status:'ok', checkedAt:Date.now() })); toast('확인했어요', '', 'ok'); render(true); },
   trRedoOpen(d){ S.redoFor = d.id; S.editing = 'redo'; render(true); $('#redoTxt')?.focus?.(); },
