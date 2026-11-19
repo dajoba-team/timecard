@@ -442,6 +442,8 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .myscore .msrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .myscore .msrow small{display:block;color:var(--muted);font-size:11px}
 .myscore .msrow b{font-family:var(--f-mono);font-size:22px}
+.reacts{display:grid;gap:6px;border-top:1px dashed var(--line);padding-top:10px;text-align:left}
+.reacts .rcline{background:var(--soft);border-radius:8px;padding:4px 8px}
 .awbanner{background:var(--amber-soft);color:var(--amber);border-radius:10px;padding:8px 10px;font-weight:600;font-size:14px}
 /* 뒤로 · 처음으로 */
 .navbar{display:flex;gap:8px;margin:0 auto 12px;max-width:1180px}
@@ -524,7 +526,7 @@ const S = {
   mailStatus:null, mailed:new Set(), mailBusy:false, alertStatus:null, slackBusy:false,
   photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0,
   // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
-  awards:{}, praise:[], awForm:null,   // 이달의 우수직원: awards/{YYYY-MM} 확정 기록, praise 칭찬 점수
+  awards:{}, praise:[], awForm:null, reacts:new Map(), reactDraft:null,   // 이달의 우수직원: awards/{YYYY-MM} 확정 기록, praise 칭찬 점수
   tasks:[], treads:new Map(), trep:{}, trSubs:{}, trLoaded:{}, trPrimed:{}, trDate:todayStr(), tform:null, redoFor:null, confirmTDel:null,
   // 직원 휴대폰 화면 (mode 'phone'): 이 휴대폰에 연결된 직원, 연결할 때 고른 직원·번호, 연 업무, 찍은 사진
   phone:{ staffId: store.get('phoneStaff'), pickId:null, pin:'', err:'', tab:'tasks', open:null, shots:[], note:'', busy:false, step:'' }
@@ -629,6 +631,11 @@ const VI = {
   // 이달의 우수직원 (점수)
   '+{n}점':'+{n} điểm', '🔥 {n}일 연속 정시 출근':'🔥 {n} ngày liên tiếp đúng giờ', '🏆 {m}월 이달의 우수직원':'🏆 Nhân viên xuất sắc tháng {m}',
   '축하해요!':'Chúc mừng!', '이번 달 달성률':'Tỷ lệ hoàn thành tháng này', '이번 달 점수':'Điểm tháng này', '🔥 연속 정시 출근':'🔥 Liên tiếp đúng giờ',
+  '👏 인정!':'👏 Công nhận!', '🙅 인정 못 해! 다음 달엔 나야':'🙅 Không phục! Tháng sau là tôi', '인정!':'Công nhận!', '인정 못 해!':'Không phục!', '소감':'Cảm nghĩ',
+  '인정':'Công nhận', '인정 못 함':'Không phục', '내 반응':'Phản hồi của tôi', '바꾸기':'Đổi', '보내기':'Gửi',
+  '🎉 축하 고마워요! 소감 남기기':'🎉 Cảm ơn lời chúc! Để lại cảm nghĩ', '🎉 소감 한마디':'🎉 Một lời cảm nghĩ', '인정 못 하는 이유 (선택)':'Lý do không phục (không bắt buộc)',
+  '예) 모두 고마워요! 다음 달도 열심히 할게요 🙏':'VD: Cảm ơn mọi người! Tháng sau mình sẽ cố gắng tiếp 🙏', '예) 내가 더 일찍 왔는데? 😤':'VD: Tôi đến sớm hơn mà? 😤',
+  '🙅 도전장을 보냈어요!':'🙅 Đã gửi lời thách đấu!', '🎉 소감을 남겼어요':'🎉 Đã để lại cảm nghĩ',
   '달성률이 가장 높은 직원이 이달의 우수직원이 돼요. 감점은 없어요.':'Người có tỷ lệ hoàn thành cao nhất sẽ là nhân viên xuất sắc của tháng. Không bị trừ điểm.',
   // 안내·오류 (토스트, 안내줄)
   '출근 기록이 없어요':'Không có bản ghi vào ca', '사장님께 확인을 요청하세요.':'Hãy hỏi chủ quán.', '저장하지 못했어요':'Không lưu được',
@@ -658,6 +665,18 @@ const fmtDateK = ds => { if (!isVi()) return fmtDateLong(ds); const d = parseDat
 // 사장님이 쓴 지시·공지: 베트남어 칸(titleVi/bodyVi)이 있으면 병기
 const taskTitle = t => isVi() && t.titleVi ? `${esc(t.titleVi)}<span class="kosub">${esc(t.title)}</span>` : esc(t.title);
 const taskBody = t => isVi() && t.bodyVi ? `${esc(t.bodyVi)}<span class="kosub kobody">${esc(t.body || '')}</span>` : esc(t.body || '');
+// ----- 자동 번역 (서버 함수 tc-translate, Claude API) -----
+// 저장할 때 한 번 번역해서 함께 저장해요. 번역이 안 되면(설정 전·인터넷 문제) 원문만 저장하고 계속 진행해요.
+const hasHangul = s => /[가-힣]/.test(s || '');
+async function translateTexts(texts, to){
+  if (!window.tcStore?.invoke) throw new Error('번역을 쓸 수 없는 화면이에요');
+  const r = await window.tcStore.invoke('tc-translate', { texts, to });
+  if (!Array.isArray(r?.translations) || r.translations.length !== texts.length) throw new Error(r?.error || '번역하지 못했어요');
+  return r.translations;
+}
+async function tryTranslate(texts, to){ try { return await translateTexts(texts, to); } catch (e){ S.trWarn = e?.message || ''; console.warn('자동 번역 안 됨:', S.trWarn); return null; } }
+// 사장님 메모(다시 해 주세요): 베트남어가 있으면 병기
+const ownerNoteHtml = r => isVi() && r?.ownerNoteVi ? `${esc(r.ownerNoteVi)}<span class="kosub">${esc(r.ownerNote || '')}</span>` : esc(r?.ownerNote || '');
 function langSwitch(){
   return `<div class="seg langsw" role="group" aria-label="Ngôn ngữ 언어"><button data-act="lang" data-v="vi" class="${S.lang === 'vi' ? 'on' : ''}" aria-pressed="${S.lang === 'vi'}" lang="vi">Tiếng Việt</button><button data-act="lang" data-v="ko" class="${S.lang !== 'vi' ? 'on' : ''}" aria-pressed="${S.lang !== 'vi'}">한국어</button></div>`;
 }
@@ -2744,7 +2763,7 @@ function repCard(r){
   return `<article class="rep">
     <header><b>${esc(st?.name || '직원')}</b>${st?.position ? `<span class="chip faint">${esc(st.position)}</span>` : ''}<span>${esc(t?.title || '지워진 지시')}</span><span class="mono">${fmtMD(r.date)} · ${fmtT(r.sentAt)} 보냄${r.round > 1 ? ` · ${r.round}번째` : ''}</span></header>
     <div class="photos">${(r.photos || []).map((p, i) => trImg(p, `${st?.name || ''} 보고 사진 ${i + 1}`)).join('')}</div>
-    ${r.note ? `<div class="quote">“${esc(r.note)}”</div>` : ''}
+    ${r.note ? `<div class="quote">“${esc(r.note)}”${r.noteKo ? `<div class="small muted" style="margin-top:4px">번역: ${esc(r.noteKo)}</div>` : ''}</div>` : ''}
     ${r.oldPhoto ? `<div class="quote red">방금 찍은 사진이 아닐 수 있어요 (휴대폰 앨범에서 고른 사진)</div>` : ''}
     ${redo ? `<label class="f" for="redoTxt">무엇을 다시 해야 하는지 적어 주세요 (직원 휴대폰에 떠요)
       <textarea id="redoTxt" placeholder="예) 촉수가 아직 보여요. 한 번 더 제거하고 다시 찍어 주세요."></textarea></label>
@@ -2818,7 +2837,8 @@ function taskForm(){
     <details class="vibox" ${f.titleVi || f.bodyVi ? 'open' : ''}><summary>🇻🇳 베트남어로도 쓰기 (선택) — 직원 화면을 Tiếng Việt로 보면 베트남어가 먼저 보여요</summary>
       <label class="f" for="trTitleVi">베트남어 제목<input type="text" id="trTitleVi" lang="vi" value="${esc(f.titleVi)}" placeholder="VD: Kiểm tra sơ chế vẹm xanh" maxlength="80"></label>
       <label class="f" for="trBodyVi">베트남어 내용<textarea id="trBodyVi" lang="vi" placeholder="VD: Hãy rửa sạch vẹm xanh, bỏ râu rồi chụp ảnh gửi.">${esc(f.bodyVi)}</textarea></label>
-      <p class="hint">비워 두면 직원 화면에 한국어만 보여요. 번역기(파파고 등)로 옮긴 문장을 붙여 넣어도 돼요.</p></details>
+      <div class="row"><button type="button" class="btn sm" data-act="trTranslate" ${S.trBusy ? 'disabled' : ''}>${S.trBusy === 'tr' ? '번역하는 중…' : '🔄 한국어 내용으로 자동 번역'}</button></div>
+      <p class="hint">비워 두고 올리면 자동으로 번역해서 함께 올려요. 번역이 어색하면 여기서 고친 뒤 올리세요.</p></details>
     <div class="f"><span>참고 사진 (리뷰 캡처 등, 4장까지)</span>
       <div class="drop" id="trDrop">캡처 사진을 여기에 끌어다 놓거나 <b>붙여넣기(Ctrl+V)</b> 하세요<br>
         <label class="btn sm filebtn" style="margin-top:8px">사진 고르기<input type="file" id="trFile" accept="image/*" multiple></label></div>
@@ -2837,7 +2857,7 @@ function taskForm(){
       <label class="f" for="trDue" style="flex:1;min-width:130px">마감 시각<input type="time" id="trDue" value="${esc(f.due)}"></label>
       <label class="f" for="trMin" style="flex:1;min-width:130px">필요한 사진 수<select id="trMin">${[1,2,3,4].map(n => `<option value="${n}" ${f.minPhotos === n ? 'selected' : ''}>${n}장 이상</option>`).join('')}</select></label>
     </div>` : ''}
-    <div class="row"><button class="btn pri" data-act="trSave" ${f.uploading ? 'disabled' : ''}>${f.kind === 'task' ? '지시 보내기' : '공지 올리기'}</button><button class="btn" data-act="trCancel">취소</button></div>
+    <div class="row"><button class="btn pri" data-act="trSave" ${f.uploading || S.trBusy ? 'disabled' : ''}>${S.trBusy === 'save' ? '번역하고 올리는 중…' : f.kind === 'task' ? '지시 보내기' : '공지 올리기'}</button><button class="btn" data-act="trCancel">취소</button></div>
     <p class="hint">${f.kind === 'task' ? '담당 직원의 휴대폰 ‘오늘 할 일’에 뜨고, 출근할 때 태블릿에서 공지로 한 번 보여 줘요.' : '출근할 때 태블릿(또는 휴대폰)에서 공지로 보여 주고, 누가 읽었는지 여기서 볼 수 있어요.'}</p>
   </div>`;
 }
@@ -2865,11 +2885,20 @@ async function saveTask(){
   if (!f.title.trim()){ toast('제목을 넣어 주세요', '', 'warn'); return; }
   if (f.target.mode === 'staff' && !f.target.ids.length){ toast('담당 직원을 골라 주세요', '', 'warn'); return; }
   if (f.kind === 'task' && f.repeat === 'days' && !f.days.length){ toast('요일을 골라 주세요', '', 'warn'); return; }
+  // 베트남어 칸이 비어 있으면 자동 번역해서 함께 올림 (안 되면 한국어만)
+  let autoTr = false;
+  if (!(f.titleVi || '').trim() && !(f.bodyVi || '').trim() && S.trBusy !== 'save'){
+    S.trBusy = 'save'; render(true);
+    const tr = await tryTranslate([f.title.trim(), f.body.trim()], 'vi');
+    S.trBusy = false;
+    if (tr){ f.titleVi = tr[0]; f.bodyVi = tr[1]; autoTr = true; }
+    else toast('자동 번역을 못 했어요', '한국어로만 올려요. 베트남어 칸에 직접 넣을 수도 있어요.', 'warn');
+  }
   const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const doc = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), titleVi:(f.titleVi || '').trim(), bodyVi:(f.bodyVi || '').trim(), refPhotos:f.refPhotos, target:f.target, active:true, createdAt:Date.now(), start:todayStr(),
     ...(f.kind === 'task' ? { repeat:f.repeat, days:f.days, due:f.due, minPhotos:f.minPhotos } : { pinned: !!f.pinned }) };
   await write(() => S.db.collection('tasks').doc(id).set(doc));
-  toast(f.kind === 'task' ? '지시를 보냈어요' : doc.pinned ? '공고를 첫 화면에 올렸어요' : '공지를 올렸어요', doc.title, 'ok');
+  toast(f.kind === 'task' ? '지시를 보냈어요' : doc.pinned ? '공고를 첫 화면에 올렸어요' : '공지를 올렸어요', doc.title + (autoTr ? ' · 🇻🇳 자동 번역 함께' : ''), 'ok');
   S.tform = null; S.editing = null; render(true);
 }
 async function addRefFiles(files){
@@ -2894,6 +2923,7 @@ function pinBoard(st){
     ${body ? `<p class="${S.pinOpen?.has(t.id) ? '' : 'clamp'}">${S.pinOpen?.has(t.id) ? taskBody(t) : esc(body)}</p>` : ''}
     ${body && (body.split('\n').length > 4 || body.length > 160 || (isVi() && t.bodyVi)) ? `<button class="linkbtn" style="justify-self:start;padding:0" data-act="pinMore" data-id="${esc(t.id)}">${S.pinOpen?.has(t.id) ? TV('접기') : TV('전체 보기')}</button>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
+    ${awardReactBox(t, st)}
   </article>`; }).join('')}</section>`;
 }
 // 직원 화면용 담당·반복·마감 (베트남어 병기). 사장님 화면은 targetText / repeatText 그대로
@@ -2917,6 +2947,7 @@ function noticeCard(t, st){
     <h3>${taskTitle(t)}</h3>
     ${t.body || t.bodyVi ? `<p>${taskBody(t)}</p>` : ''}
     ${(t.refPhotos || []).map((p, i) => trImg(p, `참고 사진 ${i + 1}`, 'ref')).join('')}
+    ${awardReactBox(t, st)}
     <footer>${t.kind === 'task' ? `<span class="chip amber">${BI(esc(`📷 ${repeatText(t)}${t.due ? ` ${t.due}까지` : ''} 휴대폰으로 사진 보고`), esc(`📷 ${repeatVi(t)}${t.due ? ` trước ${t.due}` : ''} báo cáo ảnh bằng điện thoại`))}</span>` : ''}${st ? (isRead(t, st) ? `<span class="chip ok" style="margin-left:auto">${TV('읽음')}</span>` : `<button class="btn okb" data-act="trReadOne" data-id="${esc(t.id)}" style="margin-left:auto">${T('확인했어요')}</button>`) : `<span style="margin-left:auto">${TV('읽음')} ${read}/${list.length}</span>`}</footer>
   </article>`;
 }
@@ -2926,7 +2957,7 @@ function trCards(st, list, act){
     return `<${tag} class="pcard" ${act ? `data-act="${act}" data-id="${esc(t.id)}"` : ''}><div class="ttop"><b>${taskTitle(t)}</b><span class="chip ${cls}">${TV(x.s === 'redo' ? '다시 해 주세요' : label)}</span></div>
       <div class="sub">${BI(esc(`📷 ${t.due ? `${t.due}까지 · ` : ''}사진 ${n}장 이상 · ${act ? '눌러서 지금 보내기' : '내 휴대폰 ‘오늘 할 일’에서 보내요'}`),
         esc(`📷 ${t.due ? `trước ${t.due} · ` : ''}ít nhất ${n} ảnh · ${act ? 'Bấm để gửi ngay' : 'Gửi trong “Việc hôm nay” trên điện thoại'}`))}</div>
-      ${x.s === 'redo' && x.r?.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</${tag}>`; }).join('')}</div>`;
+      ${x.s === 'redo' && x.r?.ownerNote ? `<div class="quote red">${ownerNoteHtml(x.r)}</div>` : ''}</${tag}>`; }).join('')}</div>`;
 }
 // kioskView에서 부르는 단계: notices / remind / outwarn
 function kioskTaskStep(st, clock){
@@ -2978,7 +3009,7 @@ function phoneView(){
     </div>
     ${P.tab === 'tasks'
       ? (todo.length ? todo.map(t => { const x = trStatus(t, me, ds), [cls] = TR_STATUS[x.s], n = t.minPhotos || 1, sent = x.r?.sentAt ? fmtT(x.r.sentAt) : '';
-          return `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${taskTitle(t)}</b><span class="chip ${cls}">${TV(lab[x.s])}</span></div><div class="sub">${BI(esc(`${t.due ? `${t.due}까지 · ` : ''}사진 ${n}장 이상${sent ? ` · ${sent} 보냄` : ''}`), esc(`${t.due ? `trước ${t.due} · ` : ''}ít nhất ${n} ảnh${sent ? ` · đã gửi ${sent}` : ''}`))}</div>${x.s === 'redo' && x.r.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</button>`; }).join('')
+          return `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${taskTitle(t)}</b><span class="chip ${cls}">${TV(lab[x.s])}</span></div><div class="sub">${BI(esc(`${t.due ? `${t.due}까지 · ` : ''}사진 ${n}장 이상${sent ? ` · ${sent} 보냄` : ''}`), esc(`${t.due ? `trước ${t.due} · ` : ''}ít nhất ${n} ảnh${sent ? ` · đã gửi ${sent}` : ''}`))}</div>${x.s === 'redo' && x.r.ownerNote ? `<div class="quote red">${ownerNoteHtml(x.r)}</div>` : ''}</button>`; }).join('')
         : `<div class="empty"><b>${T('오늘 할 일이 없어요')}</b>${T('사장님이 사진 보고 업무를 보내면 여기에 떠요.')}</div>`)
       : (mine.length ? mine.map(t => `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${taskTitle(t)}</b>${isRead(t, me) ? '' : '<span class="rdot" aria-label="안 읽음"></span>'}<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${TV(t.kind === 'task' ? '사진 보고' : '공지')}</span></div>${t.body || t.bodyVi ? `<div class="sub">${esc(short(isVi() && t.bodyVi ? t.bodyVi : t.body))}</div>` : ''}</button>`).join('')
         : `<div class="empty"><b>${T('공지가 없어요')}</b></div>`)}
@@ -3021,7 +3052,7 @@ function phoneTask(me, t){
   let state = '';
   if (x.s === 'ok') state = `<div class="quote green">${r.checkedAt ? T('사장님이 {t}에 확인했어요. 오늘 할 일 끝!', { t:fmtT(r.checkedAt) }) : T('사장님이 확인했어요. 오늘 할 일 끝!')}</div>`;
   else if (x.s === 'sent') state = `<div class="quote">${T('{t}에 보냈어요. 사장님 확인을 기다리는 중이에요.', { t:fmtT(r.sentAt) })}</div>`;
-  else if (x.s === 'redo') state = `<div class="quote red"><b>${T('다시 해 주세요')}</b>${isVi() ? '' : '<br>'}${r.ownerNote ? esc(r.ownerNote) : T('사장님이 다시 요청했어요.')}</div>`;
+  else if (x.s === 'redo') state = `<div class="quote red"><b>${T('다시 해 주세요')}</b>${isVi() ? '' : '<br>'}${r.ownerNote ? ownerNoteHtml(r) : T('사장님이 다시 요청했어요.')}</div>`;
   else if (x.s === 'late') state = `<div class="quote red">${T('마감({t})이 지났어요. 지금이라도 찍어서 보내 주세요.', { t:t.due })}</div>`;
   const sent = r && x.s !== 'redo' ? `<div class="photos">${(r.photos || []).map((p, i) => trImg(p, `보낸 사진 ${i + 1}`)).join('')}</div>` : '';
   const canSend = P.shots.length >= min && !P.busy;
@@ -3052,8 +3083,10 @@ async function phoneSend(){
     const ids = [];
     for (let i = 0; i < P.shots.length; i++){ P.step = `사진 올리는 중 ${i + 1}/${P.shots.length}`; P.stepT = ['사진 올리는 중 {i}/{n}', { i:i + 1, n:P.shots.length }]; render(true); ids.push(await uploadWork(P.shots[i].blob, 'w_')); }
     P.step = '보내는 중…'; P.stepT = ['보내는 중…']; render(true);
+    // 직원이 베트남어로 쓴 한마디는 사장님이 읽을 수 있게 한국어 번역도 함께 (안 되면 원문만)
+    const noteKo = P.note && !hasHangul(P.note) ? { noteKo: (await tryTranslate([P.note], 'ko'))?.[0] || '' } : {};
     await trRef(ds, key).set({ taskId:t.id, staffId:me.id, date:ds, photos:ids, note:P.note, sentAt:Date.now(), status:'sent',
-      ownerNote: prev?.ownerNote || '', round:(prev?.round || 0) + 1, oldPhoto: P.shots.some(s => s.old), via:'phone' });
+      ownerNote: prev?.ownerNote || '', ownerNoteVi: prev?.ownerNoteVi || '', ...noteKo, round:(prev?.round || 0) + 1, oldPhoto: P.shots.some(s => s.old), via:'phone' });
     clearShots(); P.note = ''; P.step = 'done';
     slackKick();   // 슬랙 '보고 도착' 알림 바로
   } catch (e){
@@ -3077,6 +3110,16 @@ const TRACT = {
     render(true);
     toast('예시 문구를 넣었어요', '가게 사정에 맞게 고친 뒤 ‘공지 올리기’를 눌러 주세요.', 'ok');
   },
+  async trTranslate(){   // 새 지시: 한국어 제목·내용 → 베트남어 칸 채우기
+    readTForm(); const f = S.tform; if (!f || S.trBusy) return;
+    if (!f.title.trim() && !f.body.trim()){ toast('먼저 한국어 제목이나 내용을 써 주세요', '', 'warn'); return; }
+    S.trBusy = 'tr'; render(true);
+    const tr = await tryTranslate([f.title.trim(), f.body.trim()], 'vi');
+    S.trBusy = false;
+    if (tr){ f.titleVi = tr[0]; f.bodyVi = tr[1]; toast('베트남어로 번역했어요', '확인하고 어색하면 고쳐 주세요.', 'ok'); }
+    else toast('자동 번역을 못 했어요', S.trWarn || '잠시 뒤 다시 눌러 주세요.', 'warn');
+    render(true);
+  },
   pinMore(d){ S.pinOpen = S.pinOpen || new Set(); S.pinOpen.has(d.id) ? S.pinOpen.delete(d.id) : S.pinOpen.add(d.id); render(true); },
   async trPinToggle(d){ const t = taskById(d.id); if (!t) return; await write(() => S.db.collection('tasks').doc(d.id).update({ pinned: !t.pinned })); toast(t.pinned ? '첫 화면에서 내렸어요' : '첫 화면에 고정했어요', t.title, 'ok'); render(true); },
   trToday(){ S.trDate = todayStr(); render(true); },
@@ -3087,7 +3130,8 @@ const TRACT = {
     const note = ($('#redoTxt')?.value || '').trim();
     if (!note){ toast('무엇을 다시 해야 하는지 적어 주세요', '', 'warn'); return; }
     S.redoFor = null; S.editing = null;
-    await write(() => trRef(d.ds, d.id).update({ status:'redo', ownerNote:note, checkedAt:Date.now() }));
+    const vi = await tryTranslate([note], 'vi');   // 직원 휴대폰에 베트남어로 (안 되면 한국어만)
+    await write(() => trRef(d.ds, d.id).update({ status:'redo', ownerNote:note, ownerNoteVi: vi ? vi[0] : '', checkedAt:Date.now() }));
     toast('다시 해 달라고 보냈어요', '직원 휴대폰 ‘오늘 할 일’ 맨 위에 떠요.', 'ok'); render(true);
   },
   async trToggle(d){ const t = taskById(d.id); if (!t) return; await write(() => S.db.collection('tasks').doc(d.id).update({ active: t.active === false })); render(true); },
@@ -3225,6 +3269,9 @@ function awardView(){
   const card = aw ? `<section class="panel award won"><h3>🏆 ${m}월 이달의 우수직원</h3>
       <div class="awname">${esc(aw.name || winner?.name || '')}</div>
       <p class="small muted" style="margin:4px 0 10px">달성률 ${pct(aw.rate)} · 총점 ${num(aw.points)}점 · 포상금 <b>${won(aw.amount)}</b>${aw.note ? ` · ${esc(aw.note)}` : ''}<br>${fmtMD(ymd(new Date(aw.decidedAt)))} 확정${aw.paidAt ? ` · <b style="color:var(--green)">${fmtMD(ymd(new Date(aw.paidAt)))} 지급 완료</b>` : ''}</p>
+      ${(() => { const list = reactsOf(ym); if (!list.length) return '<p class="small muted">아직 직원 반응이 없어요.</p>';
+        return `<div class="reacts" style="margin-bottom:10px"><div class="small"><b>👏 인정 ${list.filter(r => r.react === 'yes').length}</b> · <b>🙅 인정 못 함 ${list.filter(r => r.react === 'no').length}</b></div>
+          ${list.filter(r => r.text).map(r => `<div class="small rcline">${REACT[r.react][0]} <b>${esc(staffById(r.staffId)?.name || '직원')}</b>: ${esc(r.text)}${r.textKo ? ` <span class="muted">(번역: ${esc(r.textKo)})</span>` : ''}</div>`).join('')}</div>`; })()}
       <div class="row">${aw.paidAt ? '' : `<button class="btn pri sm" data-act="awPaid">포상금 지급 완료로 표시</button>`}<button class="btn sm danger" data-act="awCancel">${S.confirmAw ? '정말 취소할까요? 한 번 더 누르기' : '확정 취소하고 다시 정하기'}</button></div>
       <p class="hint">포상금(현금)은 근로소득이라 그달 급여와 함께 신고해야 할 수 있어요. 세무사님께 확인해 주세요.</p></section>`
     : future ? `<section class="panel"><h3>🏆 이달의 우수직원</h3><p class="muted">아직 오지 않은 달이에요.</p></section>`
@@ -3235,7 +3282,7 @@ function awardView(){
         <label>우수직원<select id="awStaff">${list.map(o => `<option value="${esc(o.st.id)}" ${o.st.id === f.staffId ? 'selected' : ''}>${esc(o.st.name)} · ${pct(o.rate)}</option>`).join('')}</select></label>
         <label>포상금 (원, 이번 달)<input id="awAmount" type="number" min="0" step="1000" value="${esc(f.amount)}"></label>
         <label class="full">한마디 (선택, 공고에 들어가요)<input id="awNote" value="${esc(f.note)}" placeholder="예) 한 달 동안 한 번도 늦지 않았어요!"></label>
-        <label class="check full"><input type="checkbox" id="awNotice" ${f.notice ? 'checked' : ''}> 가게 태블릿·직원 휴대폰 첫 화면에 축하 공고 올리기 (한국어·베트남어)</label>
+        <label class="check full"><input type="checkbox" id="awNotice" ${f.notice ? 'checked' : ''}> 📣 모든 직원에게 알리기 — 태블릿·직원 휴대폰 첫 화면 축하 공고 + 출근할 때 한 번씩 보여 주기 (한국어·베트남어, 👏 인정 / 🙅 인정 못 해 반응 달기)</label>
         <label class="check full"><input type="checkbox" id="awShowAmt" ${f.showAmount ? 'checked' : ''}> 공고에 포상금 금액도 쓰기</label>
       </div>
       <div class="row" style="margin-top:10px"><button class="btn pri" data-act="awDecide" ${list.length ? '' : 'disabled'}>이달의 우수직원으로 확정</button></div></section>`;
@@ -3285,14 +3332,14 @@ function readAwForm(){
   f.staffId = $('#awStaff')?.value || f.staffId; f.amount = Math.max(0, Math.round(+($('#awAmount')?.value ?? f.amount) || 0));
   f.note = ($('#awNote')?.value ?? f.note).trim(); f.notice = !!$('#awNotice')?.checked; f.showAmount = !!$('#awShowAmt')?.checked;
 }
-function awardNotice(ym, name, rate, amount, note, showAmount){
+function awardNotice(ym, name, rate, amount, note, showAmount, noteVi = note){
   const m = +ym.slice(5), r = pct(rate);
   return {
     kind:'notice', pinned:true, award:ym, target:{ mode:'all', ids:[] }, active:true, createdAt:Date.now(), start:todayStr(), refPhotos:[],
     title:`🏆 ${m}월 이달의 우수직원 · ${name}`,
-    body:`${name}님이 ${m}월 이달의 우수직원으로 선정됐어요!\n출근·업무 달성률 ${r}${note ? `\n\n“${note}”` : ''}${showAmount ? `\n\n포상금 ${won(amount)}을 드려요.` : ''}\n\n모두 축하해 주세요 👏 다음 달 우수직원은 누가 될까요?`,
+    body:`${name}님이 ${m}월 이달의 우수직원으로 선정되었습니다!\n출근·업무 달성률 ${r}${note ? `\n\n“${note}”` : ''}${showAmount ? `\n\n포상금 ${won(amount)}을 드려요.` : ''}\n\n모두 축하해 주세요 👏👏\n인정하나요? 아래에서 [인정!] 또는 [인정 못 해!]를 눌러 주세요 😆`,
     titleVi:`🏆 Nhân viên xuất sắc tháng ${m} · ${name}`,
-    bodyVi:`${name} đã được chọn là nhân viên xuất sắc của tháng ${m}!\nTỷ lệ hoàn thành chấm công & công việc: ${r}${note ? `\n\n“${note}”` : ''}${showAmount ? `\n\nTiền thưởng: ${num(amount)} won.` : ''}\n\nCùng chúc mừng nhé 👏 Tháng sau ai sẽ là nhân viên xuất sắc?`,
+    bodyVi:`${name} đã được chọn là nhân viên xuất sắc của tháng ${m}!\nTỷ lệ hoàn thành chấm công & công việc: ${r}${noteVi ? `\n\n“${noteVi}”` : ''}${showAmount ? `\n\nTiền thưởng: ${num(amount)} won.` : ''}\n\nCùng chúc mừng nhé 👏👏\nBạn có công nhận không? Bấm [Công nhận!] hoặc [Không phục!] bên dưới nhé 😆`,
   };
 }
 const AWACT = {
@@ -3304,7 +3351,8 @@ const AWACT = {
     let noticeId = null;
     if (f.notice){
       noticeId = 'aw' + ym.replace('-', '');
-      await write(() => S.db.collection('tasks').doc(noticeId).set(awardNotice(ym, st.name, o.rate, f.amount, f.note, f.showAmount)));
+      const noteVi = f.note ? (await tryTranslate([f.note], 'vi'))?.[0] || f.note : '';   // 한마디도 베트남어로
+      await write(() => S.db.collection('tasks').doc(noticeId).set(awardNotice(ym, st.name, o.rate, f.amount, f.note, f.showAmount, noteVi)));
       if (prev?.noticeId && taskById(prev.noticeId)?.pinned) await write(() => S.db.collection('tasks').doc(prev.noticeId).update({ pinned:false }));   // 지난달 축하 공고는 첫 화면에서 내림
     }
     await write(() => S.db.doc('awards/' + ym).set({ staffId:st.id, name:st.name, rate:o.rate, points:o.total, amount:f.amount, note:f.note, decidedAt:Date.now(), noticeId, paidAt:null }));
@@ -3330,7 +3378,8 @@ const AWACT = {
     if (!staffById(staffId) || !pts){ toast('직원과 점수를 골라 주세요', '', 'warn'); return; }
     if (!note){ toast('칭찬 이유를 적어 주세요', '직원에게도 보여요.', 'warn'); return; }
     const id = 'p' + Date.now().toString(36);
-    await write(() => S.db.collection('praise').doc(id).set({ staffId, ym:S.month, pts, note, at:Date.now() }));
+    const vi = await tryTranslate([note], 'vi');   // 직원 휴대폰에 베트남어로
+    await write(() => S.db.collection('praise').doc(id).set({ staffId, ym:S.month, pts, note, noteVi: vi ? vi[0] : '', at:Date.now() }));
     toast(`⭐ ${staffById(staffId).name}님에게 칭찬 +${pts}점`, note, 'ok'); render(true);
   },
   async prDel(d){ await write(() => S.db.collection('praise').doc(d.id).delete()); render(true); },
@@ -3346,9 +3395,65 @@ function myScoreCard(st){
     <div class="msrow"><div><small>${T('이번 달 달성률')}</small><b>${pct(o.rate)}</b> ${badge}</div><div><small>${T('이번 달 점수')}</small><b>${num(o.total)}</b></div><div><small>${T('🔥 연속 정시 출근')}</small><b>${o.streak}</b></div></div>
     <div class="small muted">${BI(`정시 출근 ${o.att.ontime}일 · 업무 보고 ${o.task.sent + o.task.late}건 · 공지 확인 ${o.read}건${o.b.praise ? ` · ⭐ 칭찬 +${o.b.praise}` : ''}`,
       `Đúng giờ ${o.att.ontime} ngày · Báo cáo ${o.task.sent + o.task.late} · Đọc thông báo ${o.read}${o.b.praise ? ` · ⭐ Khen +${o.b.praise}` : ''}`)}</div>
-    ${S.praise.filter(x => x.staffId === st.id && x.ym === ym).slice(-3).map(x => `<div class="small">⭐ +${x.pts} · ${esc(x.note || '')}</div>`).join('')}
+    ${S.praise.filter(x => x.staffId === st.id && x.ym === ym).slice(-3).map(x => `<div class="small">⭐ +${x.pts} · ${isVi() && x.noteVi ? `${esc(x.noteVi)}<span class="kosub">${esc(x.note || '')}</span>` : esc(x.note || '')}</div>`).join('')}
     <div class="small muted">${T('달성률이 가장 높은 직원이 이달의 우수직원이 돼요. 감점은 없어요.')}</div>
   </section>`;
+}
+
+// ----- 우수직원 축하 공고에 반응: 👏 인정 / 🙅 인정 못 해(이유) / 🎉 소감(뽑힌 본인) -----
+// award_reacts/{YYYY-MM}_{직원} { ym, staffId, react:'yes'|'no'|'thanks', text, textKo, textVi, at } — 한 사람당 한 달 한 개 (바꿀 수 있음)
+// 직원 휴대폰(본인)과 태블릿 출근 뒤 공지 확인(번호로 본인 확인)에서 누를 수 있어요. 첫 화면에는 반응 수와 한마디만.
+const REACT = { yes:['👏', '인정!'], no:['🙅', '인정 못 해!'], thanks:['🎉', '소감'] };
+const reactsOf = ym => [...S.reacts.values()].filter(r => r.ym === ym).sort((a, b) => b.at - a.at);
+const reactText = r => !r.text ? '' : isVi() ? esc(hasHangul(r.text) && r.textVi ? r.textVi : r.text) : esc(!hasHangul(r.text) && r.textKo ? r.textKo : r.text);
+function awardReactBox(t, st){
+  if (!t.award) return '';
+  const ym = t.award, aw = S.awards[ym], list = reactsOf(ym), yes = list.filter(r => r.react === 'yes').length, no = list.filter(r => r.react === 'no').length;
+  const mine = st ? S.reacts.get(`${ym}_${st.id}`) : null, winner = st && aw && aw.staffId === st.id, D = S.reactDraft;
+  const drafting = st && D && D.ym === ym && D.staffId === st.id;
+  const name = id => esc(staffById(id)?.name || '직원');
+  let mineHtml = '';
+  if (st){
+    if (drafting) mineHtml = `<label class="f">${T(D.react === 'thanks' ? '🎉 소감 한마디' : '인정 못 하는 이유 (선택)')}
+        <input type="text" id="rcText" maxlength="80" value="${esc(D.text || '')}" placeholder="${esc(TV(D.react === 'thanks' ? '예) 모두 고마워요! 다음 달도 열심히 할게요 🙏' : '예) 내가 더 일찍 왔는데? 😤'))}"></label>
+      <div class="row"><button class="btn sm pri" data-act="rcSend">${TV('보내기')}</button><button class="btn sm" data-act="rcCancel">${TV('취소')}</button></div>`;
+    else if (mine) mineHtml = `<div class="small">${TV('내 반응')}: <b>${REACT[mine.react][0]} ${TV(REACT[mine.react][1])}</b>${mine.text ? ` — ${reactText(mine)}` : ''} <button class="linkbtn" style="padding:0 4px" data-act="rcChange" data-ym="${ym}">${TV('바꾸기')}</button></div>`;
+    else if (winner) mineHtml = `<div class="row"><button class="btn sm okb" data-act="rcPick" data-v="thanks" data-ym="${ym}">${TV('🎉 축하 고마워요! 소감 남기기')}</button></div>`;
+    else mineHtml = `<div class="row"><button class="btn sm okb" data-act="rcPick" data-v="yes" data-ym="${ym}">${TV('👏 인정!')}</button><button class="btn sm" data-act="rcPick" data-v="no" data-ym="${ym}">${TV('🙅 인정 못 해! 다음 달엔 나야')}</button></div>`;
+  }
+  const talk = list.filter(r => r.text).slice(0, 5);
+  return `<div class="reacts">
+    <div class="small"><b>👏 ${TV('인정')} ${yes}</b> · <b>🙅 ${TV('인정 못 함')} ${no}</b></div>
+    ${talk.map(r => `<div class="small rcline">${REACT[r.react][0]} <b>${name(r.staffId)}</b>: ${reactText(r)}</div>`).join('')}
+    ${mineHtml}
+  </div>`;
+}
+const RCACT = {
+  rcPick(d){
+    const st = staffById(S.kiosk.staffId || S.phone.staffId); if (!st) return;
+    if (d.v === 'yes') return saveReact(st, d.ym, 'yes', '');
+    S.reactDraft = { ym:d.ym, staffId:st.id, react:d.v, text:'' }; S.editing = S.editing || 'react'; S.kiosk.at = Date.now(); render(true);
+  },
+  rcChange(d){ const st = staffById(S.kiosk.staffId || S.phone.staffId); if (!st) return; S.reactDraft = null; S.reacts.delete(`${d.ym}_${st.id}`); render(true); },   // 다시 고르기 (새로 고르면 덮어씀)
+  rcCancel(){ S.reactDraft = null; if (S.editing === 'react') S.editing = null; render(true); },
+  async rcSend(){
+    const D = S.reactDraft, st = D && staffById(D.staffId); if (!st) return;
+    const text = ($('#rcText')?.value || '').trim().slice(0, 80);
+    S.reactDraft = null; if (S.editing === 'react') S.editing = null;
+    await saveReact(st, D.ym, D.react, text);
+  },
+};
+async function saveReact(st, ym, react, text){
+  const doc = { ym, staffId:st.id, react, text, at:Date.now() };
+  if (text){   // 베트남어로 쓰면 사장님용 한국어, 한국어로 쓰면 직원용 베트남어도 함께
+    const tr = await tryTranslate([text], hasHangul(text) ? 'vi' : 'ko');
+    if (tr) doc[hasHangul(text) ? 'textVi' : 'textKo'] = tr[0];
+  }
+  S.reacts.set(`${ym}_${st.id}`, doc);
+  await write(() => S.db.collection('award_reacts').doc(`${ym}_${st.id}`).set(doc));
+  S.kiosk.at = Date.now();
+  toast(react === 'yes' ? '👏 인정!' : react === 'no' ? '🙅 도전장을 보냈어요!' : '🎉 소감을 남겼어요', '', 'ok');
+  render(true);
 }
 
 /* ===================== 동작 ===================== */
@@ -3472,7 +3577,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();
@@ -3728,6 +3833,7 @@ async function boot(){
   db.doc('config/sign').onSnapshot(s => { const d = s.exists ? s.data().data : ''; S.ownerSign = SIG_RE.test(d || '') ? d : ''; scheduleRender(); }, e => console.warn('sign', e));
   db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
   db.collection('awards').onSnapshot(s => { S.awards = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('awards', e));
+  db.collection('award_reacts').onSnapshot(s => { S.reacts = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('award_reacts', e));
   db.collection('praise').onSnapshot(s => { S.praise = s.docs.map(d => ({ id:d.id, ...d.data() })); scheduleRender(); }, e => console.warn('praise', e));
   db.doc('status/autobackup').onSnapshot(s => { S.autoBackup = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('autobackup', e));
   db.collection('backups').onSnapshot(s => { S.backups = s.docs.map(d => ({ id:d.id, ...d.data() })); if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backups', e));

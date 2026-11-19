@@ -110,6 +110,41 @@ S.trSubs['2026-11'] = () => {}; S.trSubs['2026-10'] = () => {}; S.monthSubs['202
   await ACT.kIn(); render(true);
   assert.ok(view.innerHTML.includes('+10점'), '정시 출근 도장에 +10점');
   console.log('직원 화면 통과');
+
+  // ----- 축하 공고 반응: 👏 인정 / 🙅 인정 못 해(이유, 자동 번역) / 🎉 소감(뽑힌 본인) -----
+  window.tcStore = { invoke: async (fn, b) => ({ translations: b.texts.map(x => '[' + b.to + '] ' + x) }) };
+  S.reacts = new Map(); S.reactDraft = null; S.editing = null;
+  S.mode = 'phone'; S.phone.staffId = 'b'; S.phone.open = null; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('data-act="rcPick" data-v="yes"') && view.innerHTML.includes('data-v="no"'), '휴대폰 첫 화면 축하 공고에 인정/인정 못 해 버튼');
+  ACT.rcPick({ v:'no', ym:'2026-11' }); render(true);
+  assert.ok(view.innerHTML.includes('id="rcText"') && view.innerHTML.includes('인정 못 하는 이유'), '이유 적는 칸');
+  el.value = 'Tôi đến sớm hơn mà 😤'; await ACT.rcSend();
+  let rc = docs['award_reacts/2026-11_b'];
+  assert.ok(rc && rc.react === 'no' && rc.text === 'Tôi đến sớm hơn mà 😤' && rc.textKo === '[ko] Tôi đến sớm hơn mà 😤', '베트남어 이유 → 사장님용 한국어 번역도 저장');
+  assert.ok(view.innerHTML.includes('내 반응') && view.innerHTML.includes('rcChange'), '내 반응 + 바꾸기');
+  ACT.rcChange({ ym:'2026-11' }); render(true); assert.ok(view.innerHTML.includes('data-v="yes"'), '바꾸기 → 다시 고르기');
+  ACT.rcPick({ v:'no', ym:'2026-11' }); el.value = 'Tôi đến sớm hơn mà 😤'; await ACT.rcSend();
+  S.phone.staffId = 'c'; render(true); await ACT.rcPick({ v:'yes', ym:'2026-11' });
+  assert.strictEqual(docs['award_reacts/2026-11_c'].react, 'yes', '인정은 바로 저장');
+  // 뽑힌 본인은 소감
+  S.phone.staffId = 'a'; render(true);
+  assert.ok(view.innerHTML.includes('data-v="thanks"') && !view.innerHTML.includes('data-v="no"'), '우수직원 본인은 소감 버튼만');
+  ACT.rcPick({ v:'thanks', ym:'2026-11' }); el.value = '모두 고마워요'; await ACT.rcSend();
+  assert.strictEqual(docs['award_reacts/2026-11_a'].textVi, '[vi] 모두 고마워요', '한국어 소감 → 베트남어 번역');
+  // 직원 화면 베트남어: 한국어 소감은 번역본으로
+  S.lang = 'vi'; render(true); assert.ok(view.innerHTML.includes('[vi] 모두 고마워요') && view.innerHTML.includes('Công nhận'), '베트남어 화면'); S.lang = 'ko';
+  // 태블릿 첫 화면(아직 누군지 모름): 수와 한마디만, 버튼 없음
+  S.mode = 'kiosk'; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('인정 1') && view.innerHTML.includes('인정 못 함 1') && !view.innerHTML.includes('rcPick'), '태블릿 첫 화면은 수만');
+  // 사장님 우수직원 탭: 반응 목록 + 번역
+  S.mode = 'owner'; S.unlocked = true; S.tab = 'award'; S.month = '2026-11'; render(true);
+  assert.ok(view.innerHTML.includes('인정 못 함 1') && view.innerHTML.includes('(번역: [ko] Tôi đến sớm hơn mà 😤)'), '사장님 화면 반응 + 번역');
+  // 번역이 안 돼도 반응은 저장
+  window.tcStore = {}; const w = console.warn; console.warn = () => {};
+  S.mode = 'phone'; S.phone.staffId = 'b'; ACT.rcChange({ ym:'2026-11' }); ACT.rcPick({ v:'no', ym:'2026-11' }); el.value = 'Không phục'; await ACT.rcSend();
+  console.warn = w;
+  assert.ok(docs['award_reacts/2026-11_b'].text === 'Không phục' && !docs['award_reacts/2026-11_b'].textKo, '번역 실패해도 저장');
+  console.log('축하 반응 통과');
   process.exit(0);
 })().catch(e => { console.error('Error', e); process.exit(1); });
 `;

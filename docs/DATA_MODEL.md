@@ -32,7 +32,8 @@
 | `task_reads/{taskId}_{staffId}` | 공지 읽음 `{ taskId, staffId, at, where('tablet'/'phone') }` |
 | `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
 | `awards/{YYYY-MM}` | 이달의 우수직원 확정 `{ staffId, name, rate(달성률 0~1), points(총점), amount(포상금), note, decidedAt, noticeId(축하 공고 tasks id), paidAt }` (v24) |
-| `praise/{id}` | 사장님 칭찬 점수 `{ staffId, ym, pts, note, at }` (보너스, 달성률에는 안 들어감) |
+| `praise/{id}` | 사장님 칭찬 점수 `{ staffId, ym, pts, note, noteVi(자동 번역, v26), at }` (보너스, 달성률에는 안 들어감) |
+| `award_reacts/{YYYY-MM}_{staffId}` | 우수직원 축하 공고 반응 `{ ym, staffId, react('yes' 인정 / 'no' 인정 못 함 / 'thanks' 뽑힌 본인 소감), text(80자까지), textKo 또는 textVi(자동 번역), at }` — 한 사람당 한 달 한 개 (v26) |
 | `backups/{YYYY-MM-DD}` | 자동 백업 목록 `{ at, ok, date, size, counts, removed, manual, keepDays }` (서버가 씀, v20) |
 | `status/autobackup` | 마지막 자동 백업 결과 `{ at, ok, date, size, counts, err }` (서버가 씀) |
 
@@ -60,7 +61,8 @@
 | `due`, `minPhotos` | 마감 시각 `HH:MM`, 필요한 사진 수 |
 | `active`, `start`, `createdAt` | 켜짐 여부(멈추기), 시작 날짜, 만든 시각 |
 | `pinned` | 공지만: `true`면 가게 태블릿·직원 휴대폰 첫 화면에 고정 (공고, v21) |
-| `titleVi`, `bodyVi` | 베트남어 제목·내용 (선택, v22). 직원 화면을 Tiếng Việt로 보면 베트남어가 먼저, 한국어가 아래 작게 |
+| `titleVi`, `bodyVi` | 베트남어 제목·내용 (v22). 직원 화면을 Tiếng Việt로 보면 베트남어가 먼저, 한국어가 아래 작게. v26부터 비워 두고 저장하면 자동 번역(`tc-translate`)으로 채움 |
+| `award` | 우수직원 축하 공고만: 그달 `YYYY-MM` (이 공고 아래에 인정/인정 못 함 반응이 붙음, v24) |
 
 ## months/{ym}/task_reports/{taskId}_{staffId}_{date} (업무 사진 보고)
 
@@ -68,10 +70,12 @@
 |---|---|
 | `taskId`, `staffId`, `date` | 업무, 직원, 날짜 |
 | `photos`, `note` | 보낸 사진 번호들(`w_…`), 직원 한마디 |
+| `noteKo` | 직원 한마디를 한국어로 자동 번역한 것 (한마디에 한글이 없을 때만, v26) |
 | `sentAt`, `round`, `via` | 보낸 시각, 회차(다시 보내면 +1), `phone` |
 | `oldPhoto` | 찍은 지 10분 넘은 사진(앨범 사진)이 섞였으면 `true` |
 | `status` | `sent`(확인 대기) / `ok`(확인 완료) / `redo`(다시 요청) — '아직'·'마감 지남'은 저장하지 않고 화면에서 계산 |
 | `ownerNote`, `checkedAt` | 사장님 '다시 해 주세요' 메모, 확인한 시각 |
+| `ownerNoteVi` | 사장님 메모의 베트남어 자동 번역 (v26) |
 
 ## config/main
 

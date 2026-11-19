@@ -164,6 +164,29 @@ needMonth(ym); bootTasks(S.db);
   await cleanWorkPhotos(); assert.strictEqual(cleaned.length, 1, '하루 한 번만');
   assert.ok(/휴대폰/.test(statusChips({ status:'done', p:{ inVia:'phone' } })), '기록에 휴대폰 표시');
   console.log('정리 통과');
+
+  // ----- 자동 번역 (Claude API 서버 함수 tc-translate) -----
+  const asked = [];
+  window.tcStore.invoke = async (fn, b) => { asked.push([fn, b]); return { translations: b.texts.map(x => x ? '[vi] ' + x : '') }; };
+  S.mode = 'owner'; ACT.trNew(); Object.assign(S.tform, { kind:'notice', title:'내일 대청소', body:'10시까지 와 주세요', target:{ mode:'all', ids:[] } });
+  await ACT.trSave();
+  let nt = S.tasks.find(t => t.title === '내일 대청소');
+  assert.ok(nt.titleVi === '[vi] 내일 대청소' && nt.bodyVi === '[vi] 10시까지 와 주세요' && asked.at(-1)[0] === 'tc-translate' && asked.at(-1)[1].to === 'vi', '저장할 때 베트남어 자동 번역');
+  // 베트남어를 직접 넣었으면 번역하지 않음
+  const n0 = asked.length;
+  ACT.trNew(); Object.assign(S.tform, { kind:'notice', title:'직접 번역', titleVi:'Tự dịch', body:'', bodyVi:'', target:{ mode:'all', ids:[] } });
+  await ACT.trSave(); assert.strictEqual(asked.length, n0, '직접 넣은 베트남어는 그대로');
+  // 번역 버튼
+  ACT.trNew(); Object.assign(S.tform, { kind:'notice', title:'창문 닦기', body:'', target:{ mode:'all', ids:[] } });
+  await ACT.trTranslate(); assert.strictEqual(S.tform.titleVi, '[vi] 창문 닦기', '자동 번역 버튼'); S.tform = null; S.editing = null;
+  // 번역이 안 되면 한국어만 저장 + 안내
+  window.tcStore.invoke = async () => { throw new Error('번역 꺼짐'); };
+  const w = console.warn; console.warn = () => {};
+  ACT.trNew(); Object.assign(S.tform, { kind:'notice', title:'번역 안 됨 공지', body:'', target:{ mode:'all', ids:[] } });
+  await ACT.trSave(); console.warn = w;
+  nt = S.tasks.find(t => t.title === '번역 안 됨 공지');
+  assert.ok(nt && !nt.titleVi && toasts.some(x => x.startsWith('자동 번역을 못 했어요')), '번역 실패해도 한국어로 저장');
+  console.log('자동 번역 통과');
   process.exit(0);
 })().catch(e => { console.error('Error', e); process.exit(1); });
 `;

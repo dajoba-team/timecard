@@ -57,6 +57,19 @@ v19부터 같은 서버 함수가 출근·퇴근·업무 보고 도착·업무 �
 
 **문제 확인:** 앱 현황의 슬랙 칸에 마지막 결과가 보여요. 더 자세히는 Supabase → Edge Functions → tc-notyet-check → Logs, 또는 SQL `select * from cron.job_run_details order by start_time desc limit 10;`
 
+## 자동 번역 (Claude API, v26)
+
+서버 함수 `supabase/functions/tc-translate/`가 한국어 ↔ 베트남어를 번역해요 (모델 `claude-opus-5-5`, effort low, 안전 필터에 걸리면 서버 쪽 대체 모델이 이어서 처리). 앱은 **저장할 때 한 번만** 번역해서 함께 저장하므로 볼 때는 비용이 들지 않아요. 키가 없거나 번역이 안 되면 원문만 저장하고 계속 진행해요.
+
+처음 한 번 (대표님이 직접 — **키는 채팅·메일로 보내지 말 것**):
+1. https://console.anthropic.com 에서 결제 수단 등록 → API Keys → 키 만들기 (`sk-ant-…`)
+2. 터미널에서 (`<키>` 자리에 붙여 넣기):
+   `npx.cmd supabase@2.58.5 secrets set ANTHROPIC_API_KEY=<키> --project-ref mtnuwdcxjxpnrpggbfwc`
+3. 배포: `npx.cmd supabase@2.58.5 functions deploy tc-translate --no-verify-jwt --use-api --project-ref mtnuwdcxjxpnrpggbfwc`
+   (함수 안에서 타임카드 계정인지 직접 확인해요. 장부 전용 계정은 거절)
+
+번역 말투(존댓말·식당 상황)는 `index.ts`의 `system` 문장에서 고쳐요. 시험: `tests/translate-fn.test.js` (가짜 Claude로 요청 모양·오류 처리 확인).
+
 ## 코드 구조
 
 ### storage.js
