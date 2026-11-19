@@ -31,6 +31,8 @@
 | `tasks/{taskId}` | 업무 지시·공지 (아래 표, v19) |
 | `task_reads/{taskId}_{staffId}` | 공지 읽음 `{ taskId, staffId, at, where('tablet'/'phone') }` |
 | `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
+| `awards/{YYYY-MM}` | 이달의 우수직원 확정 `{ staffId, name, rate(달성률 0~1), points(총점), amount(포상금), note, decidedAt, noticeId(축하 공고 tasks id), paidAt }` (v24) |
+| `praise/{id}` | 사장님 칭찬 점수 `{ staffId, ym, pts, note, at }` (보너스, 달성률에는 안 들어감) |
 | `backups/{YYYY-MM-DD}` | 자동 백업 목록 `{ at, ok, date, size, counts, removed, manual, keepDays }` (서버가 씀, v20) |
 | `status/autobackup` | 마지막 자동 백업 결과 `{ at, ok, date, size, counts, err }` (서버가 씀) |
 
@@ -89,6 +91,7 @@
 | `biz` | 사업주 정보 `{name, ceo, addr, phone}` | 빈 값 |
 | `contract` | 계약서 `{on, autoOwnerSign, payDay, payMethod, special}` | 꺼짐 |
 | `tax` | 세무사 전달 `{email, auto}` | 빈 값 / 꺼짐 |
+| `award` | 이달의 우수직원 기본 포상금 `{amount}` (확정할 때 그달 금액을 바꿀 수 있음, v24) | 50,000 |
 | `slack` | 슬랙 미출근 알림 `{on}` (슬랙 주소는 서버 secret에만 있음) | 꺼짐 |
 | `geo` | 위치 확인 `{on, lat, lng, acc, radius, setAt}` — 가게 좌표와 '가게 밖' 기준 거리(m) (v12) | 꺼짐 / 200m |
 

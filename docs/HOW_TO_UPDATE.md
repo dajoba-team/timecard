@@ -89,6 +89,7 @@ claude.ai 아티팩트 시절 `window.claude.use(...)`와 같은 모양으로 `w
 | 사진 인증 (`startCam`, `stampPhoto`, `uploadPhoto`, `photoSrcAttr`) | 카메라, 시각 새기기, 업로드, 사진 보여 주기 |
 | 위치 확인 (`getPos`, `distM`, `geoInfo`, `geoNow`, `geoLine`, `geoChip`, `geoCsv`, `GACT`) | 가게 위치 저장, 출퇴근 때 거리·'가게 밖'·외근 판정 |
 | 화면 (`kioskView`, `nowView`, `recordsView`, `timecardView`, `payrollView`, `contractView`, `staffView`) | 탭별 화면 |
+| 이달의 우수직원 (`SCORE`, `scoreMonth`, `awardRank`, `awardView`, `myScoreCard`, `AWACT`) | 점수 기준은 `SCORE` 한 곳에서 바꿔요. 추천에서 빼는 최소 점수는 `AWARD_MIN_POSSIBLE` |
 | 뒤로 · 처음으로 (`navBar`, `navBack`, `navHome`, `atHome`, `trackNav`) | 첫 화면이 아니면 맨 위 버튼. 새 화면 단계를 만들면 `navBack`에서 어디로 돌아갈지 정해 주세요. 사장님 화면에서 뒤로 갈 때 다시 열 화면은 `NAV_KEEP` |
 | 한국어 / Tiếng Việt (`VI` 사전, `T`, `TT`, `TV`, `BI`, `langSwitch`) | 직원 화면 문구. 새 문구를 `T('…')`로 쓰면 `VI` 사전에 베트남어를 꼭 넣어요 (`tests/lang.test.js`가 빠진 문구를 찾아 실패시켜요). 사장님 화면은 번역하지 않아요 |
 | 업무 지시·사진 보고 (`tasksView`, `taskForm`, `repCard`, `trStatus`, `kioskTaskStep`, `phoneView`, `phoneTask`, `TRACT`) | 사장님 '업무 보고' 탭, 태블릿 출근 뒤 공지·퇴근 안내(`notices`/`remind`/`outwarn` 단계), 직원 휴대폰 화면(mode `phone`, 주소 끝 `#phone`), 60일 사진 정리(`cleanWorkPhotos`) |
