@@ -433,6 +433,9 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .kosub.kobody{font-size:.85em;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);white-space:pre-wrap}
 .kname em .kosub,.nbadge .kosub{display:inline;margin-left:4px}
 .seg.langsw button{padding:6px 12px;font-weight:600}
+/* 뒤로 · 처음으로 */
+.navbar{display:flex;gap:8px;margin:0 auto 12px;max-width:1180px}
+.navbar .btn{padding:8px 14px;font-size:14px;font-weight:600}
 .vibox{border:1px dashed var(--line);border-radius:10px;padding:8px 12px;display:grid;gap:10px}
 .vibox summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600}
 .vibox[open] summary{margin-bottom:6px}
@@ -610,6 +613,7 @@ const VI = {
   '사진을 {n}장 이상 찍어야 보낼 수 있어요. 사진에 시각·이름·업무가 새겨져요.':'Cần chụp ít nhất {n} ảnh để gửi. Ảnh sẽ có giờ, tên và công việc.',
   '보내지 못했어요':'Không gửi được', '인터넷을 확인하고 다시 눌러 주세요. 찍은 사진은 그대로 있어요.':'Hãy kiểm tra internet rồi bấm lại. Ảnh đã chụp vẫn còn.',
   '다시 찍어 주세요.':'Vui lòng chụp lại.', '사진을 읽지 못했어요':'Không đọc được ảnh',
+  '← 뒤로':'← Quay lại', '⌂ 처음으로':'⌂ Màn hình đầu',
   // 안내·오류 (토스트, 안내줄)
   '출근 기록이 없어요':'Không có bản ghi vào ca', '사장님께 확인을 요청하세요.':'Hãy hỏi chủ quán.', '저장하지 못했어요':'Không lưu được',
   '잠시 후 다시 시도해 주세요.':'Vui lòng thử lại sau.', '저장소에 연결되지 않았어요':'Chưa kết nối được máy chủ', '인터넷 연결을 확인하고 새로고침해 주세요.':'Hãy kiểm tra internet rồi tải lại trang.',
@@ -1074,12 +1078,85 @@ function render(force){
   renderTop(); renderBanner();
   if (!force && (S.editing || ((S.mode === 'kiosk' || S.mode === 'phone') && ['photo', 'contract'].includes(S.kiosk.step)))) return;   // 사진 찍는 중에는 카메라 화면을 다시 그리지 않음
   const v = $('#view');
-  if (S.mode === 'phone'){ v.innerHTML = phoneView(); attachCam(); initSigs(); return; }
-  if (S.mode === 'kiosk'){ v.innerHTML = kioskView(); attachCam(); initSigs(); }
-  else if (!S.unlocked) v.innerHTML = lockView();
-  else v.innerHTML = ({ now:nowView, tasks:tasksView, records:recordsView, timecard:timecardView, payroll:payrollView, contract:contractView, staff:staffView }[S.tab] || nowView)();
+  trackNav();
+  // 화면을 먼저 만든 뒤(그리는 중에 단계가 바뀔 수 있음) 맨 위에 [← 뒤로] [⌂ 처음으로]
+  const html = S.mode === 'phone' ? phoneView() : S.mode === 'kiosk' ? kioskView() : !S.unlocked ? lockView()
+    : ({ now:nowView, tasks:tasksView, records:recordsView, timecard:timecardView, payroll:payrollView, contract:contractView, staff:staffView }[S.tab] || nowView)();
+  v.innerHTML = navBar() + html;
+  if (S.mode !== 'owner') attachCam();
   initSigs();
+  if (!atHome()) navGuard();
 }
+
+/* ===================== 뒤로 · 처음으로 =====================
+   첫 화면이 아니면 모든 화면 맨 위에 [← 뒤로] [⌂ 처음으로].
+   - 직원 화면(태블릿·휴대폰): 처음 = 이름 카드(태블릿) / 내 첫 화면(휴대폰). 뒤로 = 한 단계 앞 (사진 → 출근 단추, 업무 → 목록 …).
+     이미 저장한 출퇴근·서명은 되돌리지 않아요 (뒤로 = 처음으로).
+   - 사장님 화면: 처음 = 현황 탭. 뒤로 = 바로 전에 보던 탭·화면 (최근 30개 기억).
+   - 휴대폰·브라우저의 뒤로 가기 버튼도 같은 동작 (앱이 바로 닫히지 않게). */
+const NAV_KEEP = /^(staff:|config$|punch:|cview:|cedit:|cbiz$|csign$|report:)/;   // 뒤로 갈 때 다시 열 수 있는 화면
+const navSnap = () => ({ tab:S.tab, editing: S.editing && NAV_KEEP.test(S.editing) ? S.editing : null, recSub:S.recSub, viewDate:S.viewDate, month:S.month, year:S.year });
+let navLast = null, navRestoring = false;
+S.navStack = [];
+function trackNav(){
+  if (S.mode !== 'owner' || !S.unlocked){ navLast = null; return; }
+  const snap = navSnap(), key = JSON.stringify(snap);
+  if (navLast && key !== navLast.key && !navRestoring){ S.navStack.push(navLast.snap); if (S.navStack.length > 30) S.navStack.shift(); }
+  navRestoring = false;
+  navLast = { key, snap };
+}
+function atHome(){
+  if (S.mode === 'owner') return !S.unlocked || (S.tab === 'now' && !S.editing);
+  const k = S.kiosk, P = S.phone;
+  if (k.step !== 'list') return false;
+  if (S.mode === 'phone') return !P.open && P.tab === 'tasks' && !(P.pickId && !P.staffId);
+  return !S.pinOpen?.size;
+}
+function navBar(){
+  if (atHome()) return '';
+  const busy = S.kiosk.busy || S.phone.busy;
+  const back = S.mode === 'owner' ? '← 뒤로' : TV('← 뒤로'), home = S.mode === 'owner' ? '⌂ 처음으로' : TV('⌂ 처음으로');
+  return `<nav class="navbar" aria-label="이동"><button class="btn sm" data-act="navBack" ${busy ? 'disabled' : ''}>${back}</button><button class="btn sm" data-act="navHome" ${busy ? 'disabled' : ''}>${home}</button></nav>`;
+}
+function navHome(){
+  if (S.mode === 'owner'){
+    S.tab = 'now'; S.editing = null; S.tform = null; S.redoFor = null; S.cDraft = null; S.navStack = []; store.set('tab', 'now');
+    render(true); scrollTo(0, 0); return;
+  }
+  if (S.kiosk.busy || S.phone.busy) return;
+  resetKiosk();
+  if (S.mode === 'phone'){ clearShots(); Object.assign(S.phone, { open:null, tab:'tasks', step:'', note:'' }); if (!S.phone.staffId) Object.assign(S.phone, { pickId:null, pin:'', err:'' }); }
+  S.editing = null; render(true); scrollTo(0, 0);
+}
+function navBack(){
+  if (S.mode === 'owner'){
+    if (S.editing){   // 열린 입력 화면(직원 고치기·새 지시 등)이 있으면 먼저 닫기
+      const cur = JSON.stringify({ ...navSnap(), editing:null });
+      S.editing = null; S.tform = null; S.redoFor = null; S.cDraft = null;
+      if (S.navStack.length && JSON.stringify(S.navStack[S.navStack.length - 1]) === cur) S.navStack.pop();
+      navRestoring = true; render(true); return;
+    }
+    const prev = S.navStack.pop();
+    if (!prev) return navHome();
+    navRestoring = true;
+    Object.assign(S, prev); if (S.editing !== 'tform') S.tform = null; S.redoFor = null;
+    store.set('tab', S.tab); render(true); scrollTo(0, 0); return;
+  }
+  const k = S.kiosk, P = S.phone;
+  if (k.busy || P.busy) return;
+  if (k.step === 'photo'){ stopCam(); Object.assign(k, { step:'action', cam:'', camErr:'', at:Date.now() }); return render(true); }   // 사진 → 출근·퇴근 단추
+  if (k.step === 'outwarn'){ k.step = 'action'; k.at = Date.now(); return render(true); }   // 안 보낸 보고 안내 → 퇴근 단추
+  if (k.step !== 'list') return navHome();   // 번호·도장·공지 확인·계약서: 처음으로 (저장한 건 그대로)
+  if (S.mode === 'phone'){
+    if (P.open) return ACT.phBack();
+    if (P.pickId && !P.staffId) return ACT.phPickBack();
+    if (P.tab !== 'tasks'){ P.tab = 'tasks'; return render(true); }
+  }
+  return navHome();
+}
+// 휴대폰·브라우저 뒤로 가기: 첫 화면이 아니면 앱 안에서 한 단계 뒤로
+function navGuard(){ try { if (!history.state?.tcNav) history.pushState({ tcNav:1 }, ''); } catch {} }
+window.addEventListener?.('popstate', () => { if (!atHome()){ navBack(); if (!atHome()) navGuard(); } });
 function attentionCount(){
   const today = todayStr(), now = Date.now();
   return activeStaff().reduce((n, st) => { const r = dayCalc(st, today, now); return n + (r.status === 'notyet' || r.late ? 1 : 0); }, 0);
@@ -3056,6 +3133,8 @@ document.addEventListener('paste', e => { if (S.mode !== 'owner' || !S.tform) re
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
   lang(d){ S.lang = d.v === 'vi' ? 'vi' : 'ko'; store.set('lang', S.lang); render(true); },
+  navBack(){ navBack(); },
+  navHome(){ navHome(); },
   toOwner(){ S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },
   toKiosk(){ S.mode = deviceMode(); S.editing = null; S.unlocked = false; resetKiosk(); store.set('mode', S.mode); render(true); requestWake(); scrollTo(0, 0); },
   // 사장님 화면 '업무 보고' → 이 기기를 직원 휴대폰 화면으로 (직원 휴대폰에서 한 번만)

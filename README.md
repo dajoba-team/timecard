@@ -6,7 +6,7 @@
 - **운영 방식:** Netlify(화면) + Supabase(저장·로그인·사진). **장부(jangbu-web)와 같은 Supabase 프로젝트**를 함께 써요 (추가 비용 없음).
 - **이름 규칙:** 타임카드가 만드는 자원은 모두 `tc` 접두어 (`tc_docs`, `tc_audit_log`, `tc-photos`, `tc-notyet-check` …). 장부 자원은 건드리지 않아요.
 - **이전 중:** 지금 운영 중인 곳은 claude.ai 아티팩트(https://claude.ai/artifact/6n5eNiJTa4CfLhzssb7V6m)예요. 데이터 이전이 확인되면 Netlify 주소로 바꿔요. 아티팩트 설정은 `docs/legacy-artifact.json`에 남겨 뒀어요.
-- **현재 버전:** 22 (2026-11-19) — 직원 화면 한국어 / Tiếng Việt 병기, 첫 화면 공고(21). 20: 매일 자동 백업(90일 보관). 19: 업무 지시·사진 보고, 직원 휴대폰 화면(`#phone`), 슬랙 알림 5종. 주소 https://timecard.dajoba.kr
+- **현재 버전:** 23 (2026-11-19) — 모든 화면 뒤로·처음으로. 22: 직원 화면 한국어 / Tiếng Việt 병기, 21: 첫 화면 공고. 20: 매일 자동 백업(90일 보관). 19: 업무 지시·사진 보고, 직원 휴대폰 화면(`#phone`), 슬랙 알림 5종. 주소 https://timecard.dajoba.kr
 
 ## 구조
 
