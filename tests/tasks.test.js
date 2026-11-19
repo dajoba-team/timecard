@@ -30,6 +30,7 @@ S.staff = W.filter(w => w.collection === 'staff').map(w => ({ id:w.doc_id, ...w.
 const [A, B, C] = S.staff;
 A.position = '주방'; B.position = '홀'; C.position = '홀'; A.phonePunch = true;
 S.ready.staff = true;
+S.lang = 'ko';   // 이 시험은 한국어 문구로 확인 (베트남어는 lang.test.js)
 const today = todayStr(), ym = ymOf(today);
 needMonth(ym); bootTasks(S.db);
 (async () => {

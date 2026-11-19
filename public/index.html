@@ -516,7 +516,7 @@ const S = {
   months:{}, monthSubs:{}, monthLoaded:{},
   seen:new Map(), primed:false, notified:new Set(),
   mode:'kiosk', unlocked:false, tab:'now', editing:null,
-  lang: store.get('lang') === 'vi' ? 'vi' : 'ko',   // 직원 화면 언어 (한국어 / 베트남어 병기)
+  lang: store.get('uilang') === 'ko' ? 'ko' : 'vi',   // 직원 화면 언어: 처음엔 베트남어(병기), [한국어]로 바꿀 수 있음 (v25부터 'uilang', 예전 'lang' 기억은 쓰지 않음)
   lockPin:'', lockErr:'', remember:false,
   kiosk:{ step:'list', staffId:null, pin:'', err:'', at:0, result:null, busy:false },
   recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
@@ -537,7 +537,7 @@ const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
 /* ===================== 한국어 / Tiếng Việt (직원이 보는 화면) =====================
-   가게 태블릿(출퇴근 화면)과 직원 휴대폰 화면 위쪽의 [한국어 | Tiếng Việt] 버튼으로 바꿔요. 기기마다 기억해요 (tc.lang).
+   가게 태블릿(출퇴근 화면)과 직원 휴대폰 화면 위쪽의 [Tiếng Việt | 한국어] 버튼으로 바꿔요. 처음엔 베트남어, 기기마다 기억해요 (tc.uilang).
    Tiếng Việt를 고르면 베트남어를 크게, 그 아래에 한국어를 작게 같이 보여 줘요 (병기). 사장님 화면은 한국어 그대로.
    T(한국어 문장, {변수}) — 아래 VI 사전에 있으면 병기, 없으면 한국어. 변수 값은 자동으로 esc 처리.
    새 문구를 T(…)로 쓰면 VI 사전에도 넣어야 해요 (tests/lang.test.js가 빠진 문구를 찾아요).
@@ -659,7 +659,7 @@ const fmtDateK = ds => { if (!isVi()) return fmtDateLong(ds); const d = parseDat
 const taskTitle = t => isVi() && t.titleVi ? `${esc(t.titleVi)}<span class="kosub">${esc(t.title)}</span>` : esc(t.title);
 const taskBody = t => isVi() && t.bodyVi ? `${esc(t.bodyVi)}<span class="kosub kobody">${esc(t.body || '')}</span>` : esc(t.body || '');
 function langSwitch(){
-  return `<div class="seg langsw" role="group" aria-label="언어 Ngôn ngữ"><button data-act="lang" data-v="ko" class="${S.lang !== 'vi' ? 'on' : ''}" aria-pressed="${S.lang !== 'vi'}">한국어</button><button data-act="lang" data-v="vi" class="${S.lang === 'vi' ? 'on' : ''}" aria-pressed="${S.lang === 'vi'}" lang="vi">Tiếng Việt</button></div>`;
+  return `<div class="seg langsw" role="group" aria-label="Ngôn ngữ 언어"><button data-act="lang" data-v="vi" class="${S.lang === 'vi' ? 'on' : ''}" aria-pressed="${S.lang === 'vi'}" lang="vi">Tiếng Việt</button><button data-act="lang" data-v="ko" class="${S.lang !== 'vi' ? 'on' : ''}" aria-pressed="${S.lang !== 'vi'}">한국어</button></div>`;
 }
 
 /* ===================== 근무 계산 ===================== */
@@ -3354,7 +3354,7 @@ function myScoreCard(st){
 /* ===================== 동작 ===================== */
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
-  lang(d){ S.lang = d.v === 'vi' ? 'vi' : 'ko'; store.set('lang', S.lang); render(true); },
+  lang(d){ S.lang = d.v === 'ko' ? 'ko' : 'vi'; store.set('uilang', S.lang); render(true); },
   navBack(){ navBack(); },
   navHome(){ navHome(); },
   toOwner(){ S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },

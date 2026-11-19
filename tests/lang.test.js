@@ -20,15 +20,19 @@ const [A] = S.staff;
 S.tasks = [{ id:'n1', kind:'notice', title:'지각·결근 규정 안내', body:'무단 지각이 3회가 되면 퇴사 처리될 수 있습니다.', titleVi:NOTICE_TEMPLATES.attendance.titleVi, bodyVi:NOTICE_TEMPLATES.attendance.bodyVi, pinned:true, target:{ mode:'all' }, active:true, createdAt:Date.now() },
   { id:'t1', kind:'task', title:'그린홍합 손질', target:{ mode:'all' }, repeat:'daily', due:'23:59', minPhotos:1, active:true, start:todayStr(), createdAt:Date.now() }];
 (async () => {
-  // 1. 처음엔 한국어 (예전과 똑같이)
+  // 1. 처음엔 베트남어(병기)가 먼저, 버튼도 Tiếng Việt가 앞
   S.mode = 'kiosk'; resetKiosk(); render(true);
-  assert.ok(view.innerHTML.includes('본인 이름을 누르고') && !view.innerHTML.includes('Chạm vào'), '처음엔 한국어만');
-  assert.ok(top.innerHTML.includes('data-act="lang"') && top.innerHTML.includes('Tiếng Việt'), '위쪽에 언어 버튼');
-  assert.ok(!view.innerHTML.includes('kosub'), '한국어일 땐 병기 없음');
+  assert.strictEqual(S.lang, 'vi', '처음엔 베트남어');
+  assert.ok(view.innerHTML.includes('Chạm vào tên của bạn'), '처음 화면 베트남어');
+  assert.ok(top.innerHTML.indexOf('Tiếng Việt') < top.innerHTML.indexOf('한국어'), '버튼 순서: Tiếng Việt | 한국어');
+  // 한국어로 바꾸면 한국어만, 기기에 기억
+  ACT.lang({ v:'ko' });
+  assert.strictEqual(ls.get('tc.uilang'), 'ko', '기기에 기억');
+  assert.ok(view.innerHTML.includes('본인 이름을 누르고') && !view.innerHTML.includes('Chạm vào') && !view.innerHTML.includes('kosub'), '한국어일 땐 한국어만');
 
-  // 2. Tiếng Việt로 바꾸기 → 베트남어 크게 + 한국어 작게, 기기에 기억
+  // 2. 다시 Tiếng Việt → 베트남어 크게 + 한국어 작게
   ACT.lang({ v:'vi' });
-  assert.strictEqual(ls.get('tc.lang'), 'vi', '기기에 기억');
+  assert.strictEqual(ls.get('tc.uilang'), 'vi', '기기에 기억');
   assert.ok(view.innerHTML.includes('Chạm vào tên của bạn') && view.innerHTML.includes('<span class="kosub">본인 이름을 누르고'), '첫 화면 병기');
   assert.ok(/Thứ \\S+, \\d+\\/\\d+\\/\\d{4}/.test(view.innerHTML), '베트남어 날짜');
   assert.ok(view.innerHTML.includes('📌 Thông báo') && view.innerHTML.includes('Thông báo quy định đi muộn'), '첫 화면 공고도 베트남어 제목');
