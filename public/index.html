@@ -428,6 +428,14 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .pin p.clamp{display:-webkit-box;-webkit-line-clamp:4;line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .phone .pinboard{margin:0}
 .phone .pin p{font-size:14px}
+/* 한국어 / Tiếng Việt 병기: 베트남어 아래 작은 한국어 */
+.kosub{display:block;font-size:.72em;font-weight:500;opacity:.68;margin-top:2px;line-height:1.35}
+.kosub.kobody{font-size:.85em;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);white-space:pre-wrap}
+.kname em .kosub,.nbadge .kosub{display:inline;margin-left:4px}
+.seg.langsw button{padding:6px 12px;font-weight:600}
+.vibox{border:1px dashed var(--line);border-radius:10px;padding:8px 12px;display:grid;gap:10px}
+.vibox summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600}
+.vibox[open] summary{margin-bottom:6px}
 .who{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
 .who button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:14px;text-align:left;display:grid;gap:2px}
 .who button b{font-size:18px}
@@ -494,6 +502,7 @@ const S = {
   months:{}, monthSubs:{}, monthLoaded:{},
   seen:new Map(), primed:false, notified:new Set(),
   mode:'kiosk', unlocked:false, tab:'now', editing:null,
+  lang: store.get('lang') === 'vi' ? 'vi' : 'ko',   // 직원 화면 언어 (한국어 / 베트남어 병기)
   lockPin:'', lockErr:'', remember:false,
   kiosk:{ step:'list', staffId:null, pin:'', err:'', at:0, result:null, busy:false },
   recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
@@ -511,6 +520,127 @@ const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.r
   biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
+
+/* ===================== 한국어 / Tiếng Việt (직원이 보는 화면) =====================
+   가게 태블릿(출퇴근 화면)과 직원 휴대폰 화면 위쪽의 [한국어 | Tiếng Việt] 버튼으로 바꿔요. 기기마다 기억해요 (tc.lang).
+   Tiếng Việt를 고르면 베트남어를 크게, 그 아래에 한국어를 작게 같이 보여 줘요 (병기). 사장님 화면은 한국어 그대로.
+   T(한국어 문장, {변수}) — 아래 VI 사전에 있으면 병기, 없으면 한국어. 변수 값은 자동으로 esc 처리.
+   새 문구를 T(…)로 쓰면 VI 사전에도 넣어야 해요 (tests/lang.test.js가 빠진 문구를 찾아요).
+   TT(...) — 글자만 (토스트·안내줄·속성용): "베트남어 · 한국어". BI(한국어HTML, 베트남어HTML) — 직접 만든 HTML 병기. */
+const VI = {
+  // 출퇴근 화면
+  '출퇴근 화면':'Chấm công', '직원 휴대폰':'Điện thoại nhân viên', '사장님 화면':'Chủ quán', '직원':'Nhân viên',
+  '본인 이름을 누르고 개인 번호 4자리를 입력하세요':'Chạm vào tên của bạn rồi nhập mã cá nhân 4 số',
+  '📷 출퇴근할 때 얼굴 사진을 찍어요':'📷 Chụp ảnh khuôn mặt khi chấm công', '📍 위치도 함께 기록돼요':'📍 Vị trí cũng được ghi lại',
+  '아직 등록된 직원이 없어요':'Chưa có nhân viên nào', '새 공지 {n}':'Thông báo mới {n}',
+  '출근 {t} · 근무 중':'Vào ca {t} · Đang làm', '퇴근 {t}':'Tan ca {t}', '오늘 휴무':'Hôm nay nghỉ', '오늘 {a}–{b}':'Hôm nay {a}–{b}',
+  '오늘 정기 휴무':'Hôm nay nghỉ cố định', '오늘 근무 없음':'Hôm nay không có lịch',
+  '{name}님':'{name}', '개인 번호 4자리를 입력하세요':'Nhập mã cá nhân 4 số', '지우기':'Xóa', '취소':'Hủy',
+  '번호가 맞지 않아요. 다시 입력해 주세요':'Mã không đúng. Vui lòng nhập lại',
+  '출근 {t} · 지금까지 {h} 근무':'Vào ca {t} · Đã làm {h}', '퇴근 예정 {t}':'Dự kiến tan ca {t}',
+  '출근하기':'Vào ca', '퇴근하기':'Tan ca', '처음으로':'Về màn hình đầu', '확인':'Xác nhận',
+  '오늘은 {a} 출근, {b} 퇴근으로 이미 기록됐어요.':'Hôm nay đã ghi vào ca {a}, tan ca {b}.',
+  '잘못됐다면 사장님께 수정을 요청하세요.':'Nếu sai, hãy nhờ chủ quán sửa.',
+  '오늘 예정 {a}–{b}':'Lịch hôm nay {a}–{b}',
+  '오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.':'Hôm nay là ngày nghỉ cố định. Nếu vào ca sẽ được ghi là “làm ngày nghỉ”.',
+  '오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)':'Hôm nay không có lịch làm (sẽ được ghi là làm thêm)',
+  '사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요':'Đã vào bằng mã của chủ quán · Ghi là chủ quán nhập thay',
+  '{name}님 출근 사진':'{name} – ảnh vào ca', '{name}님 퇴근 사진':'{name} – ảnh tan ca',
+  '저장하는 중이에요. 잠시만 기다려 주세요…':'Đang lưu. Vui lòng chờ một chút…', '얼굴이 잘 보이게 화면을 봐 주세요':'Hãy nhìn vào màn hình để thấy rõ khuôn mặt',
+  '카메라를 켜는 중…':'Đang bật camera…', '찰칵! 출근하기':'Chụp ảnh & vào ca', '찰칵! 퇴근하기':'Chụp ảnh & tan ca',
+  '카메라로 찍고 출근하기':'Chụp bằng camera & vào ca', '카메라로 찍고 퇴근하기':'Chụp bằng camera & tan ca',
+  '사진 없이 출근하기 (사장님께 ‘사진 없음’으로 보여요)':'Vào ca không cần ảnh (chủ quán sẽ thấy “không có ảnh”)',
+  '사진 없이 퇴근하기 (사장님께 ‘사진 없음’으로 보여요)':'Tan ca không cần ảnh (chủ quán sẽ thấy “không có ảnh”)',
+  '아래 버튼으로 찍어 주세요.':'Hãy chụp bằng nút bên dưới.',
+  '이 화면에서는 바로 카메라를 켤 수 없어요.':'Không thể bật camera trực tiếp trên màn hình này.', '카메라를 찾지 못했어요.':'Không tìm thấy camera.',
+  '이 화면에서 카메라 사용이 막혀 있어요.':'Camera đang bị chặn trên màn hình này.', '카메라를 켜지 못했어요.':'Không bật được camera.',
+  '사진을 만들지 못했어요. 다시 눌러 주세요.':'Không tạo được ảnh. Vui lòng bấm lại.', '사진을 읽지 못했어요. 다시 찍어 주세요.':'Không đọc được ảnh. Vui lòng chụp lại.',
+  '출근':'VÀO CA', '퇴근':'TAN CA', '서명':'ĐÃ KÝ',
+  '예정 {a}보다 {n}분 늦었어요. 사장님께 알림이 갔어요.':'Bạn đến muộn {n} phút so với giờ {a}. Chủ quán đã được thông báo.',
+  '오늘 퇴근 예정 {t} · 좋은 하루 보내세요!':'Dự kiến tan ca {t} · Chúc một ngày tốt lành!', '추가 근무로 기록했어요.':'Đã ghi là làm thêm.',
+  '오늘 {h} 근무했어요. 수고하셨어요!':'Hôm nay bạn đã làm {h}. Cảm ơn bạn đã vất vả!',
+  '사진: {e} — 기록은 저장됐어요.':'Ảnh: {e} — Bản ghi đã được lưu.',
+  '사진 저장을 쓸 수 없는 화면이었어요':'Màn hình này không lưu được ảnh', '사진 저장 공간이 가득 찼어요':'Bộ nhớ ảnh đã đầy',
+  '사진 저장 권한이 없었어요':'Không có quyền lưu ảnh', '사진을 저장하지 못했어요':'Không lưu được ảnh',
+  '새 공지 {n}건 확인하기':'Xem {n} thông báo mới', '오늘 할 일 보기':'Xem việc hôm nay', '잠시 뒤 자동으로 넘어가요.':'Sẽ tự chuyển sau giây lát.',
+  '이번 달 내 근무 (자동 계산)':'Công việc tháng này của tôi (tự động tính)',
+  // 근로계약서 서명
+  '{name}님, 근로계약서 서명':'{name}, ký hợp đồng lao động', '출근이 기록됐어요.':'Đã ghi vào ca.',
+  '계약 내용이 바뀌어서 다시 서명이 필요해요.':'Nội dung hợp đồng đã thay đổi, cần ký lại.', '아래 근로계약서를 끝까지 읽고 서명해 주세요.':'Hãy đọc hết hợp đồng lao động bên dưới rồi ký.',
+  '계약서는 한국어로 되어 있어요. 모르는 부분은 서명하기 전에 사장님께 물어보세요.':'Hợp đồng được viết bằng tiếng Hàn. Phần nào chưa hiểu, hãy hỏi chủ quán trước khi ký.',
+  '주소':'Địa chỉ', '연락처':'Số điện thoại', '이메일 (계약서 사본 받을 곳, 선택)':'Email (nhận bản sao hợp đồng, không bắt buộc)',
+  '위 근로계약서 내용을 모두 읽었고 이에 동의합니다':'Tôi đã đọc và đồng ý với toàn bộ nội dung hợp đồng lao động trên',
+  '여기에 손가락으로 서명해 주세요':'Ký tên bằng ngón tay vào đây', '다시 쓰기':'Ký lại', '서명하고 제출하기':'Ký và gửi', '저장하는 중…':'Đang lưu…', '다음에 할게요':'Để sau',
+  '주소와 연락처를 넣어 주세요':'Hãy nhập địa chỉ và số điện thoại', '계약서에 들어가는 내용이에요.':'Thông tin này sẽ ghi vào hợp đồng.',
+  '동의 칸에 체크해 주세요':'Hãy đánh dấu vào ô đồng ý', '서명을 해 주세요':'Hãy ký tên', '네모 칸에 손가락으로 이름을 써 주세요.':'Viết tên bằng ngón tay vào ô vuông.',
+  '근로계약서 서명이 끝났어요. 사본은 사장님께 받으세요.':'Đã ký xong hợp đồng. Hãy nhận bản sao từ chủ quán.',
+  '서명했어요. 사장님 서명까지 되면 계약이 완료돼요.':'Đã ký. Hợp đồng sẽ hoàn tất khi chủ quán ký.',
+  // 공지·업무 보고
+  '{name}님, 새 공지 {n}건':'{name}, có {n} thông báo mới',
+  '읽고 [확인했어요]를 눌러 주세요. 사장님 화면에 ‘읽음’으로 남아요.':'Đọc xong hãy bấm [Đã hiểu]. Chủ quán sẽ thấy là “đã đọc”.',
+  '모두 확인했어요':'Đã đọc tất cả', '확인했어요':'Đã hiểu', '읽음':'Đã đọc', '공지':'Thông báo', '사진 보고 업무':'Việc báo cáo ảnh', '사진 보고':'Báo cáo ảnh',
+  '📌 공고':'📌 Thông báo', '전체 보기':'Xem tất cả', '접기':'Thu gọn', '전체 직원':'Tất cả nhân viên', '{pos} 전체':'Tất cả {pos}', '담당 없음':'Chưa giao',
+  '매일':'Hằng ngày', '{d}요일':'{d}', '요일 미정':'Chưa chọn thứ', '{md} 하루':'Chỉ ngày {md}', '{t}까지':'trước {t}',
+  '📷 {r} 휴대폰으로 사진 보고':'📷 {r} báo cáo ảnh bằng điện thoại',
+  '오늘 휴대폰으로 보낼 사진 보고':'Báo cáo ảnh cần gửi bằng điện thoại hôm nay', '알겠어요 (처음으로)':'Đã hiểu (về màn hình đầu)',
+  '아직 보내지 않은 보고가 있어요':'Còn báo cáo chưa gửi', '퇴근해도 괜찮아요. 지금 보내려면 눌러 주세요.':'Bạn vẫn có thể tan ca. Bấm vào để gửi ngay.',
+  '퇴근해도 괜찮아요. 휴대폰에서 사진을 보내 주세요.':'Bạn vẫn có thể tan ca. Hãy gửi ảnh bằng điện thoại.',
+  '그래도 퇴근하기':'Vẫn tan ca', '취소하고 처음으로':'Hủy và về màn hình đầu',
+  '확인 완료':'Đã duyệt', '확인 대기':'Chờ duyệt', '다시 요청함':'Yêu cầu làm lại', '마감 지남':'Quá hạn', '아직':'Chưa gửi', '다시 해 주세요':'Hãy làm lại',
+  '사진 {n}장 이상':'ít nhất {n} ảnh', '눌러서 지금 보내기':'Bấm để gửi ngay', '내 휴대폰 ‘오늘 할 일’에서 보내요':'Gửi trong “Việc hôm nay” trên điện thoại',
+  // 직원 휴대폰
+  '내 휴대폰 연결':'Kết nối điện thoại của tôi',
+  '처음 한 번만 이름을 고르고 개인 번호를 넣으면, 이 휴대폰에서는 계속 바로 들어와요.':'Chỉ cần chọn tên và nhập mã cá nhân một lần, lần sau điện thoại này sẽ vào thẳng.',
+  '휴대폰 출퇴근':'Chấm công bằng điện thoại', '출퇴근 때 쓰는 개인 번호 4자리':'Mã cá nhân 4 số dùng khi chấm công', '다른 이름 고르기':'Chọn tên khác',
+  '번호가 맞지 않아요. 다시 넣어 주세요':'Mã không đúng. Vui lòng nhập lại', '다른 사람':'Người khác', '오늘 할 일':'Việc hôm nay',
+  '사장님 확인 완료':'Chủ quán đã duyệt', '보냄 · 확인 기다리는 중':'Đã gửi · Đang chờ duyệt', '마감 지남 · 지금 보내기':'Quá hạn · Gửi ngay', '사진 보내기 전':'Chưa gửi ảnh',
+  '{t} 보냄':'đã gửi {t}', '오늘 할 일이 없어요':'Hôm nay không có việc', '사장님이 사진 보고 업무를 보내면 여기에 떠요.':'Khi chủ quán giao việc báo cáo ảnh, việc sẽ hiện ở đây.',
+  '공지가 없어요':'Không có thông báo', '출퇴근 기록을 불러오는 중이에요…':'Đang tải dữ liệu chấm công…',
+  '출퇴근은 가게 태블릿에서 찍어요':'Chấm công bằng máy tính bảng ở quán', '오늘 {a} 출근':'Hôm nay vào ca {a}', '오늘 {a} 출근, {b} 퇴근':'Hôm nay vào ca {a}, tan ca {b}',
+  '근무 중':'Đang làm', '{t} 출근':'Vào ca {t}', '{t} 출근 (휴대폰)':'Vào ca {t} (điện thoại)', '오늘 근무 끝':'Đã xong ca hôm nay', '{a} 출근 · {b} 퇴근':'Vào ca {a} · Tan ca {b}',
+  '휴무 처리':'Nghỉ', '출근 전':'Chưa vào ca', '외근 직원 · 휴대폰으로 출퇴근':'Nhân viên làm ngoài · chấm công bằng điện thoại', '외근 직원 · 휴대폰으로 출퇴근 · 얼굴 사진':'Nhân viên làm ngoài · chấm công bằng điện thoại · ảnh khuôn mặt',
+  '← 목록':'← Danh sách', '목록으로':'Về danh sách', '읽음으로 남았어요. 사장님 화면에서 볼 수 있어요.':'Đã ghi là đã đọc. Chủ quán có thể xem.',
+  '오늘은 보고하는 날이 아니에요 ({r}).':'Hôm nay không phải ngày báo cáo ({r}).', '보냈어요':'ĐÃ GỬI',
+  '사장님이 확인하면 ‘오늘 할 일’에 초록색으로 바뀌어요.':'Khi chủ quán duyệt, việc sẽ chuyển sang màu xanh trong “Việc hôm nay”.',
+  '사장님이 {t}에 확인했어요. 오늘 할 일 끝!':'Chủ quán đã duyệt lúc {t}. Xong việc hôm nay!', '사장님이 확인했어요. 오늘 할 일 끝!':'Chủ quán đã duyệt. Xong việc hôm nay!',
+  '{t}에 보냈어요. 사장님 확인을 기다리는 중이에요.':'Đã gửi lúc {t}. Đang chờ chủ quán duyệt.', '사장님이 다시 요청했어요.':'Chủ quán yêu cầu làm lại.',
+  '마감({t})이 지났어요. 지금이라도 찍어서 보내 주세요.':'Đã quá hạn ({t}). Hãy chụp và gửi ngay.',
+  '한 장 더 찍기':'Chụp thêm 1 ảnh', '사진 찍기':'Chụp ảnh', '한마디 (선택)':'Ghi chú (không bắt buộc)', '예) 오늘 홍합 3kg 손질했어요':'VD: Hôm nay đã sơ chế 3kg vẹm',
+  '다시 보내기':'Gửi lại', '사장님께 보내기':'Gửi cho chủ quán', '보내는 중…':'Đang gửi…', '사진 올리는 중 {i}/{n}':'Đang tải ảnh {i}/{n}',
+  '사진을 {n}장 이상 찍어야 보낼 수 있어요. 사진에 시각·이름·업무가 새겨져요.':'Cần chụp ít nhất {n} ảnh để gửi. Ảnh sẽ có giờ, tên và công việc.',
+  '보내지 못했어요':'Không gửi được', '인터넷을 확인하고 다시 눌러 주세요. 찍은 사진은 그대로 있어요.':'Hãy kiểm tra internet rồi bấm lại. Ảnh đã chụp vẫn còn.',
+  '다시 찍어 주세요.':'Vui lòng chụp lại.', '사진을 읽지 못했어요':'Không đọc được ảnh',
+  // 안내·오류 (토스트, 안내줄)
+  '출근 기록이 없어요':'Không có bản ghi vào ca', '사장님께 확인을 요청하세요.':'Hãy hỏi chủ quán.', '저장하지 못했어요':'Không lưu được',
+  '잠시 후 다시 시도해 주세요.':'Vui lòng thử lại sau.', '저장소에 연결되지 않았어요':'Chưa kết nối được máy chủ', '인터넷 연결을 확인하고 새로고침해 주세요.':'Hãy kiểm tra internet rồi tải lại trang.',
+  '기록을 불러오는 중이에요…':'Đang tải dữ liệu…', '저장소 응답을 기다리고 있어요. 인터넷 연결을 확인해 주세요.':'Đang chờ máy chủ phản hồi. Hãy kiểm tra kết nối internet.',
+  '인터넷이 끊겨 아직 서버에 보내지 못한 기록이 {n}건 있어요. 연결되면 자동으로 보내요. 이 기기를 끄거나 로그아웃하지 마세요.':'Mất internet, còn {n} bản ghi chưa gửi lên máy chủ. Khi có mạng sẽ tự gửi. Đừng tắt máy hoặc đăng xuất.',
+};
+const VI_DAYS = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+const VI_DAYS_S = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const staffScreen = () => S.mode === 'kiosk' || S.mode === 'phone';
+const isVi = () => S.lang === 'vi' && staffScreen();
+const fillT = (s, vars) => vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? esc(vars[k]) : m)) : s;
+function T(ko, vars){
+  const k = fillT(ko, vars);
+  if (!isVi() || !(ko in VI)) return k;
+  return `${fillT(VI[ko], vars)}<span class="kosub">${k}</span>`;
+}
+function TT(ko, vars){   // 글자만: 토스트·안내줄·aria·placeholder (esc 하지 않은 글자)
+  const raw = (s) => vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : s;
+  if (!isVi() || !(ko in VI)) return raw(ko);
+  return `${raw(VI[ko])} · ${raw(ko)}`;
+}
+const TV = (ko, vars) => isVi() && ko in VI ? fillT(VI[ko], vars) : fillT(ko, vars);   // 짧은 표시(뱃지 등): 베트남어만
+const BI = (koHtml, viHtml) => isVi() ? `${viHtml}<span class="kosub">${koHtml}</span>` : koHtml;
+const fmtHvi = min => { min = Math.max(0, Math.round(min||0)); const h = Math.floor(min/60), m = min%60; return m ? `${h} giờ ${m} phút` : `${h} giờ`; };
+const fmtDateK = ds => { if (!isVi()) return fmtDateLong(ds); const d = parseDate(ds); return `${VI_DAYS[d.getDay()]}, ${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}<span class="kosub">${fmtDateLong(ds)}</span>`; };
+// 사장님이 쓴 지시·공지: 베트남어 칸(titleVi/bodyVi)이 있으면 병기
+const taskTitle = t => isVi() && t.titleVi ? `${esc(t.titleVi)}<span class="kosub">${esc(t.title)}</span>` : esc(t.title);
+const taskBody = t => isVi() && t.bodyVi ? `${esc(t.bodyVi)}<span class="kosub kobody">${esc(t.body || '')}</span>` : esc(t.body || '');
+function langSwitch(){
+  return `<div class="seg langsw" role="group" aria-label="언어 Ngôn ngữ"><button data-act="lang" data-v="ko" class="${S.lang !== 'vi' ? 'on' : ''}" aria-pressed="${S.lang !== 'vi'}">한국어</button><button data-act="lang" data-v="vi" class="${S.lang === 'vi' ? 'on' : ''}" aria-pressed="${S.lang === 'vi'}" lang="vi">Tiếng Việt</button></div>`;
+}
 
 /* ===================== 근무 계산 ===================== */
 const WORKED = new Set(['done','working','extra']);
@@ -719,6 +849,7 @@ function beep(kind){
 }
 function initAudio(){ if (!S.audio){ try { S.audio = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } else if (S.audio.state === 'suspended') S.audio.resume().catch(()=>{}); }
 function toast(title, body, tone = 'info', ms = 8000){
+  if (isVi()){ title = TT(title); body = body ? TT(body) : body; }   // 직원 화면: 사전에 있는 안내는 베트남어 병기
   const el = document.createElement('div');
   el.className = 'toast ' + tone;
   el.innerHTML = `<b>${esc(title)}</b>${body ? `<span>${esc(body)}</span>` : ''}`;
@@ -956,15 +1087,16 @@ function attentionCount(){
 function renderTop(){
   const c = cfg(), owner = S.mode === 'owner' && S.unlocked, att = owner ? attentionCount() : 0;
   $('#top').innerHTML = `
-    <div class="brand"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? '출퇴근 화면' : S.mode === 'phone' ? '직원 휴대폰' : '사장님 화면'}</small></div></div>
+    <div class="brand"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? TV('출퇴근 화면') : S.mode === 'phone' ? TV('직원 휴대폰') : '사장님 화면'}</small></div></div>
     ${owner ? `<nav class="tabs">${TABS.map(([k, l]) => { const n = k === 'now' ? att : k === 'tasks' && S.ready.tasks ? trWaiting().length : 0; return `<button data-act="tab" data-v="${k}" class="${S.tab === k ? 'on' : ''}">${l}${n ? `<i class="badge">${n}</i>` : ''}</button>`; }).join('')}</nav>` : ''}
-    ${S.mode !== 'owner' ? `<button class="ghost" data-act="toOwner">사장님 화면</button>` : `<button class="ghost" data-act="toKiosk">${deviceMode() === 'phone' ? '직원 휴대폰 화면으로' : '출퇴근 화면으로'}</button>`}`;
+    ${S.mode !== 'owner' ? `${langSwitch()}<button class="ghost" data-act="toOwner">${TV('사장님 화면')}</button>` : `<button class="ghost" data-act="toKiosk">${deviceMode() === 'phone' ? '직원 휴대폰 화면으로' : '출퇴근 화면으로'}</button>`}`;
+  document.documentElement && (document.documentElement.lang = isVi() ? 'vi' : 'ko');
 }
 function renderBanner(){
   let msg = '';
   if (S.noDb) msg = '저장소에 연결되지 않았어요. 인터넷 연결을 확인하고 새로고침해 주세요. 계속 이러면 사장님께 알려 주세요.';
-  else if (S.connNote) msg = S.connNote;
-  else if (S.pending) msg = `인터넷이 끊겨 아직 서버에 보내지 못한 기록이 ${S.pending}건 있어요. 연결되면 자동으로 보내요. 이 기기를 끄거나 로그아웃하지 마세요.`;
+  else if (S.connNote) msg = TT(S.connNote);
+  else if (S.pending) msg = TT('인터넷이 끊겨 아직 서버에 보내지 못한 기록이 {n}건 있어요. 연결되면 자동으로 보내요. 이 기기를 끄거나 로그아웃하지 마세요.', { n:S.pending });
   $('#banner').textContent = msg;
 }
 const loadingNote = () => `<div class="empty">기록을 불러오는 중이에요…</div>`;
@@ -993,79 +1125,86 @@ function schedSummary(sched){
 /* ---------- 출퇴근 화면 (키오스크) ---------- */
 function kioskStatus(st, now){
   const today = todayStr(), op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
-  if (op) return { cls: op.lateMin ? 'late' : 'working', text:`출근 ${fmtT(op.in)} · 근무 중` };
-  if (tp && tp.out) return { cls:'done', text:`퇴근 ${fmtT(tp.out)}` };
-  if (tp && tp.kind === 'leave') return { cls:'', text:'오늘 휴무' };
-  if (sc) return { cls: now > at(today, sc.start) + cfg().graceMin*60000 ? 'wait' : '', text:`오늘 ${sc.start}–${sc.end}` };
-  return { cls:'', text: isRegularOff(st, today) ? '오늘 정기 휴무' : '오늘 근무 없음' };
+  // 이름 카드의 좁은 줄이라 베트남어 한 줄만 (TV)
+  if (op) return { cls: op.lateMin ? 'late' : 'working', text: TV('출근 {t} · 근무 중', { t:fmtT(op.in) }) };
+  if (tp && tp.out) return { cls:'done', text: TV('퇴근 {t}', { t:fmtT(tp.out) }) };
+  if (tp && tp.kind === 'leave') return { cls:'', text: TV('오늘 휴무') };
+  if (sc) return { cls: now > at(today, sc.start) + cfg().graceMin*60000 ? 'wait' : '', text: TV('오늘 {a}–{b}', { a:sc.start, b:sc.end }) };
+  return { cls:'', text: isRegularOff(st, today) ? TV('오늘 정기 휴무') : TV('오늘 근무 없음') };
 }
 function mySummary(st){
   const o = monthSummary(st, ymOf(todayStr()));
-  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">이번 달 내 근무 (자동 계산)</div>
-    일한 시간 <b>${fmtH(o.paid)}</b> · 결근 <b>${o.absentDays.length}일</b> · 지각 <b>${o.lateDays.length}회</b><br>
-    추가근무날 <b>${otDaysText(o)}</b>${o.ot ? ` · 추가근무시간 <b>${fmtH(o.ot)}</b>` : ''}</div>`;
+  const ko = `일한 시간 <b>${fmtH(o.paid)}</b> · 결근 <b>${o.absentDays.length}일</b> · 지각 <b>${o.lateDays.length}회</b><br>
+    추가근무날 <b>${otDaysText(o)}</b>${o.ot ? ` · 추가근무시간 <b>${fmtH(o.ot)}</b>` : ''}`;
+  const vi = `Giờ làm <b>${fmtHvi(o.paid)}</b> · Vắng <b>${o.absentDays.length} ngày</b> · Đi muộn <b>${o.lateDays.length} lần</b><br>
+    Ngày làm thêm <b>${o.otDays.length ? o.otDays.map(x => `${fmtMD(x.ds)}(${fmtHM(x.min)})`).join(', ') : 'không có'}</b>${o.ot ? ` · Giờ làm thêm <b>${fmtHvi(o.ot)}</b>` : ''}`;
+  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}</div>`;
 }
 function kioskView(){
   const k = S.kiosk, now = Date.now(), today = todayStr();
-  const clock = `<div class="kclock"><div class="kdate" id="kdate">${fmtDateLong(today)}</div><div class="ktime mono" id="ktime">${fmtClock(now)}</div></div>`;
+  const clock = `<div class="kclock"><div class="kdate" id="kdate">${fmtDateK(today)}</div><div class="ktime mono" id="ktime">${fmtClock(now)}</div></div>`;
   if (S.noDb) return clock + `<div class="empty"><b>기록을 저장할 수 없어요</b>위 안내처럼 인터넷 연결을 확인하고 새로고침해 주세요.</div>`;
   if (!S.ready.staff) return clock + loadingNote();
   const list = activeStaff();
   if (k.step === 'list'){
-    if (!list.length) return clock + `<div class="empty"><b>아직 등록된 직원이 없어요</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
-    return clock + pinBoard() + `<p class="khint">본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}</p>
-      <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length; return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${esc(st.position || '직원')}</small><em>${i.text}</em>${nn ? `<i class="nbadge">새 공지 ${nn}</i>` : ''}</button>`; }).join('')}</div>`;
+    if (!list.length) return clock + `<div class="empty"><b>${T('아직 등록된 직원이 없어요')}</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
+    const hint = BI(`본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}`,
+      `${VI['본인 이름을 누르고 개인 번호 4자리를 입력하세요']}${cfg().photo.on ? ' · ' + VI['📷 출퇴근할 때 얼굴 사진을 찍어요'] : ''}${cfg().geo.on ? ' · ' + VI['📍 위치도 함께 기록돼요'] : ''}`);
+    return clock + pinBoard() + `<p class="khint">${hint}</p>
+      <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length; return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${st.position ? esc(st.position) : TV('직원')}</small><em>${i.text}</em>${nn ? `<i class="nbadge">${TV('새 공지 {n}', { n:nn })}</i>` : ''}</button>`; }).join('')}</div>`;
   }
   const st = staffById(k.staffId);
   if (!st){ resetKiosk(); return kioskView(); }
-  if (k.step === 'pin') return clock + `<div class="kpanel ${k.err ? 'shake' : ''}">${pinPad(`${esc(st.name)}님`, '개인 번호 4자리를 입력하세요', k.pin, 'staff', k.err)}</div>`;
+  if (k.step === 'pin') return clock + `<div class="kpanel ${k.err ? 'shake' : ''}">${pinPad(TV('{name}님', { name:st.name }), T('개인 번호 4자리를 입력하세요'), k.pin, 'staff', k.err)}</div>`;
   if (k.step === 'action'){
     const op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
     let body;
     if (op){
       const r = dayCalc(st, op.date, now);
-      body = `<p>출근 ${fmtT(op.in)} · 지금까지 ${fmtH(r.worked)} 근무</p>${op.sched ? `<p>퇴근 예정 ${op.sched.end}</p>` : ''}
-        <button class="bigbtn out" data-act="kOut" ${k.busy ? 'disabled' : ''}>퇴근하기</button>`;
+      body = `<p>${BI(`출근 ${fmtT(op.in)} · 지금까지 ${fmtH(r.worked)} 근무`, fillT(VI['출근 {t} · 지금까지 {h} 근무'], { t:fmtT(op.in), h:fmtHvi(r.worked) }))}</p>${op.sched ? `<p>${T('퇴근 예정 {t}', { t:op.sched.end })}</p>` : ''}
+        <button class="bigbtn out" data-act="kOut" ${k.busy ? 'disabled' : ''}>${T('퇴근하기')}</button>`;
     } else if (tp && tp.out){
-      body = `<p>오늘은 ${fmtT(tp.in)} 출근, ${fmtT(tp.out)} 퇴근으로 이미 기록됐어요.<br>잘못됐다면 사장님께 수정을 요청하세요.</p>`;
+      body = `<p>${T('오늘은 {a} 출근, {b} 퇴근으로 이미 기록됐어요.', { a:fmtT(tp.in), b:fmtT(tp.out) })}${isVi() ? '' : '<br>'}${T('잘못됐다면 사장님께 수정을 요청하세요.')}</p>`;
     } else {
-      body = `<p>${sc ? `오늘 예정 ${sc.start}–${sc.end}` : (isRegularOff(st, today) ? '오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.' : '오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)')}</p>
-        <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>출근하기</button>`;
+      body = `<p>${sc ? T('오늘 예정 {a}–{b}', { a:sc.start, b:sc.end }) : (isRegularOff(st, today) ? T('오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.') : T('오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)'))}</p>
+        <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>${T('출근하기')}</button>`;
     }
-    return clock + `<div class="kpanel"><h2>${esc(st.name)}님</h2>${k.master ? '<p><span class="chip amber">사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요</span></p>' : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">처음으로</button></div>`;
+    return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>${k.master ? `<p><span class="chip amber">${TV('사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요')}</span></p>` : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
   }
   if (k.step === 'contract'){ const html = kioskContract(st); if (html) return html; resetKiosk(); return kioskView(); }
   if (['notices', 'remind', 'outwarn', 'end'].includes(k.step)) return kioskTaskStep(st, clock);   // 업무 지시·사진 보고
   if (k.step === 'photo'){
     const word = k.kind === 'in' ? '출근' : '퇴근', live = k.cam === 'live', fail = k.cam === 'fail';
-    return clock + `<div class="kpanel"><h2>${esc(st.name)}님 ${word} 사진</h2>
-      <p>${k.busy ? '저장하는 중이에요. 잠시만 기다려 주세요…' : '얼굴이 잘 보이게 화면을 봐 주세요'}</p>
-      ${fail ? `<p class="err">${esc(k.camErr)}${k.camErr.endsWith('요.') ? ' 아래 버튼으로 찍어 주세요.' : ''}</p>`
+    const camErr = k.camErr ? (k.camErr in VI ? T(k.camErr) : esc(k.camErr)) : '';
+    return clock + `<div class="kpanel"><h2>${T(`{name}님 ${word} 사진`, { name:st.name })}</h2>
+      <p>${k.busy ? T('저장하는 중이에요. 잠시만 기다려 주세요…') : T('얼굴이 잘 보이게 화면을 봐 주세요')}</p>
+      ${fail ? `<p class="err">${camErr}${k.camErr.endsWith('요.') ? ' ' + T('아래 버튼으로 찍어 주세요.') : ''}</p>`
         : `<div class="cam"><video id="camv" autoplay playsinline muted></video>
           <div class="camstamp"><b id="camtime">${fmtClock(now)}</b>${esc(cfg().storeName)} · ${esc(st.name)} · ${word}</div>
-          ${live ? '' : `<div class="cammsg">${k.busy ? '' : '카메라를 켜는 중…'}</div>`}</div>
-          ${k.camErr && live ? `<p class="err">${esc(k.camErr)}</p>` : ''}`}
-      ${live && !k.busy ? `<button class="bigbtn ${k.kind === 'out' ? 'out' : ''}" data-act="kSnap">찰칵! ${word}하기</button>` : ''}
-      ${fail && !k.busy ? `<label class="bigbtn filebtn ${k.kind === 'out' ? 'out' : ''}"><input type="file" id="camFile" accept="image/*" capture="user">카메라로 찍고 ${word}하기</label>
-        <button class="linkbtn" data-act="kNoPhoto">사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)</button>` : ''}
-      ${k.busy ? '' : '<button class="linkbtn" data-act="kCancel">처음으로</button>'}</div>`;
+          ${live ? '' : `<div class="cammsg">${k.busy ? '' : T('카메라를 켜는 중…')}</div>`}</div>
+          ${k.camErr && live ? `<p class="err">${camErr}</p>` : ''}`}
+      ${live && !k.busy ? `<button class="bigbtn ${k.kind === 'out' ? 'out' : ''}" data-act="kSnap">${T(`찰칵! ${word}하기`)}</button>` : ''}
+      ${fail && !k.busy ? `<label class="bigbtn filebtn ${k.kind === 'out' ? 'out' : ''}"><input type="file" id="camFile" accept="image/*" capture="user">${T(`카메라로 찍고 ${word}하기`)}</label>
+        <button class="linkbtn" data-act="kNoPhoto">${T(`사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)`)}</button>` : ''}
+      ${k.busy ? '' : `<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button>`}</div>`;
   }
   if (k.step === 'done'){
-    const res = k.result || {};
-    return clock + `<div class="kpanel"><h2>${esc(st.name)}님</h2>
-      <div class="stamp ${res.late ? 'red' : ''}">${res.kind === 'in' ? '출근' : res.kind === 'contract' ? '서명' : '퇴근'}<b>${fmtT(res.t)}</b></div>
-      <p class="${res.late ? 'err' : ''}">${res.msg || ''}</p>
-      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${res.photoErr ? `<p class="err">사진: ${esc(res.photoErr)} — 기록은 저장됐어요.</p>` : ''}${mySummary(st)}
-      ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? `새 공지 ${unreadFor(st).length}건 확인하기` : '오늘 할 일 보기'}</button><p class="hint">잠시 뒤 자동으로 넘어가요.</p>` : `<button class="linkbtn" data-act="kCancel">확인</button>`}</div>`;
+    const res = k.result || {}, pe = res.photoErr;
+    return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>
+      <div class="stamp ${res.late ? 'red' : ''}">${T(res.kind === 'in' ? '출근' : res.kind === 'contract' ? '서명' : '퇴근')}<b>${fmtT(res.t)}</b></div>
+      <p class="${res.late ? 'err' : ''}">${res.msgArgs ? T(...res.msgArgs) : res.kind === 'out' && res.worked != null ? BI(esc(res.msg), fillT(VI['오늘 {h} 근무했어요. 수고하셨어요!'], { h:fmtHvi(res.worked) })) : res.msg && res.msg in VI ? T(res.msg) : (res.msg || '')}</p>
+      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${mySummary(st)}
+      ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? T('새 공지 {n}건 확인하기', { n:unreadFor(st).length }) : T('오늘 할 일 보기')}</button><p class="hint">${T('잠시 뒤 자동으로 넘어가요.')}</p>` : `<button class="linkbtn" data-act="kCancel">${T('확인')}</button>`}</div>`;
   }
   return clock;
 }
 function pinPad(title, sub, val, ctx, err){
   const keys = ['1','2','3','4','5','6','7','8','9','back','0','cancel'];
+  const staff = ctx !== 'owner';   // 직원용 번호판만 베트남어 병기
   return `<h2>${title}</h2><p>${sub}</p>
     <div class="pindots">${[0,1,2,3].map(i => `<i class="${i < val.length ? 'on' : ''}"></i>`).join('')}</div>
-    ${err ? `<p class="err">${esc(err)}</p>` : ''}
-    <div class="pad">${keys.map(x => `<button data-act="pad" data-ctx="${ctx}" data-v="${x}" class="${x.length > 1 ? 'fn' : ''}">${x === 'back' ? '지우기' : x === 'cancel' ? '취소' : x}</button>`).join('')}</div>`;
+    ${err ? `<p class="err">${staff && err in VI ? T(err) : esc(err)}</p>` : ''}
+    <div class="pad">${keys.map(x => `<button data-act="pad" data-ctx="${ctx}" data-v="${x}" class="${x.length > 1 ? 'fn' : ''}">${x === 'back' ? (staff ? TV('지우기') : '지우기') : x === 'cancel' ? (staff ? TV('취소') : '취소') : x}</button>`).join('')}</div>`;
 }
 function resetKiosk(){
   stopCam();
@@ -1722,7 +1861,7 @@ table.ct{border-collapse:collapse;margin:6px 0;width:100%;font-size:12px}table.c
 const SIG = {};
 function sigPad(id, hint = '여기에 손가락으로 서명해 주세요'){
   return `<div class="sigwrap"><canvas id="${id}" class="sigpad" aria-label="${hint}"></canvas><span class="sighint">${hint}</span>
-    <button type="button" class="btn sm sigclr" data-act="sigClear" data-id="${id}">다시 쓰기</button></div>`;
+    <button type="button" class="btn sm sigclr" data-act="sigClear" data-id="${id}">${TV('다시 쓰기')}</button></div>`;
 }
 function initSigs(){ document.querySelectorAll?.('canvas.sigpad').forEach(c => initSig(c)); }
 function initSig(c){
@@ -1754,18 +1893,19 @@ function kioskContract(st){
   const k = S.kiosk, c = S.contracts.find(x => x.id === k.contractId);
   if (!c) return '';
   const e = c.emp || {};
-  return `<div class="kpanel wide"><h2>${esc(st.name)}님, 근로계약서 서명</h2>
-    <p>${k.result ? '출근이 기록됐어요. ' : ''}${c.prev ? '계약 내용이 바뀌어서 다시 서명이 필요해요.' : '아래 근로계약서를 끝까지 읽고 서명해 주세요.'}</p>
+  return `<div class="kpanel wide"><h2>${T('{name}님, 근로계약서 서명', { name:st.name })}</h2>
+    <p>${k.result ? T('출근이 기록됐어요.') + ' ' : ''}${c.prev ? T('계약 내용이 바뀌어서 다시 서명이 필요해요.') : T('아래 근로계약서를 끝까지 읽고 서명해 주세요.')}</p>
+    ${isVi() ? `<p class="err">${T('계약서는 한국어로 되어 있어요. 모르는 부분은 서명하기 전에 사장님께 물어보세요.')}</p>` : ''}
     <div class="contract cbox">${contractBody(c)}</div>
     <div class="form ksign">
-      <label>주소<input id="k-addr" value="${esc(e.addr || '')}" autocomplete="street-address"></label>
-      <label>연락처<input id="k-phone" value="${esc(e.phone || '')}" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>
-      <label class="full">이메일 (계약서 사본 받을 곳, 선택)<input id="k-email" value="${esc(e.email || '')}" inputmode="email" autocomplete="email"></label>
-      <label class="check full"><input type="checkbox" id="k-agree"> 위 근로계약서 내용을 모두 읽었고 이에 동의합니다</label>
+      <label>${T('주소')}<input id="k-addr" value="${esc(e.addr || '')}" autocomplete="street-address"></label>
+      <label>${T('연락처')}<input id="k-phone" value="${esc(e.phone || '')}" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>
+      <label class="full">${T('이메일 (계약서 사본 받을 곳, 선택)')}<input id="k-email" value="${esc(e.email || '')}" inputmode="email" autocomplete="email"></label>
+      <label class="check full"><input type="checkbox" id="k-agree"> <span>${T('위 근로계약서 내용을 모두 읽었고 이에 동의합니다')}</span></label>
     </div>
-    ${sigPad('sig-emp')}
-    <button class="bigbtn" data-act="kSign" ${k.busy ? 'disabled' : ''}>${k.busy ? '저장하는 중…' : '서명하고 제출하기'}</button>
-    <button class="linkbtn" data-act="kSignLater">다음에 할게요</button></div>`;
+    ${sigPad('sig-emp', TV('여기에 손가락으로 서명해 주세요'))}
+    <button class="bigbtn" data-act="kSign" ${k.busy ? 'disabled' : ''}>${k.busy ? T('저장하는 중…') : T('서명하고 제출하기')}</button>
+    <button class="linkbtn" data-act="kSignLater">${T('다음에 할게요')}</button></div>`;
 }
 async function kioskSign(){
   const k = S.kiosk, c = S.contracts.find(x => x.id === k.contractId);
@@ -2523,7 +2663,7 @@ function trRow(t, ds){
 function taskItem(t){
   const list = assignees(t), unread = list.filter(st => !isRead(t, st)), del = S.confirmTDel === t.id;
   return `<div class="titem ${t.active === false ? 'off' : ''}">
-    <div class="ttop"><b>${esc(t.title)}</b><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.pinned ? '<span class="chip red">📌 첫 화면 고정</span>' : ''}${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
+    <div class="ttop"><b>${esc(t.title)}</b><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.pinned ? '<span class="chip red">📌 첫 화면 고정</span>' : ''}${t.titleVi || t.bodyVi ? '<span class="chip faint" title="베트남어 내용 있음">🇻🇳</span>' : ''}${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
     ${t.body ? `<p>${esc(t.body)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}
     <div class="small muted">${esc(targetText(t))} · ${t.kind === 'task' ? `${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''} · 사진 ${t.minPhotos || 1}장 이상 · ` : ''}읽음 ${list.length - unread.length}/${list.length}${unread.length ? ` (${esc(unread.map(s => s.name).join(', '))} 안 읽음)` : ''}</div>
@@ -2532,7 +2672,7 @@ function taskItem(t){
       : `<button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button>${t.kind === 'notice' ? `<button class="btn sm" data-act="trPinToggle" data-id="${esc(t.id)}">${t.pinned ? '첫 화면에서 내리기' : '📌 첫 화면에 고정'}</button>` : ''}<button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
   </div>`;
 }
-function freshTForm(){ return { kind:'task', title:'', body:'', refPhotos:[], target:{ mode:'all', ids:[] }, repeat:'daily', days:[], due:'15:00', minPhotos:1, pinned:false, uploading:false }; }
+function freshTForm(){ return { kind:'task', title:'', body:'', titleVi:'', bodyVi:'', refPhotos:[], target:{ mode:'all', ids:[] }, repeat:'daily', days:[], due:'15:00', minPhotos:1, pinned:false, uploading:false }; }
 // 공지 예시 문구 (사장님이 고쳐서 올려요). 법적인 효력은 근로계약서·취업규칙과 노무사 확인이 필요해요.
 const NOTICE_TEMPLATES = {
   attendance: { title:'지각·결근 규정 안내', body:
@@ -2550,7 +2690,23 @@ const NOTICE_TEMPLATES = {
  - 부득이한 사정이 있으면 반드시 출근 시각 전에 사장님께 연락해 주세요.
  - 미리 연락하고 허락받은 경우는 무단으로 보지 않습니다.
 
-출퇴근 시각은 타임카드에 자동으로 기록됩니다. 모두 협조 부탁드립니다.` },
+출퇴근 시각은 타임카드에 자동으로 기록됩니다. 모두 협조 부탁드립니다.`,
+    titleVi:'Thông báo quy định đi muộn, nghỉ làm', bodyVi:
+`Gửi các bạn nhân viên, để mọi người cùng làm việc trong sự tin tưởng, quán xin thông báo quy định làm việc như sau.
+
+1. Đi muộn không báo trước
+ - Đến muộn hơn giờ vào ca đã định mà không báo trước được xem là đi muộn không phép.
+ - Nếu đi muộn không phép 3 lần, bạn có thể bị cho nghỉ việc.
+
+2. Nghỉ làm không báo trước
+ - Không đến làm mà không báo trước được xem là nghỉ không phép.
+ - Nếu nghỉ không phép 2 lần, bạn có thể bị cho nghỉ việc.
+
+3. Khi phải đến muộn hoặc xin nghỉ
+ - Nếu có việc bất khả kháng, nhất định phải liên lạc với chủ quán trước giờ vào ca.
+ - Trường hợp đã báo trước và được chủ quán đồng ý thì không bị xem là không phép.
+
+Giờ vào ca và tan ca được ghi tự động trên máy chấm công. Mong mọi người hợp tác.` },
 };
 function taskForm(){
   const f = S.tform, pos = positions();
@@ -2561,6 +2717,10 @@ function taskForm(){
     <div class="row small muted">예시 문구: <button type="button" class="btn sm" data-act="trTpl" data-v="attendance">지각·결근 규정</button></div>` : ''}
     <label class="f" for="trTitle">제목<input type="text" id="trTitle" value="${esc(f.title)}" placeholder="예) 그린홍합 손질 확인" maxlength="60"></label>
     <label class="f" for="trBody">내용<textarea id="trBody" placeholder="예) 앞으로 그린홍합을 깨끗이 씻고 촉수를 제거해서 사진으로 보내 주세요.">${esc(f.body)}</textarea></label>
+    <details class="vibox" ${f.titleVi || f.bodyVi ? 'open' : ''}><summary>🇻🇳 베트남어로도 쓰기 (선택) — 직원 화면을 Tiếng Việt로 보면 베트남어가 먼저 보여요</summary>
+      <label class="f" for="trTitleVi">베트남어 제목<input type="text" id="trTitleVi" lang="vi" value="${esc(f.titleVi)}" placeholder="VD: Kiểm tra sơ chế vẹm xanh" maxlength="80"></label>
+      <label class="f" for="trBodyVi">베트남어 내용<textarea id="trBodyVi" lang="vi" placeholder="VD: Hãy rửa sạch vẹm xanh, bỏ râu rồi chụp ảnh gửi.">${esc(f.bodyVi)}</textarea></label>
+      <p class="hint">비워 두면 직원 화면에 한국어만 보여요. 번역기(파파고 등)로 옮긴 문장을 붙여 넣어도 돼요.</p></details>
     <div class="f"><span>참고 사진 (리뷰 캡처 등, 4장까지)</span>
       <div class="drop" id="trDrop">캡처 사진을 여기에 끌어다 놓거나 <b>붙여넣기(Ctrl+V)</b> 하세요<br>
         <label class="btn sm filebtn" style="margin-top:8px">사진 고르기<input type="file" id="trFile" accept="image/*" multiple></label></div>
@@ -2591,6 +2751,7 @@ function readTForm(){
   f.kind = val('input[name=tkind]:checked') || 'task';
   f.title = $('#trTitle')?.value ?? f.title; f.body = $('#trBody')?.value ?? f.body;
   f.pinned = f.kind === 'notice' && !!$('#trPin')?.checked;
+  f.titleVi = $('#trTitleVi')?.value ?? f.titleVi; f.bodyVi = $('#trBodyVi')?.value ?? f.bodyVi;
   const tg = val('input[name=tgt]:checked') || 'all';
   f.target = tg === 'all' ? { mode:'all', ids:[] } : tg === 'staff' ? { mode:'staff', ids: all('input[name=tids]:checked') } : { mode:'pos', pos: tg.slice(4), ids:[] };
   if (f.kind === 'task'){
@@ -2607,7 +2768,7 @@ async function saveTask(){
   if (f.target.mode === 'staff' && !f.target.ids.length){ toast('담당 직원을 골라 주세요', '', 'warn'); return; }
   if (f.kind === 'task' && f.repeat === 'days' && !f.days.length){ toast('요일을 골라 주세요', '', 'warn'); return; }
   const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const doc = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), refPhotos:f.refPhotos, target:f.target, active:true, createdAt:Date.now(), start:todayStr(),
+  const doc = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), titleVi:(f.titleVi || '').trim(), bodyVi:(f.bodyVi || '').trim(), refPhotos:f.refPhotos, target:f.target, active:true, createdAt:Date.now(), start:todayStr(),
     ...(f.kind === 'task' ? { repeat:f.repeat, days:f.days, due:f.due, minPhotos:f.minPhotos } : { pinned: !!f.pinned }) };
   await write(() => S.db.collection('tasks').doc(id).set(doc));
   toast(f.kind === 'task' ? '지시를 보냈어요' : doc.pinned ? '공고를 첫 화면에 올렸어요' : '공지를 올렸어요', doc.title, 'ok');
@@ -2630,13 +2791,23 @@ const pinnedNotices = st => liveTasks().filter(t => t.kind === 'notice' && t.pin
 function pinBoard(st){
   const list = pinnedNotices(st);
   if (!list.length) return '';
-  return `<section class="pinboard" aria-label="공고">${list.map(t => `<article class="pin">
-    <div class="pinhead"><span class="chip red">📌 공고</span><b>${esc(t.title)}</b><span class="small muted">${fmtMD(ymd(new Date(t.createdAt || Date.now())))}</span></div>
-    ${t.body ? `<p class="${S.pinOpen?.has(t.id) ? '' : 'clamp'}">${esc(t.body)}</p>` : ''}
-    ${t.body && (t.body.split('\n').length > 4 || t.body.length > 160) ? `<button class="linkbtn" style="justify-self:start;padding:0" data-act="pinMore" data-id="${esc(t.id)}">${S.pinOpen?.has(t.id) ? '접기' : '전체 보기'}</button>` : ''}
+  return `<section class="pinboard" aria-label="공고">${list.map(t => { const body = isVi() && t.bodyVi ? t.bodyVi : t.body; return `<article class="pin">
+    <div class="pinhead"><span class="chip red">${TV('📌 공고')}</span><b>${taskTitle(t)}</b><span class="small muted">${fmtMD(ymd(new Date(t.createdAt || Date.now())))}</span></div>
+    ${body ? `<p class="${S.pinOpen?.has(t.id) ? '' : 'clamp'}">${S.pinOpen?.has(t.id) ? taskBody(t) : esc(body)}</p>` : ''}
+    ${body && (body.split('\n').length > 4 || body.length > 160 || (isVi() && t.bodyVi)) ? `<button class="linkbtn" style="justify-self:start;padding:0" data-act="pinMore" data-id="${esc(t.id)}">${S.pinOpen?.has(t.id) ? TV('접기') : TV('전체 보기')}</button>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
-  </article>`).join('')}</section>`;
+  </article>`; }).join('')}</section>`;
 }
+// 직원 화면용 담당·반복·마감 (베트남어 병기). 사장님 화면은 targetText / repeatText 그대로
+const dmVi = ds => { const d = parseDate(ds); return `${d.getDate()}/${d.getMonth()+1}`; };
+const repeatVi = t => t.repeat === 'daily' ? 'Hằng ngày' : t.repeat === 'days' ? ((t.days || []).length ? WEEK_ORDER.filter(d => t.days.includes(d)).map(d => VI_DAYS_S[d]).join('·') : 'Chưa chọn thứ') : `Chỉ ngày ${dmVi(t.start || todayStr())}`;
+function targetS(t){
+  const tg = t.target || { mode:'all' };
+  if (tg.mode === 'pos') return T('{pos} 전체', { pos:tg.pos });
+  if (tg.mode === 'staff'){ const n = assignees(t).map(s => s.name).join(', '); return n ? esc(n) : T('담당 없음'); }
+  return T('전체 직원');
+}
+const kindChip = t => `<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${TV(t.kind === 'task' ? '사진 보고 업무' : '공지')}</span>`;
 
 // ----- 태블릿·휴대폰 출퇴근 흐름에 끼워 넣기 -----
 // 출근 도장 → (2.5초 뒤) 안 읽은 공지 → 오늘 휴대폰으로 보낼 사진 보고 → 처음 / 퇴근: 안 보낸 보고 안내(막지 않음) → 퇴근
@@ -2644,18 +2815,19 @@ function kNextStep(st){ return !st ? null : unreadFor(st).length ? 'notices' : t
 function noticeCard(t, st){
   const list = assignees(t), read = list.filter(s => isRead(t, s)).length;
   return `<article class="ncard">
-    <div class="row"><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고 업무' : '공지'}</span><span class="small muted">${esc(targetText(t))}</span></div>
-    <h3>${esc(t.title)}</h3>
-    ${t.body ? `<p>${esc(t.body)}</p>` : ''}
+    <div class="row">${kindChip(t)}<span class="small muted">${targetS(t)}</span></div>
+    <h3>${taskTitle(t)}</h3>
+    ${t.body || t.bodyVi ? `<p>${taskBody(t)}</p>` : ''}
     ${(t.refPhotos || []).map((p, i) => trImg(p, `참고 사진 ${i + 1}`, 'ref')).join('')}
-    <footer>${t.kind === 'task' ? `<span class="chip amber">📷 ${esc(repeatText(t))}${t.due ? ` ${t.due}까지` : ''} 휴대폰으로 사진 보고</span>` : ''}${st ? (isRead(t, st) ? '<span class="chip ok" style="margin-left:auto">읽음</span>' : `<button class="btn okb" data-act="trReadOne" data-id="${esc(t.id)}" style="margin-left:auto">확인했어요</button>`) : `<span style="margin-left:auto">읽음 ${read}/${list.length}</span>`}</footer>
+    <footer>${t.kind === 'task' ? `<span class="chip amber">${BI(esc(`📷 ${repeatText(t)}${t.due ? ` ${t.due}까지` : ''} 휴대폰으로 사진 보고`), esc(`📷 ${repeatVi(t)}${t.due ? ` trước ${t.due}` : ''} báo cáo ảnh bằng điện thoại`))}</span>` : ''}${st ? (isRead(t, st) ? `<span class="chip ok" style="margin-left:auto">${TV('읽음')}</span>` : `<button class="btn okb" data-act="trReadOne" data-id="${esc(t.id)}" style="margin-left:auto">${T('확인했어요')}</button>`) : `<span style="margin-left:auto">${TV('읽음')} ${read}/${list.length}</span>`}</footer>
   </article>`;
 }
 function trCards(st, list, act){
   return `<div class="pcards">${list.map(t => { const x = trStatus(t, st, todayStr()), [cls, label] = TR_STATUS[x.s];
-    const tag = act ? 'button' : 'div';
-    return `<${tag} class="pcard" ${act ? `data-act="${act}" data-id="${esc(t.id)}"` : ''}><div class="ttop"><b>${esc(t.title)}</b><span class="chip ${cls}">${x.s === 'redo' ? '다시 해 주세요' : label}</span></div>
-      <div class="sub">📷 ${t.due ? `${t.due}까지 · ` : ''}사진 ${t.minPhotos || 1}장 이상 · ${act ? '눌러서 지금 보내기' : '내 휴대폰 ‘오늘 할 일’에서 보내요'}</div>
+    const tag = act ? 'button' : 'div', n = t.minPhotos || 1;
+    return `<${tag} class="pcard" ${act ? `data-act="${act}" data-id="${esc(t.id)}"` : ''}><div class="ttop"><b>${taskTitle(t)}</b><span class="chip ${cls}">${TV(x.s === 'redo' ? '다시 해 주세요' : label)}</span></div>
+      <div class="sub">${BI(esc(`📷 ${t.due ? `${t.due}까지 · ` : ''}사진 ${n}장 이상 · ${act ? '눌러서 지금 보내기' : '내 휴대폰 ‘오늘 할 일’에서 보내요'}`),
+        esc(`📷 ${t.due ? `trước ${t.due} · ` : ''}ít nhất ${n} ảnh · ${act ? 'Bấm để gửi ngay' : 'Gửi trong “Việc hôm nay” trên điện thoại'}`))}</div>
       ${x.s === 'redo' && x.r?.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</${tag}>`; }).join('')}</div>`;
 }
 // kioskView에서 부르는 단계: notices / remind / outwarn
@@ -2664,21 +2836,21 @@ function kioskTaskStep(st, clock){
   if (k.step === 'notices'){
     const unread = unreadFor(st);
     if (!unread.length){ k.step = todayTasksFor(st).length ? 'remind' : 'end'; return kioskTaskStep(st, clock); }
-    return clock + `<div class="kpanel wide"><h2>${esc(st.name)}님, 새 공지 ${unread.length}건</h2>
-      <p>읽고 [확인했어요]를 눌러 주세요. 사장님 화면에 ‘읽음’으로 남아요.</p>
+    return clock + `<div class="kpanel wide"><h2>${T('{name}님, 새 공지 {n}건', { name:st.name, n:unread.length })}</h2>
+      <p>${T('읽고 [확인했어요]를 눌러 주세요. 사장님 화면에 ‘읽음’으로 남아요.')}</p>
       <div class="ncards">${unread.map(t => noticeCard(t, st)).join('')}</div>
-      <button class="bigbtn" data-act="trReadAll">모두 확인했어요</button></div>`;
+      <button class="bigbtn" data-act="trReadAll">${T('모두 확인했어요')}</button></div>`;
   }
   if (k.step === 'remind'){
     const list = todayTasksFor(st);
     if (!list.length){ k.step = 'end'; return kioskTaskStep(st, clock); }
-    return clock + `<div class="kpanel"><h2>오늘 휴대폰으로 보낼 사진 보고</h2>${trCards(st, list, phone ? 'phOpen' : '')}
-      <button class="bigbtn" data-act="kCancel">${phone ? '오늘 할 일 보기' : '알겠어요 (처음으로)'}</button></div>`;
+    return clock + `<div class="kpanel"><h2>${T('오늘 휴대폰으로 보낼 사진 보고')}</h2>${trCards(st, list, phone ? 'phOpen' : '')}
+      <button class="bigbtn" data-act="kCancel">${phone ? T('오늘 할 일 보기') : T('알겠어요 (처음으로)')}</button></div>`;
   }
   if (k.step === 'outwarn'){
-    return clock + `<div class="kpanel"><h2>아직 보내지 않은 보고가 있어요</h2>
-      <p>퇴근해도 괜찮아요. ${phone ? '지금 보내려면 눌러 주세요.' : '휴대폰에서 사진을 보내 주세요.'}</p>${trCards(st, unsentFor(st), phone ? 'phOpen' : '')}
-      <button class="bigbtn out" data-act="kOutGo" ${k.busy ? 'disabled' : ''}>그래도 퇴근하기</button><button class="linkbtn" data-act="kCancel">취소하고 처음으로</button></div>`;
+    return clock + `<div class="kpanel"><h2>${T('아직 보내지 않은 보고가 있어요')}</h2>
+      <p>${phone ? T('퇴근해도 괜찮아요. 지금 보내려면 눌러 주세요.') : T('퇴근해도 괜찮아요. 휴대폰에서 사진을 보내 주세요.')}</p>${trCards(st, unsentFor(st), phone ? 'phOpen' : '')}
+      <button class="bigbtn out" data-act="kOutGo" ${k.busy ? 'disabled' : ''}>${T('그래도 퇴근하기')}</button><button class="linkbtn" data-act="kCancel">${T('취소하고 처음으로')}</button></div>`;
   }
   resetKiosk(); return phone ? phoneView() : kioskView();
 }
@@ -2696,66 +2868,70 @@ function phoneView(){
   if (P.open) return `<div class="phone tr">${phoneTask(me, taskById(P.open))}</div>`;
   const ds = todayStr(), mine = mineAll(me), todo = todayTasksFor(me), unread = unreadFor(me).length;
   const lab = { ok:'사장님 확인 완료', sent:'보냄 · 확인 기다리는 중', redo:'다시 해 주세요', late:'마감 지남 · 지금 보내기', todo:'사진 보내기 전' };
+  const short = s => s.length > 60 ? s.slice(0, 60) + '…' : s;
   return `<div class="phone tr">
-    <div class="phead"><span class="mark">IN</span><div><b>${esc(me.name)}님</b><div class="small muted">${fmtDateLong(ds)}${me.position ? ` · ${esc(me.position)}` : ''}</div></div><button class="linkbtn" data-act="phSwitch">다른 사람</button></div>
+    <div class="phead"><span class="mark">IN</span><div><b>${TV('{name}님', { name:me.name })}</b><div class="small muted">${me.position ? `${esc(me.position)} · ` : ''}${fmtDateK(ds)}</div></div><button class="linkbtn" data-act="phSwitch">${TV('다른 사람')}</button></div>
     ${pinBoard(me)}
     ${phonePunchCard(me)}
     <div class="ptabs" role="tablist">
-      <button role="tab" aria-selected="${P.tab === 'tasks'}" data-act="phTab" data-v="tasks">오늘 할 일 ${todo.length ? `(${todo.length})` : ''}</button>
-      <button role="tab" aria-selected="${P.tab === 'notices'}" data-act="phTab" data-v="notices">공지 ${unread ? '<span class="rdot" aria-label="안 읽음"></span>' : ''}</button>
+      <button role="tab" aria-selected="${P.tab === 'tasks'}" data-act="phTab" data-v="tasks">${TV('오늘 할 일')} ${todo.length ? `(${todo.length})` : ''}</button>
+      <button role="tab" aria-selected="${P.tab === 'notices'}" data-act="phTab" data-v="notices">${TV('공지')} ${unread ? '<span class="rdot" aria-label="안 읽음"></span>' : ''}</button>
     </div>
     ${P.tab === 'tasks'
-      ? (todo.length ? todo.map(t => { const x = trStatus(t, me, ds), [cls] = TR_STATUS[x.s];
-          return `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${esc(t.title)}</b><span class="chip ${cls}">${lab[x.s]}</span></div><div class="sub">${t.due ? `${t.due}까지 · ` : ''}사진 ${t.minPhotos || 1}장 이상${x.r?.sentAt ? ` · ${fmtT(x.r.sentAt)} 보냄` : ''}</div>${x.s === 'redo' && x.r.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</button>`; }).join('')
-        : `<div class="empty"><b>오늘 할 일이 없어요</b>사장님이 사진 보고 업무를 보내면 여기에 떠요.</div>`)
-      : (mine.length ? mine.map(t => `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${esc(t.title)}</b>${isRead(t, me) ? '' : '<span class="rdot" aria-label="안 읽음"></span>'}<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span></div>${t.body ? `<div class="sub">${esc(t.body.length > 60 ? t.body.slice(0, 60) + '…' : t.body)}</div>` : ''}</button>`).join('')
-        : `<div class="empty"><b>공지가 없어요</b></div>`)}
+      ? (todo.length ? todo.map(t => { const x = trStatus(t, me, ds), [cls] = TR_STATUS[x.s], n = t.minPhotos || 1, sent = x.r?.sentAt ? fmtT(x.r.sentAt) : '';
+          return `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${taskTitle(t)}</b><span class="chip ${cls}">${TV(lab[x.s])}</span></div><div class="sub">${BI(esc(`${t.due ? `${t.due}까지 · ` : ''}사진 ${n}장 이상${sent ? ` · ${sent} 보냄` : ''}`), esc(`${t.due ? `trước ${t.due} · ` : ''}ít nhất ${n} ảnh${sent ? ` · đã gửi ${sent}` : ''}`))}</div>${x.s === 'redo' && x.r.ownerNote ? `<div class="quote red">${esc(x.r.ownerNote)}</div>` : ''}</button>`; }).join('')
+        : `<div class="empty"><b>${T('오늘 할 일이 없어요')}</b>${T('사장님이 사진 보고 업무를 보내면 여기에 떠요.')}</div>`)
+      : (mine.length ? mine.map(t => `<button class="pcard" data-act="phOpen" data-id="${esc(t.id)}"><div class="ttop"><b>${taskTitle(t)}</b>${isRead(t, me) ? '' : '<span class="rdot" aria-label="안 읽음"></span>'}<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${TV(t.kind === 'task' ? '사진 보고' : '공지')}</span></div>${t.body || t.bodyVi ? `<div class="sub">${esc(short(isVi() && t.bodyVi ? t.bodyVi : t.body))}</div>` : ''}</button>`).join('')
+        : `<div class="empty"><b>${T('공지가 없어요')}</b></div>`)}
   </div>`;
 }
 const phoneCanPunch = st => !!(st && st.phonePunch && st.active !== false);
 function phonePunchCard(me){
   const today = todayStr(), op = openPunch(me), tp = getPunch(me.id, today);
-  if (!S.monthLoaded[ymOf(today)]) return `<div class="punch muted-card"><span class="small">출퇴근 기록을 불러오는 중이에요…</span></div>`;
+  if (!S.monthLoaded[ymOf(today)]) return `<div class="punch muted-card"><span class="small">${T('출퇴근 기록을 불러오는 중이에요…')}</span></div>`;
   if (!phoneCanPunch(me)){
-    return `<div class="punch muted-card"><span class="small">출퇴근은 <b>가게 태블릿</b>에서 찍어요${tp?.in ? ` · 오늘 ${fmtT(tp.in)} 출근${tp.out ? `, ${fmtT(tp.out, today)} 퇴근` : ''}` : ''}</span></div>`;
+    const a = tp?.in ? fmtT(tp.in) : '', b = tp?.out ? fmtT(tp.out, today) : '';
+    return `<div class="punch muted-card"><span class="small">${BI(`출퇴근은 <b>가게 태블릿</b>에서 찍어요${a ? ` · 오늘 ${a} 출근${b ? `, ${b} 퇴근` : ''}` : ''}`,
+      `Chấm công bằng <b>máy tính bảng ở quán</b>${a ? ` · Hôm nay vào ca ${a}${b ? `, tan ca ${b}` : ''}` : ''}`)}</span></div>`;
   }
-  if (op) return `<div class="punch on"><div><b>근무 중</b><div class="small muted">${fmtT(op.in)} 출근${op.inVia === 'phone' ? ' (휴대폰)' : ''}</div></div><button class="btn big" style="background:var(--ink);color:var(--card);border-color:var(--ink)" data-act="phOut">퇴근하기</button></div>`;
-  if (tp && (tp.out || tp.kind === 'leave')) return `<div class="punch done"><div><b>오늘 근무 끝</b><div class="small muted">${tp.in ? `${fmtT(tp.in)} 출근 · ${fmtT(tp.out, today)} 퇴근` : '휴무 처리'}</div></div></div>`;
-  return `<div class="punch"><div><b>출근 전</b><div class="small muted">외근 직원 · 휴대폰으로 출퇴근${cfg().photo.on ? ' · 얼굴 사진' : ''}</div></div><button class="btn pri big" data-act="phIn">출근하기</button></div>`;
+  if (op) return `<div class="punch on"><div><b>${T('근무 중')}</b><div class="small muted">${op.inVia === 'phone' ? T('{t} 출근 (휴대폰)', { t:fmtT(op.in) }) : T('{t} 출근', { t:fmtT(op.in) })}</div></div><button class="btn big" style="background:var(--ink);color:var(--card);border-color:var(--ink)" data-act="phOut">${TV('퇴근하기')}</button></div>`;
+  if (tp && (tp.out || tp.kind === 'leave')) return `<div class="punch done"><div><b>${T('오늘 근무 끝')}</b><div class="small muted">${tp.in ? T('{a} 출근 · {b} 퇴근', { a:fmtT(tp.in), b:fmtT(tp.out, today) }) : T('휴무 처리')}</div></div></div>`;
+  return `<div class="punch"><div><b>${T('출근 전')}</b><div class="small muted">${T(cfg().photo.on ? '외근 직원 · 휴대폰으로 출퇴근 · 얼굴 사진' : '외근 직원 · 휴대폰으로 출퇴근')}</div></div><button class="btn pri big" data-act="phIn">${TV('출근하기')}</button></div>`;
 }
 function phoneConnect(){
   const P = S.phone, pick = P.pickId ? staffById(P.pickId) : null;
-  if (!pick) return `<h2 style="font-size:20px">내 휴대폰 연결</h2><p class="small muted" style="margin:0">처음 한 번만 이름을 고르고 개인 번호를 넣으면, 이 휴대폰에서는 계속 바로 들어와요.</p>
-    <div class="who">${activeStaff().map(s => `<button data-act="phPick" data-id="${esc(s.id)}"><b>${esc(s.name)}</b><small>${esc(s.position || '직원')}${s.phonePunch ? ' · 휴대폰 출퇴근' : ''}</small></button>`).join('') || '<div class="empty">아직 등록된 직원이 없어요</div>'}</div>`;
-  return `<div class="kpanel ${P.err ? 'shake' : ''}">${pinPad(`${esc(pick.name)}님`, '출퇴근 때 쓰는 개인 번호 4자리', P.pin, 'phone', P.err)}
-    <button class="linkbtn" data-act="phPickBack">다른 이름 고르기</button></div>`;
+  if (!pick) return `<h2 style="font-size:20px">${T('내 휴대폰 연결')}</h2><p class="small muted" style="margin:0">${T('처음 한 번만 이름을 고르고 개인 번호를 넣으면, 이 휴대폰에서는 계속 바로 들어와요.')}</p>
+    <div class="who">${activeStaff().map(s => `<button data-act="phPick" data-id="${esc(s.id)}"><b>${esc(s.name)}</b><small>${s.position ? esc(s.position) : TV('직원')}${s.phonePunch ? ` · ${TV('휴대폰 출퇴근')}` : ''}</small></button>`).join('') || `<div class="empty">${T('아직 등록된 직원이 없어요')}</div>`}</div>`;
+  return `<div class="kpanel ${P.err ? 'shake' : ''}">${pinPad(TV('{name}님', { name:pick.name }), T('출퇴근 때 쓰는 개인 번호 4자리'), P.pin, 'phone', P.err)}
+    <button class="linkbtn" data-act="phPickBack">${T('다른 이름 고르기')}</button></div>`;
 }
 function phoneTask(me, t){
   const P = S.phone;
   if (!t){ P.open = null; S.editing = null; return phoneView(); }
   const ds = todayStr(), x = t.kind === 'task' ? trStatus(t, me, ds) : null, min = t.minPhotos || 1;
-  const head = `<div class="phead"><button class="btn sm" data-act="phBack">← 목록</button></div>
-    <h2 style="font-size:22px">${esc(t.title)}</h2>
-    <div class="row"><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고 업무' : '공지'}</span>${t.kind === 'task' ? `<span class="small muted">${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''}</span>` : ''}</div>
-    ${t.body ? `<p style="margin:0;white-space:pre-wrap">${esc(t.body)}</p>` : ''}
+  const head = `<div class="phead"><button class="btn sm" data-act="phBack">${TV('← 목록')}</button></div>
+    <h2 style="font-size:22px">${taskTitle(t)}</h2>
+    <div class="row">${kindChip(t)}${t.kind === 'task' ? `<span class="small muted">${BI(esc(`${repeatText(t)}${t.due ? ` · ${t.due}까지` : ''}`), esc(`${repeatVi(t)}${t.due ? ` · trước ${t.due}` : ''}`))}</span>` : ''}</div>
+    ${t.body || t.bodyVi ? `<p style="margin:0;white-space:pre-wrap">${taskBody(t)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="photos">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}`;
-  if (t.kind !== 'task') return head + `<div class="quote green">읽음으로 남았어요. 사장님 화면에서 볼 수 있어요.</div><button class="bigbtn ghost sm" data-act="phBack">목록으로</button>`;
-  if (!appliesOn(t, ds)) return head + `<div class="quote">오늘은 보고하는 날이 아니에요 (${esc(repeatText(t))}).</div><button class="bigbtn ghost sm" data-act="phBack">목록으로</button>`;
-  if (P.step === 'done') return head + `<div class="stamp"><b>${fmtT(Date.now())}</b>보냈어요</div><p class="small muted" style="text-align:center;margin:0">사장님이 확인하면 ‘오늘 할 일’에 초록색으로 바뀌어요.</p><button class="bigbtn ghost sm" data-act="phBack">목록으로</button>`;
+  const back = `<button class="bigbtn ghost sm" data-act="phBack">${T('목록으로')}</button>`;
+  if (t.kind !== 'task') return head + `<div class="quote green">${T('읽음으로 남았어요. 사장님 화면에서 볼 수 있어요.')}</div>${back}`;
+  if (!appliesOn(t, ds)) return head + `<div class="quote">${BI(esc(`오늘은 보고하는 날이 아니에요 (${repeatText(t)}).`), esc(`Hôm nay không phải ngày báo cáo (${repeatVi(t)}).`))}</div>${back}`;
+  if (P.step === 'done') return head + `<div class="stamp"><b>${fmtT(Date.now())}</b>${T('보냈어요')}</div><p class="small muted" style="text-align:center;margin:0">${T('사장님이 확인하면 ‘오늘 할 일’에 초록색으로 바뀌어요.')}</p>${back}`;
   const r = x.r;
   let state = '';
-  if (x.s === 'ok') state = `<div class="quote green">사장님이 ${r.checkedAt ? fmtT(r.checkedAt) + '에 ' : ''}확인했어요. 오늘 할 일 끝!</div>`;
-  else if (x.s === 'sent') state = `<div class="quote">${fmtT(r.sentAt)}에 보냈어요. 사장님 확인을 기다리는 중이에요.</div>`;
-  else if (x.s === 'redo') state = `<div class="quote red"><b>다시 해 주세요</b><br>${esc(r.ownerNote || '사장님이 다시 요청했어요.')}</div>`;
-  else if (x.s === 'late') state = `<div class="quote red">마감(${esc(t.due)})이 지났어요. 지금이라도 찍어서 보내 주세요.</div>`;
+  if (x.s === 'ok') state = `<div class="quote green">${r.checkedAt ? T('사장님이 {t}에 확인했어요. 오늘 할 일 끝!', { t:fmtT(r.checkedAt) }) : T('사장님이 확인했어요. 오늘 할 일 끝!')}</div>`;
+  else if (x.s === 'sent') state = `<div class="quote">${T('{t}에 보냈어요. 사장님 확인을 기다리는 중이에요.', { t:fmtT(r.sentAt) })}</div>`;
+  else if (x.s === 'redo') state = `<div class="quote red"><b>${T('다시 해 주세요')}</b>${isVi() ? '' : '<br>'}${r.ownerNote ? esc(r.ownerNote) : T('사장님이 다시 요청했어요.')}</div>`;
+  else if (x.s === 'late') state = `<div class="quote red">${T('마감({t})이 지났어요. 지금이라도 찍어서 보내 주세요.', { t:t.due })}</div>`;
   const sent = r && x.s !== 'redo' ? `<div class="photos">${(r.photos || []).map((p, i) => trImg(p, `보낸 사진 ${i + 1}`)).join('')}</div>` : '';
   const canSend = P.shots.length >= min && !P.busy;
   const capture = x.s === 'ok' ? '' : `
     <div class="shots">${P.shots.map((s, i) => `<div class="shot"><img src="${s.url}" alt="찍은 사진 ${i + 1}"><button data-act="phShotDel" data-i="${i}" aria-label="이 사진 빼기" ${P.busy ? 'disabled' : ''}>✕</button></div>`).join('')}</div>
-    ${P.shots.length < 4 ? `<label class="bigbtn ghost sm filebtn">📷 ${P.shots.length ? '한 장 더 찍기' : '사진 찍기'}<input type="file" id="trCam" accept="image/*" capture="environment" ${P.busy ? 'disabled' : ''}></label>` : ''}
-    <label class="f" for="trNote">한마디 (선택)<textarea id="trNote" placeholder="예) 오늘 홍합 3kg 손질했어요" ${P.busy ? 'disabled' : ''}>${esc(P.note)}</textarea></label>
-    <button class="bigbtn sm" data-act="phSend" ${canSend ? '' : 'disabled'}>${P.busy ? esc(P.step || '보내는 중…') : x.s === 'sent' ? '다시 보내기' : '사장님께 보내기'}</button>
-    ${P.shots.length < min ? `<p class="hint" style="text-align:center">사진을 ${min}장 이상 찍어야 보낼 수 있어요. 사진에 시각·이름·업무${me.geoExempt || me.phonePunch ? '·외근' : ''}이 새겨져요.</p>` : ''}`;
+    ${P.shots.length < 4 ? `<label class="bigbtn ghost sm filebtn"><span>📷 ${P.shots.length ? T('한 장 더 찍기') : T('사진 찍기')}</span><input type="file" id="trCam" accept="image/*" capture="environment" ${P.busy ? 'disabled' : ''}></label>` : ''}
+    <label class="f" for="trNote">${T('한마디 (선택)')}<textarea id="trNote" placeholder="${esc(TV('예) 오늘 홍합 3kg 손질했어요'))}" ${P.busy ? 'disabled' : ''}>${esc(P.note)}</textarea></label>
+    <button class="bigbtn sm" data-act="phSend" ${canSend ? '' : 'disabled'}>${P.busy ? (P.stepT ? T(...P.stepT) : T('보내는 중…')) : x.s === 'sent' ? T('다시 보내기') : T('사장님께 보내기')}</button>
+    ${P.shots.length < min ? `<p class="hint" style="text-align:center">${BI(esc(`사진을 ${min}장 이상 찍어야 보낼 수 있어요. 사진에 시각·이름·업무${me.geoExempt || me.phonePunch ? '·외근' : ''}이 새겨져요.`), esc(fillT(VI['사진을 {n}장 이상 찍어야 보낼 수 있어요. 사진에 시각·이름·업무가 새겨져요.'], { n:min })))}</p>` : ''}`;
   return head + state + sent + capture;
 }
 function clearShots(){ S.phone.shots.forEach(s => URL.revokeObjectURL(s.url)); S.phone.shots = []; }
@@ -2775,8 +2951,8 @@ async function phoneSend(){
   const ds = todayStr(), key = trKey(t.id, me.id, ds), prev = getRep(t.id, me.id, ds);
   try {
     const ids = [];
-    for (let i = 0; i < P.shots.length; i++){ P.step = `사진 올리는 중 ${i + 1}/${P.shots.length}`; render(true); ids.push(await uploadWork(P.shots[i].blob, 'w_')); }
-    P.step = '보내는 중…'; render(true);
+    for (let i = 0; i < P.shots.length; i++){ P.step = `사진 올리는 중 ${i + 1}/${P.shots.length}`; P.stepT = ['사진 올리는 중 {i}/{n}', { i:i + 1, n:P.shots.length }]; render(true); ids.push(await uploadWork(P.shots[i].blob, 'w_')); }
+    P.step = '보내는 중…'; P.stepT = ['보내는 중…']; render(true);
     await trRef(ds, key).set({ taskId:t.id, staffId:me.id, date:ds, photos:ids, note:P.note, sentAt:Date.now(), status:'sent',
       ownerNote: prev?.ownerNote || '', round:(prev?.round || 0) + 1, oldPhoto: P.shots.some(s => s.old), via:'phone' });
     clearShots(); P.note = ''; P.step = 'done';
@@ -2784,7 +2960,7 @@ async function phoneSend(){
   } catch (e){
     P.step = '';
     toast('보내지 못했어요', e?.code === 'no_assets' ? e.message : '인터넷을 확인하고 다시 눌러 주세요. 찍은 사진은 그대로 있어요.', 'warn');
-  } finally { P.busy = false; render(true); }
+  } finally { P.busy = false; P.stepT = null; render(true); }
 }
 
 const TRACT = {
@@ -2796,9 +2972,9 @@ const TRACT = {
   trTpl(d){   // 예시 문구 넣기 (공고로 고정까지 켬)
     const t = NOTICE_TEMPLATES[d.v]; if (!t || !S.tform) return;
     readTForm();
-    if ((S.tform.title || S.tform.body) && !S.confirmTpl){ S.confirmTpl = true; toast('쓰던 내용이 있어요', '예시 문구로 바꾸려면 한 번 더 눌러 주세요.', 'warn'); setTimeout(() => { S.confirmTpl = false; }, 5000); return; }
+    if ((S.tform.title || S.tform.body || S.tform.bodyVi) && !S.confirmTpl){ S.confirmTpl = true; toast('쓰던 내용이 있어요', '예시 문구로 바꾸려면 한 번 더 눌러 주세요.', 'warn'); setTimeout(() => { S.confirmTpl = false; }, 5000); return; }
     S.confirmTpl = false;
-    Object.assign(S.tform, { kind:'notice', title:t.title, body:t.body, pinned:true, target:{ mode:'all', ids:[] } });
+    Object.assign(S.tform, { kind:'notice', title:t.title, body:t.body, titleVi:t.titleVi || '', bodyVi:t.bodyVi || '', pinned:true, target:{ mode:'all', ids:[] } });
     render(true);
     toast('예시 문구를 넣었어요', '가게 사정에 맞게 고친 뒤 ‘공지 올리기’를 눌러 주세요.', 'ok');
   },
@@ -2879,6 +3055,7 @@ document.addEventListener('paste', e => { if (S.mode !== 'owner' || !S.tform) re
 /* ===================== 동작 ===================== */
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
+  lang(d){ S.lang = d.v === 'vi' ? 'vi' : 'ko'; store.set('lang', S.lang); render(true); },
   toOwner(){ S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },
   toKiosk(){ S.mode = deviceMode(); S.editing = null; S.unlocked = false; resetKiosk(); store.set('mode', S.mode); render(true); requestWake(); scrollTo(0, 0); },
   // 사장님 화면 '업무 보고' → 이 기기를 직원 휴대폰 화면으로 (직원 휴대폰에서 한 번만)
@@ -3081,7 +3258,8 @@ async function kioskPunch(kind, shot){
       const ph = await photoFields('in', shot);
       await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}), ...(geo ? { inGeo:geo } : {}), ...(S.mode === 'phone' ? { inVia:'phone' } : {}) }));
       k.didIn = true;   // 출근 도장 다음에 새 공지·오늘 할 일로 넘어감
-      k.result = { kind:'in', t:now, late, photoErr: shot?.blob && !ph.inPhoto ? ph.inPhotoNote : '', msg: late ? `예정 ${sc.start}보다 ${late}분 늦었어요. 사장님께 알림이 갔어요.` : sc ? `오늘 퇴근 예정 ${sc.end} · 좋은 하루 보내세요!` : '추가 근무로 기록했어요.' };
+      k.result = { kind:'in', t:now, late, photoErr: shot?.blob && !ph.inPhoto ? ph.inPhotoNote : '', msg: late ? `예정 ${sc.start}보다 ${late}분 늦었어요. 사장님께 알림이 갔어요.` : sc ? `오늘 퇴근 예정 ${sc.end} · 좋은 하루 보내세요!` : '추가 근무로 기록했어요.',
+        msgArgs: late ? ['예정 {a}보다 {n}분 늦었어요. 사장님께 알림이 갔어요.', { a:sc.start, n:late }] : sc ? ['오늘 퇴근 예정 {t} · 좋은 하루 보내세요!', { t:sc.end }] : ['추가 근무로 기록했어요.'] };
       mailPunch(st, 'in', now, { late, sc, blob: shot?.blob, master: k.master, geo });
       const need = await contractNeeded(st);
       if (need){ k.contractId = need.id; k.nextStep = 'contract'; }
@@ -3091,7 +3269,7 @@ async function kioskPunch(kind, shot){
       const ph = await photoFields('out', shot);
       await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}), ...(geo ? { outGeo:geo } : {}), ...(S.mode === 'phone' ? { outVia:'phone' } : {}) }));
       const r = dayCalc(st, op.date, now);
-      k.result = { kind:'out', t:now, late:false, photoErr: shot?.blob && !ph.outPhoto ? ph.outPhotoNote : '', msg:`오늘 ${fmtH(r.worked)} 근무했어요. 수고하셨어요!` };
+      k.result = { kind:'out', t:now, late:false, photoErr: shot?.blob && !ph.outPhoto ? ph.outPhotoNote : '', msg:`오늘 ${fmtH(r.worked)} 근무했어요. 수고하셨어요!`, worked:r.worked };
       mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master, geo });
     }
     k.step = k.nextStep || 'done'; k.nextStep = null; k.at = Date.now(); beep('ok');

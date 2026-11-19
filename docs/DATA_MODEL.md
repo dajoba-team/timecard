@@ -58,6 +58,7 @@
 | `due`, `minPhotos` | 마감 시각 `HH:MM`, 필요한 사진 수 |
 | `active`, `start`, `createdAt` | 켜짐 여부(멈추기), 시작 날짜, 만든 시각 |
 | `pinned` | 공지만: `true`면 가게 태블릿·직원 휴대폰 첫 화면에 고정 (공고, v21) |
+| `titleVi`, `bodyVi` | 베트남어 제목·내용 (선택, v22). 직원 화면을 Tiếng Việt로 보면 베트남어가 먼저, 한국어가 아래 작게 |
 
 ## months/{ym}/task_reports/{taskId}_{staffId}_{date} (업무 사진 보고)
 
@@ -145,6 +146,6 @@
 
 ## 기기에만 남는 값 (브라우저 localStorage, 앞에 `tc.`)
 
-`mode`(출퇴근/직원 휴대폰/사장님 화면), `device`(`kiosk` 가게 태블릿 / `phone` 직원 휴대폰), `phoneStaff`(이 휴대폰에 연결된 직원), `tab`, `sound`, `ownerDevice`(이 기기 기억하기), `notified`, `mailed`(오늘 띄운 알림), `workClean`(업무 사진 정리한 날)
+`mode`(출퇴근/직원 휴대폰/사장님 화면), `lang`(`ko` / `vi` 직원 화면 언어), `device`(`kiosk` 가게 태블릿 / `phone` 직원 휴대폰), `phoneStaff`(이 휴대폰에 연결된 직원), `tab`, `sound`, `ownerDevice`(이 기기 기억하기), `notified`, `mailed`(오늘 띄운 알림), `workClean`(업무 사진 정리한 날)
 
 storage.js가 쓰는 값: `tc_pending_v1`(서버에 아직 못 보낸 쓰기 목록), `sb-…-auth-token`(Supabase 로그인 정보)
