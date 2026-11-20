@@ -444,6 +444,10 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .myscore .msrow small{display:block;color:var(--muted);font-size:11px}
 .myscore .msrow b{font-family:var(--f-mono);font-size:22px}
 .reacts{display:grid;gap:6px;border-top:1px dashed var(--line);padding-top:10px;text-align:left}
+.lvbar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:6px 0 4px}
+.lvbar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),var(--green));border-radius:99px;transition:width .4s}
+.lvhead{display:flex;align-items:center;gap:8px;font-size:17px}
+.lvhead .lvicon{font-size:28px;line-height:1}
 .otbit{display:grid;gap:8px;margin-top:12px}
 .otline{border-radius:10px;padding:8px 10px;background:var(--soft);font-size:14px;text-align:left}
 .otline.approved{background:var(--green-soft)}
@@ -650,6 +654,7 @@ const VI = {
   '예) 모두 고마워요! 다음 달도 열심히 할게요 🙏':'VD: Cảm ơn mọi người! Tháng sau mình sẽ cố gắng tiếp 🙏', '예) 내가 더 일찍 왔는데? 😤':'VD: Tôi đến sớm hơn mà? 😤',
   '🙅 도전장을 보냈어요!':'🙅 Đã gửi lời thách đấu!', '🎉 소감을 남겼어요':'🎉 Đã để lại cảm nghĩ',
   // 추가근무 요청·보고 (v27)
+  '점수는 나의 성실함 기록이에요. 이달의 우수직원은 이 기록과 사장님 평가(업무태도 등)를 함께 보고 정해요.':'Điểm là nhật ký chăm chỉ của bạn. Nhân viên xuất sắc của tháng được chọn dựa trên điểm này cùng đánh giá của chủ quán (thái độ làm việc…).',
   '⏱ 추가근무 요청':'⏱ Xin làm thêm giờ', '⏱ 추가근무 다시 요청':'⏱ Xin làm thêm lại', '사장님':'Chủ quán', '돌아가기':'Quay lại',
   '✅ 추가근무 승인됨 · 퇴근 {t}':'✅ Đã duyệt làm thêm · Tan ca {t}', '✅ 추가근무 {h} 인정됐어요':'✅ Đã công nhận làm thêm {h}',
   '❌ 추가근무 요청이 거절됐어요 · 정해진 시간에 퇴근해 주세요':'❌ Yêu cầu làm thêm bị từ chối · Vui lòng tan ca đúng giờ', '❌ 추가근무가 인정되지 않았어요':'❌ Giờ làm thêm không được công nhận',
@@ -1288,11 +1293,11 @@ function mySummary(st){
     일찍 출근 <b>${early.length ? `${early.length}일` : '없음'}</b>${early.length ? ` (${eShow.map(x => `${fmtMD(x.ds)} ${minKo(x.min)}`).join(', ')}${eMore ? ` 외 ${eMore}일` : ''}) · 합계 <b>${minKo(eMin)}</b>` : ''}`;
   const vi = `Giờ làm <b>${fmtHvi(o.paid)}</b> · Vắng <b>${o.absentDays.length} ngày</b> · Đi muộn <b>${o.lateDays.length} lần</b><br>
     Đến sớm <b>${early.length ? `${early.length} ngày` : 'không có'}</b>${early.length ? ` (${eShow.map(x => `${dmVi(x.ds)} ${minVi(x.min)}`).join(', ')}${eMore ? ` và ${eMore} ngày khác` : ''}) · Tổng <b>${minVi(eMin)}</b>` : ''}`;
-  if (!awardOn(ymOf(todayStr()))) return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}</div>`;   // 우수직원 선발을 안 하는 달은 점수 줄 없음
-  const sc = scoreMonth(st, ymOf(todayStr()));   // 이달의 우수직원 점수 (본인 것만)
-  const ko2 =`⭐ 이번 달 점수 <b>${num(sc.total)}점</b> · 달성률 <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak}일</b> 연속 정시 출근` : ''}`;
-  const vi2 = `⭐ Điểm tháng này <b>${num(sc.total)}</b> · Tỷ lệ <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak} ngày</b> liên tiếp đúng giờ` : ''}`;
-  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}<div style="margin-top:6px">${BI(ko2, vi2)}</div></div>`;
+  // 내 점수·레벨은 우수직원 선발을 켰는지와 상관없이 늘 보여 줌 (v31, 동기 부여용 · 본인 것만)
+  const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total);
+  const ko2 = `⭐ 이번 달 점수 <b>${num(sc.total)}점</b> · ${lv.icon} <b>Lv.${lv.n} ${lv.ko}</b> · 달성률 <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak}일</b> 연속 정시 출근` : ''}`;
+  const vi2 = `⭐ Điểm tháng này <b>${num(sc.total)}</b> · ${lv.icon} <b>Lv.${lv.n} ${lv.vi}</b> · Tỷ lệ <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak} ngày</b> liên tiếp đúng giờ` : ''}`;
+  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}<div style="margin-top:6px">${BI(ko2, vi2)}</div>${levelBar(lv)}</div>`;
 }
 function kioskView(){
   const k = S.kiosk, now = Date.now(), today = todayStr();
@@ -1347,8 +1352,8 @@ function kioskView(){
     const res = k.result || {}, pe = res.photoErr;
     return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>
       <div class="stamp ${res.late ? 'red' : ''}">${T(res.kind === 'in' ? '출근' : res.kind === 'contract' ? '서명' : '퇴근')}<b>${fmtT(res.t)}</b></div>
-      ${res.kind === 'in' && !res.late && awardOn(ymOf(todayStr())) ? `<p class="plus">${TV('+{n}점', { n:SCORE.onTime })}${(() => { const s = scoreMonth(st, ymOf(todayStr())).streak; return s >= 2 ? ` · ${TV('🔥 {n}일 연속 정시 출근', { n:s })}` : ''; })()}</p>` : ''}
-      ${res.kind === 'out' && res.worked != null && awardOn(ymOf(todayStr())) ? `<p class="plus">${TV('+{n}점', { n:SCORE.done })}</p>` : ''}
+      ${res.kind === 'in' && !res.late ? `<p class="plus">${TV('+{n}점', { n:SCORE.onTime })}${(() => { const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total); return `${sc.streak >= 2 ? ` · ${TV('🔥 {n}일 연속 정시 출근', { n:sc.streak })}` : ''} · ${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
+      ${res.kind === 'out' && res.worked != null ? `<p class="plus">${TV('+{n}점', { n:SCORE.done })} · ${(() => { const lv = levelOf(scoreMonth(st, ymOf(todayStr())).total); return `${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
       <p class="${res.late ? 'err' : ''}">${res.msgArgs ? T(...res.msgArgs) : res.kind === 'out' && res.worked != null ? BI(esc(res.msg), fillT(VI['오늘 {h} 근무했어요. 수고하셨어요!'], { h:fmtHvi(res.worked) })) : res.msg && res.msg in VI ? T(res.msg) : (res.msg || '')}</p>
       ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${mySummary(st)}
       ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? T('새 공지 {n}건 확인하기', { n:unreadFor(st).length }) : T('오늘 할 일 보기')}</button><p class="hint">${T('잠시 뒤 자동으로 넘어가요.')}</p>` : `<button class="linkbtn" data-act="kCancel">${T('확인')}</button>`}</div>`;
@@ -3307,6 +3312,17 @@ function scoreMonth(st, ym, now = Date.now()){
 }
 const pct = r => r == null ? '—' : `${Math.floor(r * 1000) / 10}%`;
 const badgeOf = r => r == null ? '' : r >= 0.95 ? '🥇' : r >= 0.85 ? '🥈' : r >= 0.7 ? '🥉' : '';
+// 직원 화면 재미 요소 (v31): 이번 달 점수로 레벨 — 매달 1일에 새싹부터 다시 시작. 다른 직원과 비교하는 순위가 아니라 내 성장 기록
+// [시작 점수, 그림, 한국어, 베트남어] — 한 달 꼬박 정시 출근·퇴근(약 22일 × 15점 = 330점) 하면 에이스 근처
+const LEVELS = [[0, '🌱', '새싹', 'Mầm non'], [50, '🌿', '성실 잎새', 'Lá chăm chỉ'], [100, '🌳', '든든 나무', 'Cây vững chắc'], [180, '⭐', '반짝 스타', 'Ngôi sao sáng'], [270, '🏅', '에이스', 'Át chủ bài'], [380, '👑', '전설', 'Huyền thoại']];
+function levelOf(total){
+  let i = 0;
+  LEVELS.forEach((l, k) => { if ((total || 0) >= l[0]) i = k; });
+  const [from, icon, ko, vi] = LEVELS[i], next = LEVELS[i + 1];
+  return { n:i + 1, icon, ko, vi, next, need: next ? next[0] - total : 0, pct: next ? Math.min(1, Math.max(0, (total - from) / (next[0] - from))) : 1 };
+}
+const levelBar = lv => `<div class="lvbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(lv.pct * 100)}"><i style="width:${Math.round(lv.pct * 100)}%"></i></div>
+  <div class="small muted">${lv.next ? BI(`다음 단계 ${lv.next[1]} ${lv.next[2]}까지 <b>${num(lv.need)}점</b>`, `Còn <b>${num(lv.need)} điểm</b> nữa lên ${lv.next[1]} ${lv.next[3]}`) : BI('👑 최고 단계예요! 이대로 쭉~', '👑 Cấp cao nhất rồi! Cứ thế phát huy nhé~')}</div>`;
 // 업무태도 가중치 (v30, 사장님만 보고 정함): 점수 항목에 없는 태도·성실함을 달마다 직원별로. 감점 없이 1.0~1.3배
 // config.award.att = { 'YYYY-MM': { 직원id: 1.1 } }. 최종 점수 = 달성률 × 100 × 가중치 → 이 점수로 순위·추천
 const ATT_LEVELS = [[1, '보통 ×1.0'], [1.1, '좋음 ×1.1'], [1.2, '아주 좋음 ×1.2'], [1.3, '최고 ×1.3']];
@@ -3363,10 +3379,10 @@ function awardView(){
   const on = awardOn(ym);
   const toggle = `<section class="panel awtoggle"><div class="row" style="align-items:center;gap:8px"><b>${m}월 우수직원 선발</b><span class="chip ${on ? 'ok' : 'faint'}">${on ? '진행해요' : '안 해요'}</span><span class="spacer"></span>
       ${aw ? '<span class="small muted">확정했어요</span>' : `<button class="btn sm ${on ? '' : 'pri'}" role="switch" aria-checked="${on}" data-act="awMonthToggle">${on ? '이 달은 안 하기' : '이 달 진행하기'}</button>`}</div>
-      <p class="hint" style="margin:6px 0 0">켜 둔 달만 직원 화면에 점수·달성률이 보이고, 월말에 우수직원을 정해요. 켜지 않은 달은 선발하지 않아요.</p></section>`;
+      <p class="hint" style="margin:6px 0 0">켜 둔 달만 월말에 우수직원을 뽑아요 (점수 + 사장님 판단). 직원 화면의 내 점수·레벨·연속 출근은 선발과 상관없이 늘 보여요 (본인 것만, 순위는 안 보임).</p></section>`;
   const pastPanel = pastAwards.length ? `<section class="panel"><h3>지난 우수직원</h3><div class="slist">${pastAwards.map(([k, a]) => `<div class="sitem"><div><b>${fmtYM(k)}</b> · ${esc(a.name || '')} 🏆<div class="sub">달성률 ${pct(a.rate)} · ${won(a.amount)}${a.paidAt ? ' · 지급 완료' : ' · <span style="color:var(--amber)">지급 전</span>'}</div></div></div>`).join('')}</div></section>` : '';
   if (!on) return `<div class="sec-head"><h2>🏆 이달의 우수직원</h2>${monthNav()}</div>
-  <div class="cols"><div class="stack">${toggle}<section class="panel"><h3>🏆 ${m}월 이달의 우수직원</h3><p class="muted" style="margin:0">이 달은 우수직원 선발을 하지 않아요. 직원 화면(태블릿·휴대폰)에도 점수가 보이지 않아요.<br>진행하려면 위의 <b>[이 달 진행하기]</b>를 눌러 주세요. 그달 처음부터의 기록으로 점수를 계산해요.</p></section></div>
+  <div class="cols"><div class="stack">${toggle}<section class="panel"><h3>🏆 ${m}월 이달의 우수직원</h3><p class="muted" style="margin:0">이 달은 우수직원 선발을 하지 않아요. 직원 화면의 내 점수·레벨은 평소처럼 보여요.<br>진행하려면 위의 <b>[이 달 진행하기]</b>를 눌러 주세요. 그달 처음부터의 기록으로 점수를 계산해요.</p></section></div>
     <div class="stack">${pastPanel}</div></div>`;
   return `<div class="sec-head"><h2>🏆 이달의 우수직원</h2>${monthNav()}</div>
   <div class="cols">
@@ -3436,7 +3452,7 @@ const AWACT = {
     const ym = S.month, on = !awardOn(ym), months = { ...(cfg().award.months || {}) };
     if (on) months[ym] = true; else delete months[ym];
     await write(() => S.db.doc('config/main').set({ ...S.config, award:{ ...cfg().award, months } }));
-    toast(on ? `${fmtYM(ym)} 우수직원 선발을 진행해요` : `${fmtYM(ym)}은 우수직원 선발을 안 해요`, on ? '직원 화면에 점수·달성률이 보여요.' : '직원 화면에서 점수가 사라져요.', 'ok');
+    toast(on ? `${fmtYM(ym)} 우수직원 선발을 진행해요` : `${fmtYM(ym)}은 우수직원 선발을 안 해요`, on ? '월말에 점수와 업무태도를 보고 정해요.' : '직원 화면의 점수·레벨은 그대로 보여요.', 'ok');
     S.awForm = null; render(true);
   },
   async awPaid(){ await write(() => S.db.doc('awards/' + S.month).update({ paidAt:Date.now() })); toast('지급 완료로 표시했어요', '', 'ok'); render(true); },
@@ -3480,15 +3496,16 @@ document.addEventListener('input', e => { if (['awAmount', 'awNote'].includes(e.
 function myScoreCard(st){
   const ym = ymOf(todayStr()), prevYm = shiftYM(ym, -1), last = S.awards[prevYm];
   const banner = last ? `<div class="awbanner">${T('🏆 {m}월 이달의 우수직원', { m:+prevYm.slice(5) })} · <b>${esc(last.name || '')}</b>${last.staffId === st.id ? ` 🎉 ${T('축하해요!')}` : ''}</div>` : '';
-  if (!awardOn(ym)) return banner ? `<section class="myscore">${banner}</section>` : '';   // 이번 달은 선발 안 함: 지난달 우수직원만
-  const o = scoreMonth(st, ym), badge = badgeOf(o.rate);
+  const o = scoreMonth(st, ym), badge = badgeOf(o.rate), lv = levelOf(o.total);   // 선발을 켰는지와 상관없이 늘 보여 줌 (v31)
   return `<section class="myscore">
     ${banner}
+    <div class="lvhead"><span class="lvicon">${lv.icon}</span><div><b>${BI(`Lv.${lv.n} ${lv.ko}`, `Lv.${lv.n} ${lv.vi}`)}</b></div></div>
+    ${levelBar(lv)}
     <div class="msrow"><div><small>${T('이번 달 달성률')}</small><b>${pct(o.rate)}</b> ${badge}</div><div><small>${T('이번 달 점수')}</small><b>${num(o.total)}</b></div><div><small>${T('🔥 연속 정시 출근')}</small><b>${o.streak}</b></div></div>
     <div class="small muted">${BI(`정시 출근 ${o.att.ontime}일 · 업무 보고 ${o.task.sent + o.task.late}건 · 공지 확인 ${o.read}건${o.b.praise ? ` · ⭐ 칭찬 +${o.b.praise}` : ''}`,
       `Đúng giờ ${o.att.ontime} ngày · Báo cáo ${o.task.sent + o.task.late} · Đọc thông báo ${o.read}${o.b.praise ? ` · ⭐ Khen +${o.b.praise}` : ''}`)}</div>
     ${S.praise.filter(x => x.staffId === st.id && x.ym === ym).slice(-3).map(x => `<div class="small">⭐ +${x.pts} · ${isVi() && x.noteVi ? `${esc(x.noteVi)}<span class="kosub">${esc(x.note || '')}</span>` : esc(x.note || '')}</div>`).join('')}
-    <div class="small muted">${T('달성률이 가장 높은 직원이 이달의 우수직원이 돼요. 감점은 없어요.')}</div>
+    <div class="small muted">${T('점수는 나의 성실함 기록이에요. 이달의 우수직원은 이 기록과 사장님 평가(업무태도 등)를 함께 보고 정해요.')}</div>
   </section>`;
 }
 

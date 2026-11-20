@@ -80,9 +80,14 @@ S.trSubs['2026-11'] = () => {}; S.trSubs['2026-10'] = () => {}; S.monthSubs['202
   S.mode = 'owner'; S.unlocked = true; S.tab = 'award'; render(true);
   assert.ok(view.innerHTML.includes('이 달은 우수직원 선발을 하지 않아요') && view.innerHTML.includes('data-act="awMonthToggle"') && !view.innerHTML.includes('추천:') && !view.innerHTML.includes('awDecide'), '꺼진 달: 켜기 버튼만');
   S.mode = 'phone'; S.phone.staffId = 'a'; resetKiosk(); render(true);
-  assert.ok(!view.innerHTML.includes('이번 달 달성률') && !view.innerHTML.includes('이번 달 점수'), '꺼진 달: 직원 휴대폰에 점수 없음');
+  // v31: 선발을 꺼도 직원 화면의 내 점수·레벨·연속 출근은 늘 보임 (동기 부여, 본인 것만)
+  assert.ok(view.innerHTML.includes('이번 달 달성률') && view.innerHTML.includes('이번 달 점수') && view.innerHTML.includes('class="lvbar"') && view.innerHTML.includes('Lv.6 전설'), '꺼진 달에도 직원 휴대폰에 내 점수·레벨 (395점 → 전설)');
+  assert.ok(view.innerHTML.includes('사장님 평가(업무태도 등)를 함께 보고') && !view.innerHTML.includes('달성률이 가장 높은 직원이'), '점수만으로 정해지지 않는다는 안내');
   S.mode = 'kiosk'; Object.assign(S.kiosk, { staffId:'a', step:'action' }); render(true);
-  assert.ok(!view.innerHTML.includes('⭐ 이번 달 점수'), '꺼진 달: 태블릿 요약에 점수 없음');
+  assert.ok(view.innerHTML.includes('⭐ 이번 달 점수') && view.innerHTML.includes('class="lvbar"') && view.innerHTML.includes('최고 단계예요'), '꺼진 달에도 태블릿 요약에 점수·레벨 막대');
+  // 레벨: 이번 달 점수로, 다음 단계까지 남은 점수
+  assert.strictEqual(levelOf(0).n, 1); assert.strictEqual(levelOf(49).n, 1); assert.strictEqual(levelOf(50).ko, '성실 잎새');
+  assert.strictEqual(levelOf(67).need, 33, '67점 → 든든 나무까지 33점'); assert.strictEqual(levelOf(999).next, undefined, '최고 단계');
   resetKiosk(); S.mode = 'owner'; render(true);
   await ACT.awMonthToggle();
   assert.strictEqual(docs['config/main'].award.months['2026-11'], true, '이 달 진행하기 → 저장');
