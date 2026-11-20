@@ -1280,10 +1280,14 @@ function kioskStatus(st, now){
 }
 function mySummary(st){
   const o = monthSummary(st, ymOf(todayStr()));
+  // 추가근무 대신 일찍 출근한 날·시간 (v30, 대표님 요청): 정해진 출근 시각보다 1분 이상 먼저 찍은 날
+  const early = o.days.filter(r => r.p?.in && r.sStart && r.p.in <= r.sStart - 60000).map(r => ({ ds:r.ds, min:Math.round((r.sStart - r.p.in) / 60000) }));
+  const eMin = early.reduce((t, x) => t + x.min, 0), eShow = early.slice(-5), eMore = early.length - eShow.length;
+  const minKo = m => m < 60 ? `${m}분` : fmtH(m), minVi = m => m < 60 ? `${m} phút` : fmtHvi(m);
   const ko = `일한 시간 <b>${fmtH(o.paid)}</b> · 결근 <b>${o.absentDays.length}일</b> · 지각 <b>${o.lateDays.length}회</b><br>
-    추가근무날 <b>${otDaysText(o)}</b>${o.ot ? ` · 추가근무시간 <b>${fmtH(o.ot)}</b>` : ''}`;
+    일찍 출근 <b>${early.length ? `${early.length}일` : '없음'}</b>${early.length ? ` (${eShow.map(x => `${fmtMD(x.ds)} ${minKo(x.min)}`).join(', ')}${eMore ? ` 외 ${eMore}일` : ''}) · 합계 <b>${minKo(eMin)}</b>` : ''}`;
   const vi = `Giờ làm <b>${fmtHvi(o.paid)}</b> · Vắng <b>${o.absentDays.length} ngày</b> · Đi muộn <b>${o.lateDays.length} lần</b><br>
-    Ngày làm thêm <b>${o.otDays.length ? o.otDays.map(x => `${fmtMD(x.ds)}(${fmtHM(x.min)})`).join(', ') : 'không có'}</b>${o.ot ? ` · Giờ làm thêm <b>${fmtHvi(o.ot)}</b>` : ''}`;
+    Đến sớm <b>${early.length ? `${early.length} ngày` : 'không có'}</b>${early.length ? ` (${eShow.map(x => `${dmVi(x.ds)} ${minVi(x.min)}`).join(', ')}${eMore ? ` và ${eMore} ngày khác` : ''}) · Tổng <b>${minVi(eMin)}</b>` : ''}`;
   if (!awardOn(ymOf(todayStr()))) return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}</div>`;   // 우수직원 선발을 안 하는 달은 점수 줄 없음
   const sc = scoreMonth(st, ymOf(todayStr()));   // 이달의 우수직원 점수 (본인 것만)
   const ko2 =`⭐ 이번 달 점수 <b>${num(sc.total)}점</b> · 달성률 <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak}일</b> 연속 정시 출근` : ''}`;
@@ -3303,11 +3307,16 @@ function scoreMonth(st, ym, now = Date.now()){
 }
 const pct = r => r == null ? '—' : `${Math.floor(r * 1000) / 10}%`;
 const badgeOf = r => r == null ? '' : r >= 0.95 ? '🥇' : r >= 0.85 ? '🥈' : r >= 0.7 ? '🥉' : '';
+// 업무태도 가중치 (v30, 사장님만 보고 정함): 점수 항목에 없는 태도·성실함을 달마다 직원별로. 감점 없이 1.0~1.3배
+// config.award.att = { 'YYYY-MM': { 직원id: 1.1 } }. 최종 점수 = 달성률 × 100 × 가중치 → 이 점수로 순위·추천
+const ATT_LEVELS = [[1, '보통 ×1.0'], [1.1, '좋음 ×1.1'], [1.2, '아주 좋음 ×1.2'], [1.3, '최고 ×1.3']];
+const attOf = (sid, ym) => { const w = +cfg().award.att?.[ym]?.[sid]; return ATT_LEVELS.some(([v]) => v === w) ? w : 1; };
+const finalScore = o => o.rate == null ? null : Math.round(o.rate * 100 * (o.w || 1) * 10) / 10;
 function awardRank(ym){
-  const list = staffForMonth(ym).map(st => scoreMonth(st, ym));
+  const list = staffForMonth(ym).map(st => { const o = scoreMonth(st, ym); o.w = attOf(st.id, ym); o.final = finalScore(o); return o; });
   const eligible = list.filter(o => o.possible >= AWARD_MIN_POSSIBLE && o.rate != null)
-    .sort((a, b) => b.rate - a.rate || b.total - a.total || b.possible - a.possible);
-  return { list: list.sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.total - a.total), top: eligible[0] || null };
+    .sort((a, b) => b.final - a.final || b.total - a.total || b.possible - a.possible);
+  return { list: list.sort((a, b) => (b.final ?? -1) - (a.final ?? -1) || b.total - a.total), top: eligible[0] || null };
 }
 // 그 달 우수직원 선발을 진행하는지: 사장님이 켠 달, 또는 이미 확정한 달 (v29부터 기본은 꺼짐)
 function awardOn(ym){ return !!cfg().award.months?.[ym] || !!S.awards[ym]; }
@@ -3320,7 +3329,7 @@ function awardView(){
   const winner = aw ? staffById(aw.staffId) : null;
   const card = aw ? `<section class="panel award won"><h3>🏆 ${m}월 이달의 우수직원</h3>
       <div class="awname">${esc(aw.name || winner?.name || '')}</div>
-      <p class="small muted" style="margin:4px 0 10px">달성률 ${pct(aw.rate)} · 총점 ${num(aw.points)}점 · 포상금 <b>${won(aw.amount)}</b>${aw.note ? ` · ${esc(aw.note)}` : ''}<br>${fmtMD(ymd(new Date(aw.decidedAt)))} 확정${aw.paidAt ? ` · <b style="color:var(--green)">${fmtMD(ymd(new Date(aw.paidAt)))} 지급 완료</b>` : ''}</p>
+      <p class="small muted" style="margin:4px 0 10px">${aw.final != null ? `최종 점수 ${aw.final}${aw.att && aw.att !== 1 ? ` (업무태도 ×${aw.att})` : ''} · ` : ''}달성률 ${pct(aw.rate)} · 총점 ${num(aw.points)}점 · 포상금 <b>${won(aw.amount)}</b>${aw.note ? ` · ${esc(aw.note)}` : ''}<br>${fmtMD(ymd(new Date(aw.decidedAt)))} 확정${aw.paidAt ? ` · <b style="color:var(--green)">${fmtMD(ymd(new Date(aw.paidAt)))} 지급 완료</b>` : ''}</p>
       ${(() => { const list = reactsOf(ym); if (!list.length) return '<p class="small muted">아직 직원 반응이 없어요.</p>';
         return `<div class="reacts" style="margin-bottom:10px"><div class="small"><b>👏 인정 ${list.filter(r => r.react === 'yes').length}</b> · <b>🙅 인정 못 함 ${list.filter(r => r.react === 'no').length}</b></div>
           ${list.filter(r => r.text).map(r => `<div class="small rcline">${REACT[r.react][0]} <b>${esc(staffById(r.staffId)?.name || '직원')}</b>: ${esc(r.text)}${r.textKo ? ` <span class="muted">(번역: ${esc(r.textKo)})</span>` : ''}</div>`).join('')}</div>`; })()}
@@ -3328,10 +3337,10 @@ function awardView(){
       <p class="hint">포상금(현금)은 근로소득이라 그달 급여와 함께 신고해야 할 수 있어요. 세무사님께 확인해 주세요.</p></section>`
     : future ? `<section class="panel"><h3>🏆 이달의 우수직원</h3><p class="muted">아직 오지 않은 달이에요.</p></section>`
     : `<section class="panel award"><h3>🏆 ${m}월 이달의 우수직원 정하기</h3>
-      ${top ? `<p style="margin:0 0 10px">추천: <b>${esc(top.st.name)}</b> — 달성률 <b>${pct(top.rate)}</b> · 총점 ${num(top.total)}점</p>` : '<p class="muted" style="margin:0 0 10px">아직 추천할 직원이 없어요 (근무 기록이 4일 이상 쌓이면 추천해요).</p>'}
+      ${top ? `<p style="margin:0 0 10px">추천: <b>${esc(top.st.name)}</b> — 최종 점수 <b>${top.final}</b> (달성률 ${pct(top.rate)}${top.w !== 1 ? ` × 업무태도 ${top.w}` : ''}) · 총점 ${num(top.total)}점</p>` : '<p class="muted" style="margin:0 0 10px">아직 추천할 직원이 없어요 (근무 기록이 4일 이상 쌓이면 추천해요).</p>'}
       ${cur ? '<p class="small" style="color:var(--amber);margin:0 0 10px">이번 달은 아직 끝나지 않았어요. 보통 마지막 날 마감 뒤나 다음 달 초에 확정해요.</p>' : ''}
       <div class="form">
-        <label>우수직원<select id="awStaff">${list.map(o => `<option value="${esc(o.st.id)}" ${o.st.id === f.staffId ? 'selected' : ''}>${esc(o.st.name)} · ${pct(o.rate)}</option>`).join('')}</select></label>
+        <label>우수직원<select id="awStaff">${list.map(o => `<option value="${esc(o.st.id)}" ${o.st.id === f.staffId ? 'selected' : ''}>${esc(o.st.name)} · 최종 ${o.final ?? '-'}</option>`).join('')}</select></label>
         <label>포상금 (원, 이번 달)<input id="awAmount" type="number" min="0" step="1000" value="${esc(f.amount)}"></label>
         <label class="full">한마디 (선택, 공고에 들어가요)<input id="awNote" value="${esc(f.note)}" placeholder="예) 한 달 동안 한 번도 늦지 않았어요!"></label>
         <label class="check full"><input type="checkbox" id="awNotice" ${f.notice ? 'checked' : ''}> 📣 모든 직원에게 알리기 — 태블릿·직원 휴대폰 첫 화면 축하 공고 + 출근할 때 한 번씩 보여 주기 (한국어·베트남어, 👏 인정 / 🙅 인정 못 해 반응 달기)</label>
@@ -3340,7 +3349,9 @@ function awardView(){
       <div class="row" style="margin-top:10px"><button class="btn pri" data-act="awDecide" ${list.length ? '' : 'disabled'}>이달의 우수직원으로 확정</button></div></section>`;
   const rows = list.map(o => `<tr class="${winner?.id === o.st.id || (!aw && top?.st.id === o.st.id) ? 'awtop' : ''}">
       <td><b>${esc(o.st.name)}</b>${winner?.id === o.st.id ? ' 🏆' : !aw && top?.st.id === o.st.id ? ' <span class="chip amber">추천</span>' : ''}<div class="small muted">${esc(o.st.position || '')}</div></td>
-      <td class="r"><b>${pct(o.rate)}</b> ${badgeOf(o.rate)}${o.possible < AWARD_MIN_POSSIBLE ? '<div class="small muted">근무 적음</div>' : ''}</td>
+      <td class="r mono"><b>${o.final ?? '-'}</b>${o.possible < AWARD_MIN_POSSIBLE ? '<div class="small muted">근무 적음</div>' : ''}</td>
+      <td><select name="awAtt" data-sid="${esc(o.st.id)}" aria-label="${esc(o.st.name)} 업무태도" ${aw || future ? 'disabled' : ''} style="border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:var(--card);color:var(--ink)">${ATT_LEVELS.map(([v, l]) => `<option value="${v}" ${o.w === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td class="r">${pct(o.rate)} ${badgeOf(o.rate)}</td>
       <td class="r mono">${num(o.earned)} / ${num(o.possible)}</td>
       <td class="r mono">+${num(o.bonus)}</td><td class="r mono"><b>${num(o.total)}</b></td>
       <td class="small">정시 ${o.att.ontime} · 지각 ${o.att.late} · 결근 ${o.att.absent}${o.best >= 5 ? ` · 🔥${o.best}일` : ''}</td>
@@ -3360,9 +3371,9 @@ function awardView(){
   return `<div class="sec-head"><h2>🏆 이달의 우수직원</h2>${monthNav()}</div>
   <div class="cols">
     <div class="stack">${toggle}${card}
-      <section class="panel"><h3>직원별 점수 <small>사장님만 보여요 · 달성률 순</small></h3>
-        ${list.length ? `<div class="tscroll"><table class="t awt"><thead><tr><th>직원</th><th class="r">달성률</th><th class="r">기본 점수</th><th class="r">보너스</th><th class="r">총점</th><th>출근</th><th>업무 보고</th><th>공지</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">이달 근무한 직원이 없어요.</p>'}
-        <p class="hint">달성률 = 받은 기본 점수 ÷ 받을 수 있었던 기본 점수. 근무일 수가 달라도 공정하게 비교돼요. 보너스는 총점에만 더해지고, 달성률이 같을 때 총점이 높은 직원을 추천해요.</p>
+      <section class="panel"><h3>직원별 점수·순위 <small>사장님만 보여요 · 최종 점수 순 (직원끼리는 서로의 점수·순위를 몰라요)</small></h3>
+        ${list.length ? `<div class="tscroll"><table class="t awt"><thead><tr><th>직원</th><th class="r">최종 점수</th><th>업무태도</th><th class="r">달성률</th><th class="r">기본 점수</th><th class="r">보너스</th><th class="r">총점</th><th>출근</th><th>업무 보고</th><th>공지</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">이달 근무한 직원이 없어요.</p>'}
+        <p class="hint"><b>최종 점수 = 달성률 × 100 × 업무태도</b>. 달성률 = 받은 기본 점수 ÷ 받을 수 있었던 기본 점수 (근무일 수가 달라도 공정하게 비교돼요). <b>업무태도</b>는 점수 항목에 없는 태도·성실함·팀워크를 사장님이 달마다 정해요 (보통 ×1.0 ~ 최고 ×1.3, 감점 없음). 직원 화면에는 업무태도와 순위가 보이지 않아요. 보너스는 총점에만 더해지고, 최종 점수가 같으면 총점이 높은 직원을 추천해요.</p>
       </section>
     </div>
     <div class="stack">
@@ -3416,7 +3427,8 @@ const AWACT = {
       await write(() => S.db.collection('tasks').doc(noticeId).set(awardNotice(ym, st.name, o.rate, f.amount, f.note, f.showAmount, noteVi)));
       if (prev?.noticeId && taskById(prev.noticeId)?.pinned) await write(() => S.db.collection('tasks').doc(prev.noticeId).update({ pinned:false }));   // 지난달 축하 공고는 첫 화면에서 내림
     }
-    await write(() => S.db.doc('awards/' + ym).set({ staffId:st.id, name:st.name, rate:o.rate, points:o.total, amount:f.amount, note:f.note, decidedAt:Date.now(), noticeId, paidAt:null }));
+    o.w = attOf(st.id, ym);
+    await write(() => S.db.doc('awards/' + ym).set({ staffId:st.id, name:st.name, rate:o.rate, points:o.total, att:o.w, final:finalScore(o), amount:f.amount, note:f.note, decidedAt:Date.now(), noticeId, paidAt:null }));
     toast(`${fmtYM(ym)} 이달의 우수직원: ${st.name}`, f.notice ? '첫 화면에 축하 공고를 올렸어요.' : '', 'ok');
     S.awForm = null; render(true);
   },
@@ -3453,6 +3465,16 @@ const AWACT = {
   async prDel(d){ await write(() => S.db.collection('praise').doc(d.id).delete()); render(true); },
 };
 document.addEventListener('change', e => { if (['awStaff', 'awAmount', 'awNote', 'awNotice', 'awShowAmt'].includes(e.target.id)) readAwForm(); });
+// 업무태도 가중치 고르기 → 바로 저장하고 순위 다시 계산 (사장님 화면 우수직원 탭)
+document.addEventListener('change', async e => {
+  if (e.target.name !== 'awAtt' || !S.db) return;
+  const sid = e.target.dataset.sid, w = +e.target.value, ym = S.month, att = { ...(cfg().award.att || {}) };
+  att[ym] = { ...(att[ym] || {}), [sid]: w };
+  if (w === 1) delete att[ym][sid];
+  await write(() => S.db.doc('config/main').set({ ...S.config, award:{ ...cfg().award, att } }));
+  S.awForm = null;   // 추천이 바뀔 수 있어서 확정 칸을 새로 채움
+  toast(`${staffById(sid)?.name || '직원'} 업무태도 ${ATT_LEVELS.find(([v]) => v === w)?.[1] || ''}`, '최종 점수와 순위에 반영했어요.', 'ok'); render(true);
+});
 document.addEventListener('input', e => { if (['awAmount', 'awNote'].includes(e.target.id)) readAwForm(); });
 // 직원 화면: 내 점수 (본인 것만) + 지난달 우수직원
 function myScoreCard(st){

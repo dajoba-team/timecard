@@ -89,6 +89,22 @@ S.trSubs['2026-11'] = () => {}; S.trSubs['2026-10'] = () => {}; S.monthSubs['202
   S.config = docs['config/main'];
   render(true);
   assert.ok(view.innerHTML.includes('이달의 우수직원') && view.innerHTML.includes('추천: <b>성실</b>') && view.innerHTML.includes('이 달은 안 하기'), '추천 표시');
+  // 업무태도 가중치 (v30): 사장님만, 최종 점수 = 달성률 × 100 × 가중치, 감점 없음
+  assert.ok(view.innerHTML.includes('name="awAtt"') && view.innerHTML.includes('최고 ×1.3') && !view.innerHTML.includes('×0.'), '업무태도 고르기 (감점 없음)');
+  const base = awardRank('2026-11');
+  assert.strictEqual(base.top.st.id, 'a'); assert.strictEqual(base.top.final, 100, '가중치 없으면 달성률 그대로');
+  const bRate = base.list.find(o => o.st.id === 'b').rate;
+  S.config.award.att = { '2026-11': { b: 1.3 } };
+  const wr = awardRank('2026-11'), bo = wr.list.find(o => o.st.id === 'b');
+  assert.strictEqual(bo.final, Math.round(bRate * 130 * 10) / 10, '최종 점수에 가중치 반영');
+  if (bRate * 1.3 > 1) assert.strictEqual(wr.top.st.id, 'b', '가중치로 추천이 바뀔 수 있음');
+  S.config.award.att = { '2026-11': { b: 7 } }; assert.strictEqual(attOf('b', '2026-11'), 1, '이상한 값은 보통으로');
+  S.config.award.att = {};
+  // 직원 요약: 추가근무날 대신 일찍 출근한 날·시간 (v30)
+  S.mode = 'kiosk'; resetKiosk(); Object.assign(S.kiosk, { staffId:'a', step:'action' }); render(true);
+  assert.ok(view.innerHTML.includes('일찍 출근 <b>') && view.innerHTML.includes(' 5분') && !view.innerHTML.includes('추가근무날'), '일찍 출근 표시, 추가근무날은 뺌');
+  assert.ok(!view.innerHTML.includes('업무태도') && !view.innerHTML.includes('최종 점수'), '직원 화면엔 업무태도·순위 없음');
+  resetKiosk(); S.mode = 'owner'; render(true);
   assert.ok(view.innerHTML.includes('100%') && view.innerHTML.includes('근무 적음'), '점수표');
   // 지난달 축하 공고가 있으면 확정할 때 내림
   docs['awards/2026-10'] = { staffId:'b', name:'가끔늦음', rate:0.9, points:300, amount:30000, noticeId:'aw202610', decidedAt:1 }; apply('awards/2026-10');
