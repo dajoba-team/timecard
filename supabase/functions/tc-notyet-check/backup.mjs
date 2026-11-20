@@ -36,7 +36,7 @@ export function buildBackup(rows, now, storeName) {
     app: "가게 타임카드 백업", format: 1, exportedAt: new Date(now).toISOString(), store: storeName || config.storeName || "우리 가게",
     auto: true,
     config, ownerSign: (sign && sign.data) || "", staff, punches, contracts, reports,
-    extra: { tasks, task_reads: taskReads, task_reports: taskReports, ot: list("ot"), awards: list("awards"), praise: list("praise"), award_reacts: list("award_reacts") },
+    extra: { tasks, task_reads: taskReads, task_reports: taskReports, ot: list("ot"), awards: list("awards"), praise: list("praise"), award_reacts: list("award_reacts"), badges: list("badges"), thanks: list("thanks") },
     counts: {
       staff: staff.length, punches: Object.values(punches).reduce((t, a) => t + a.length, 0), months: Object.keys(punches).length, contracts: contracts.length,
       tasks: tasks.length, task_reports: Object.values(taskReports).reduce((t, a) => t + a.length, 0),

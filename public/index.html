@@ -446,6 +446,26 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .reacts{display:grid;gap:6px;border-top:1px dashed var(--line);padding-top:10px;text-align:left}
 .lvbar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:6px 0 4px}
 .lvbar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),var(--green));border-radius:99px;transition:width .4s}
+.mission{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--stamp-soft);font-size:14px;text-align:left}
+.mission.done{background:var(--green-soft)}.mission.fail{background:var(--soft)}
+.mdots{display:inline-flex;gap:3px;vertical-align:middle;margin-left:4px}
+.mdots i{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block}
+.mdots i.ok{background:var(--green)}.mdots i.miss{background:var(--red)}
+.shelf{margin-top:8px;text-align:left}
+.badges{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.bdg{font-size:20px;line-height:1;filter:grayscale(1);opacity:.28}
+.bdg.got{filter:none;opacity:1}
+.thx{margin-top:8px;display:grid;gap:4px;text-align:left}
+.thx .btn{justify-self:start}
+.teamgoal{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--amber-soft);font-size:14px;text-align:left}
+.teamgoal.ok{background:var(--green-soft)}
+.gnews{margin:6px 0;padding:8px 10px;border-radius:10px;background:var(--amber-soft);font-weight:700}
+.evrow{border-top:1px solid var(--line);padding:8px 0;display:grid;gap:2px}
+.evrow:first-of-type{border-top:0}
+.evcat{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.stars button{border:0;background:none;font-size:20px;line-height:1;padding:0 1px;color:var(--line);cursor:pointer}
+.stars button.on{color:var(--amber)}
+.stars button:disabled{cursor:default}
 .lvhead{display:flex;align-items:center;gap:8px;font-size:17px}
 .lvhead .lvicon{font-size:28px;line-height:1}
 .otbit{display:grid;gap:8px;margin-top:12px}
@@ -526,8 +546,9 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   tax:{ email:'', auto:false },
   geo:{ on:false, lat:null, lng:null, acc:0, radius:200, setAt:0 },
   award:{ amount:50000, months:{} },   // 이달의 우수직원 기본 포상금 (매달 확정할 때 바꿀 수 있음), months: 진행하는 달 { 'YYYY-MM': true } (v29)
-  ot:{ on:false, since:'' } };   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
-const TABS = [['now','현황'],['tasks','업무 보고'],['award','우수직원'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
+  ot:{ on:false, since:'' },
+  team:{ on:false, target:90, reward:'', rewardVi:'' } };   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
+const TABS = [['now','현황'],['tasks','업무 보고'],['award','동기부여'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
   db:null, noDb:false, connected:false, connNote:'',
   config:{}, staff:[], ready:{config:false, staff:false, contracts:false, reports:false}, reports:{}, backupStatus:null, contracts:[], ownerSign:'', cDraft:null,
@@ -542,7 +563,8 @@ const S = {
   mailStatus:null, mailed:new Set(), mailBusy:false, alertStatus:null, slackBusy:false,
   photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0,
   // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
-  ots:new Map(), otForm:null, otEdit:null,   // 추가근무 요청·승인: ot/{직원}_{날짜}, 직원 요청 입력, 사장님 '시간 바꿔 승인' 입력
+  ots:new Map(), otForm:null, otEdit:null,
+  badges:new Map(), thanks:new Map(), growthNews:{}, thForm:null,   // 동기부여(v32): 배지·신기록, 동료 고마워요, 방금 받은 배지, 고마워요 입력   // 추가근무 요청·승인: ot/{직원}_{날짜}, 직원 요청 입력, 사장님 '시간 바꿔 승인' 입력
   awards:{}, praise:[], awForm:null, reacts:new Map(), reactDraft:null,   // 이달의 우수직원: awards/{YYYY-MM} 확정 기록, praise 칭찬 점수
   tasks:[], treads:new Map(), trep:{}, trSubs:{}, trLoaded:{}, trPrimed:{}, trDate:todayStr(), tform:null, redoFor:null, confirmTDel:null,
   // 직원 휴대폰 화면 (mode 'phone'): 이 휴대폰에 연결된 직원, 연결할 때 고른 직원·번호, 연 업무, 찍은 사진
@@ -551,7 +573,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -655,6 +677,12 @@ const VI = {
   '🙅 도전장을 보냈어요!':'🙅 Đã gửi lời thách đấu!', '🎉 소감을 남겼어요':'🎉 Đã để lại cảm nghĩ',
   // 추가근무 요청·보고 (v27)
   '점수는 나의 성실함 기록이에요. 이달의 우수직원은 이 기록과 사장님 평가(업무태도 등)를 함께 보고 정해요.':'Điểm là nhật ký chăm chỉ của bạn. Nhân viên xuất sắc của tháng được chọn dựa trên điểm này cùng đánh giá của chủ quán (thái độ làm việc…).',
+  // 동기부여 (v32)
+  '🙏 동료에게 고마워요':'🙏 Cảm ơn đồng nghiệp', '🙏 동료에게 고마워요 보내기':'🙏 Gửi lời cảm ơn đồng nghiệp', '💌 오늘 보낸 고마워요':'💌 Lời cảm ơn hôm nay',
+  '오늘 고마웠던 동료를 골라 주세요. 하루에 한 번 보낼 수 있어요.':'Hãy chọn đồng nghiệp bạn muốn cảm ơn hôm nay. Mỗi ngày gửi được một lần.',
+  '예) 바쁠 때 도와줘서 고마워요':'VD: Cảm ơn đã giúp mình lúc bận', '고마워요 보내기 🙏':'Gửi lời cảm ơn 🙏',
+  '🎉 새 배지를 받았어요!':'🎉 Bạn nhận được huy hiệu mới!', '🔥 연속 정시 출근 신기록!':'🔥 Kỷ lục mới đúng giờ liên tiếp!',
+  '🙏 고마워요를 보냈어요':'🙏 Đã gửi lời cảm ơn', '받는 사람을 골라 주세요':'Hãy chọn người nhận',
   '⏱ 추가근무 요청':'⏱ Xin làm thêm giờ', '⏱ 추가근무 다시 요청':'⏱ Xin làm thêm lại', '사장님':'Chủ quán', '돌아가기':'Quay lại',
   '✅ 추가근무 승인됨 · 퇴근 {t}':'✅ Đã duyệt làm thêm · Tan ca {t}', '✅ 추가근무 {h} 인정됐어요':'✅ Đã công nhận làm thêm {h}',
   '❌ 추가근무 요청이 거절됐어요 · 정해진 시간에 퇴근해 주세요':'❌ Yêu cầu làm thêm bị từ chối · Vui lòng tan ca đúng giờ', '❌ 추가근무가 인정되지 않았어요':'❌ Giờ làm thêm không được công nhận',
@@ -1294,10 +1322,11 @@ function mySummary(st){
   const vi = `Giờ làm <b>${fmtHvi(o.paid)}</b> · Vắng <b>${o.absentDays.length} ngày</b> · Đi muộn <b>${o.lateDays.length} lần</b><br>
     Đến sớm <b>${early.length ? `${early.length} ngày` : 'không có'}</b>${early.length ? ` (${eShow.map(x => `${dmVi(x.ds)} ${minVi(x.min)}`).join(', ')}${eMore ? ` và ${eMore} ngày khác` : ''}) · Tổng <b>${minVi(eMin)}</b>` : ''}`;
   // 내 점수·레벨은 우수직원 선발을 켰는지와 상관없이 늘 보여 줌 (v31, 동기 부여용 · 본인 것만)
+  queueGrowth(st);   // 배지·신기록 확인 (v32)
   const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total);
   const ko2 = `⭐ 이번 달 점수 <b>${num(sc.total)}점</b> · ${lv.icon} <b>Lv.${lv.n} ${lv.ko}</b> · 달성률 <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak}일</b> 연속 정시 출근` : ''}`;
   const vi2 = `⭐ Điểm tháng này <b>${num(sc.total)}</b> · ${lv.icon} <b>Lv.${lv.n} ${lv.vi}</b> · Tỷ lệ <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak} ngày</b> liên tiếp đúng giờ` : ''}`;
-  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}<div style="margin-top:6px">${BI(ko2, vi2)}</div>${levelBar(lv)}</div>`;
+  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}<div style="margin-top:6px">${BI(ko2, vi2)}</div>${levelBar(lv)}${missionLine(st)}${badgeShelf(st, false)}</div>`;
 }
 function kioskView(){
   const k = S.kiosk, now = Date.now(), today = todayStr();
@@ -1309,7 +1338,7 @@ function kioskView(){
     if (!list.length) return clock + `<div class="empty"><b>${T('아직 등록된 직원이 없어요')}</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
     const hint = BI(`본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}`,
       `${VI['본인 이름을 누르고 개인 번호 4자리를 입력하세요']}${cfg().photo.on ? ' · ' + VI['📷 출퇴근할 때 얼굴 사진을 찍어요'] : ''}${cfg().geo.on ? ' · ' + VI['📍 위치도 함께 기록돼요'] : ''}`);
-    return clock + pinBoard() + `<p class="khint">${hint}</p>
+    return clock + teamBanner() + pinBoard() + `<p class="khint">${hint}</p>
       <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length; return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${st.position ? esc(st.position) : TV('직원')}</small><em>${i.text}</em>${nn ? `<i class="nbadge">${TV('새 공지 {n}', { n:nn })}</i>` : ''}</button>`; }).join('')}</div>`;
   }
   const st = staffById(k.staffId);
@@ -1328,6 +1357,7 @@ function kioskView(){
       body = `<p>${sc ? T('오늘 예정 {a}–{b}', { a:sc.start, b:sc.end }) : (isRegularOff(st, today) ? T('오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.') : T('오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)'))}</p>
         <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>${T('출근하기')}</button>${otKioskBit(st)}`;
     }
+    body += `<button class="linkbtn" data-act="thOpen">${TV(thanksTodayFrom(st.id) ? '💌 오늘 보낸 고마워요' : '🙏 동료에게 고마워요 보내기')}</button>`;
     return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>${k.master ? `<p><span class="chip amber">${TV('사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요')}</span></p>` : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
   }
   if (k.step === 'contract'){ const html = kioskContract(st); if (html) return html; resetKiosk(); return kioskView(); }
@@ -1347,6 +1377,7 @@ function kioskView(){
         <button class="linkbtn" data-act="kNoPhoto">${T(`사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)`)}</button>` : ''}
       ${k.busy ? '' : `<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button>`}</div>`;
   }
+  if (k.step === 'thanks'){ if (!S.thForm){ k.step = 'action'; return kioskView(); } return thanksView(st, clock); }   // 동료 고마워요 (v32)
   if (k.step === 'otreq' || k.step === 'ot'){ if (!S.otForm){ k.step = k.step === 'ot' ? 'done' : 'action'; return kioskView(); } return k.step === 'ot' ? otPostView(st, clock) : otReqView(st, clock); }   // 추가근무 요청 / 퇴근 뒤 이유
   if (k.step === 'done'){
     const res = k.result || {}, pe = res.photoErr;
@@ -1355,7 +1386,7 @@ function kioskView(){
       ${res.kind === 'in' && !res.late ? `<p class="plus">${TV('+{n}점', { n:SCORE.onTime })}${(() => { const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total); return `${sc.streak >= 2 ? ` · ${TV('🔥 {n}일 연속 정시 출근', { n:sc.streak })}` : ''} · ${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
       ${res.kind === 'out' && res.worked != null ? `<p class="plus">${TV('+{n}점', { n:SCORE.done })} · ${(() => { const lv = levelOf(scoreMonth(st, ymOf(todayStr())).total); return `${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
       <p class="${res.late ? 'err' : ''}">${res.msgArgs ? T(...res.msgArgs) : res.kind === 'out' && res.worked != null ? BI(esc(res.msg), fillT(VI['오늘 {h} 근무했어요. 수고하셨어요!'], { h:fmtHvi(res.worked) })) : res.msg && res.msg in VI ? T(res.msg) : (res.msg || '')}</p>
-      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${mySummary(st)}
+      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${growthNews(st)}${mySummary(st)}
       ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? T('새 공지 {n}건 확인하기', { n:unreadFor(st).length }) : T('오늘 할 일 보기')}</button><p class="hint">${T('잠시 뒤 자동으로 넘어가요.')}</p>` : `<button class="linkbtn" data-act="kCancel">${T('확인')}</button>`}</div>`;
   }
   return clock;
@@ -1372,8 +1403,8 @@ function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
   Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
-  S.otForm = null; S.reactDraft = null;   // 쓰다 만 추가근무 요청·축하 반응은 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
-  if (S.editing === 'ot' || S.editing === 'react') S.editing = null;
+  S.otForm = null; S.reactDraft = null; S.thForm = null;   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
+  if (S.editing === 'ot' || S.editing === 'react' || S.editing === 'thanks') S.editing = null;
 }
 function lockView(){
   return `<div class="kpanel ${S.lockErr ? 'shake' : ''}" style="margin-top:24px">${pinPad('사장님 확인', '관리 번호 4자리 (처음 번호는 0000)', S.lockPin, 'owner', S.lockErr)}
@@ -2528,7 +2559,8 @@ const BACT = {
         app:'가게 타임카드 백업', format:1, exportedAt:new Date().toISOString(), store: cfg().storeName,
         config: S.config, ownerSign: S.ownerSign || '', staff: S.staff, punches, contracts: S.contracts, reports: S.reports,
         extra:{ tasks: S.tasks, task_reads: [...S.treads].map(([id, r]) => ({ id, ...r })), task_reports: taskReports,
-          ot: [...S.ots].map(([id, r]) => ({ id, ...r })), awards: Object.entries(S.awards).map(([id, r]) => ({ id, ...r })), praise: S.praise, award_reacts: [...S.reacts].map(([id, r]) => ({ id, ...r })) },
+          ot: [...S.ots].map(([id, r]) => ({ id, ...r })), awards: Object.entries(S.awards).map(([id, r]) => ({ id, ...r })), praise: S.praise, award_reacts: [...S.reacts].map(([id, r]) => ({ id, ...r })),
+          badges: [...S.badges].map(([id, r]) => ({ id, ...r })), thanks: [...S.thanks].map(([id, r]) => ({ id, ...r })) },
         counts:{ staff: S.staff.length, punches: Object.values(punches).reduce((t, a) => t + a.length, 0), months: Object.keys(punches).length, contracts: S.contracts.length,
           tasks: S.tasks.length, task_reports: Object.values(taskReports).reduce((t, a) => t + a.length, 0) },
         note:'사진 파일은 포함되지 않았어요 (기록의 inPhoto/outPhoto는 사진 번호).'
@@ -3325,8 +3357,18 @@ const levelBar = lv => `<div class="lvbar" role="progressbar" aria-valuemin="0" 
   <div class="small muted">${lv.next ? BI(`다음 단계 ${lv.next[1]} ${lv.next[2]}까지 <b>${num(lv.need)}점</b>`, `Còn <b>${num(lv.need)} điểm</b> nữa lên ${lv.next[1]} ${lv.next[3]}`) : BI('👑 최고 단계예요! 이대로 쭉~', '👑 Cấp cao nhất rồi! Cứ thế phát huy nhé~')}</div>`;
 // 업무태도 가중치 (v30, 사장님만 보고 정함): 점수 항목에 없는 태도·성실함을 달마다 직원별로. 감점 없이 1.0~1.3배
 // config.award.att = { 'YYYY-MM': { 직원id: 1.1 } }. 최종 점수 = 달성률 × 100 × 가중치 → 이 점수로 순위·추천
+// v32: 사장님 평가 체크리스트 — 4가지를 별 1~5개로 매기면 가중치 자동 (평균 별 3개 이하 ×1.0, 4개 ×1.15, 5개 ×1.3, 감점 없음)
+//   config.award.att[ym][직원] = { h, k, t, r } (예전 v30 숫자 1.1~1.3도 그대로 읽음)
 const ATT_LEVELS = [[1, '보통 ×1.0'], [1.1, '좋음 ×1.1'], [1.2, '아주 좋음 ×1.2'], [1.3, '최고 ×1.3']];
-const attOf = (sid, ym) => { const w = +cfg().award.att?.[ym]?.[sid]; return ATT_LEVELS.some(([v]) => v === w) ? w : 1; };
+const ATT_CATS = [['h', '🧼', '위생·청결'], ['k', '😊', '친절'], ['t', '🤝', '팀워크'], ['r', '💪', '책임감']];
+const attStars = (sid, ym) => { const v = cfg().award.att?.[ym]?.[sid]; return v && typeof v === 'object' ? Object.fromEntries(ATT_CATS.map(([c]) => [c, Math.min(5, Math.max(1, Math.round(+v[c] || 3)))])) : null; };
+const attAvg = s => ATT_CATS.reduce((t, [c]) => t + s[c], 0) / ATT_CATS.length;
+const attOf = (sid, ym) => {
+  const v = cfg().award.att?.[ym]?.[sid];
+  if (typeof v === 'number') return ATT_LEVELS.some(([x]) => x === v) ? v : 1;
+  const s = attStars(sid, ym);
+  return s ? Math.round((1 + Math.max(0, attAvg(s) - 3) * 0.15) * 100) / 100 : 1;
+};
 const finalScore = o => o.rate == null ? null : Math.round(o.rate * 100 * (o.w || 1) * 10) / 10;
 function awardRank(ym){
   const list = staffForMonth(ym).map(st => { const o = scoreMonth(st, ym); o.w = attOf(st.id, ym); o.final = finalScore(o); return o; });
@@ -3366,7 +3408,7 @@ function awardView(){
   const rows = list.map(o => `<tr class="${winner?.id === o.st.id || (!aw && top?.st.id === o.st.id) ? 'awtop' : ''}">
       <td><b>${esc(o.st.name)}</b>${winner?.id === o.st.id ? ' 🏆' : !aw && top?.st.id === o.st.id ? ' <span class="chip amber">추천</span>' : ''}<div class="small muted">${esc(o.st.position || '')}</div></td>
       <td class="r mono"><b>${o.final ?? '-'}</b>${o.possible < AWARD_MIN_POSSIBLE ? '<div class="small muted">근무 적음</div>' : ''}</td>
-      <td><select name="awAtt" data-sid="${esc(o.st.id)}" aria-label="${esc(o.st.name)} 업무태도" ${aw || future ? 'disabled' : ''} style="border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:var(--card);color:var(--ink)">${ATT_LEVELS.map(([v, l]) => `<option value="${v}" ${o.w === v ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td class="small">${(() => { const s = attStars(o.st.id, ym); return `${s ? `★${attAvg(s).toFixed(1)} · ` : ''}<b>×${o.w}</b>`; })()}</td>
       <td class="r">${pct(o.rate)} ${badgeOf(o.rate)}</td>
       <td class="r mono">${num(o.earned)} / ${num(o.possible)}</td>
       <td class="r mono">+${num(o.bonus)}</td><td class="r mono"><b>${num(o.total)}</b></td>
@@ -3381,18 +3423,54 @@ function awardView(){
       ${aw ? '<span class="small muted">확정했어요</span>' : `<button class="btn sm ${on ? '' : 'pri'}" role="switch" aria-checked="${on}" data-act="awMonthToggle">${on ? '이 달은 안 하기' : '이 달 진행하기'}</button>`}</div>
       <p class="hint" style="margin:6px 0 0">켜 둔 달만 월말에 우수직원을 뽑아요 (점수 + 사장님 판단). 직원 화면의 내 점수·레벨·연속 출근은 선발과 상관없이 늘 보여요 (본인 것만, 순위는 안 보임).</p></section>`;
   const pastPanel = pastAwards.length ? `<section class="panel"><h3>지난 우수직원</h3><div class="slist">${pastAwards.map(([k, a]) => `<div class="sitem"><div><b>${fmtYM(k)}</b> · ${esc(a.name || '')} 🏆<div class="sub">달성률 ${pct(a.rate)} · ${won(a.amount)}${a.paidAt ? ' · 지급 완료' : ' · <span style="color:var(--amber)">지급 전</span>'}</div></div></div>`).join('')}</div></section>` : '';
-  if (!on) return `<div class="sec-head"><h2>🏆 이달의 우수직원</h2>${monthNav()}</div>
-  <div class="cols"><div class="stack">${toggle}<section class="panel"><h3>🏆 ${m}월 이달의 우수직원</h3><p class="muted" style="margin:0">이 달은 우수직원 선발을 하지 않아요. 직원 화면의 내 점수·레벨은 평소처럼 보여요.<br>진행하려면 위의 <b>[이 달 진행하기]</b>를 눌러 주세요. 그달 처음부터의 기록으로 점수를 계산해요.</p></section></div>
-    <div class="stack">${pastPanel}</div></div>`;
-  return `<div class="sec-head"><h2>🏆 이달의 우수직원</h2>${monthNav()}</div>
+  // ----- 동기부여 (v32): 팀 목표 · 동료 고마워요 · 배지 · 업무태도 평가 -----
+  const tg = cfg().team, tgNow = teamGoal(ym);
+  const teamPanel = `<section class="panel"><h3>🤝 팀 목표 <small>가게 전체 정시 출근률 · 태블릿·직원 휴대폰에 보여요</small></h3>
+      <div class="form"><label class="check full"><input type="checkbox" id="tmOn" ${tg.on ? 'checked' : ''}> 이번 달 팀 목표 보여 주기</label>
+        <label>목표 정시 출근률<select id="tmTarget">${[80, 85, 90, 95, 100].map(v => `<option value="${v}" ${+tg.target === v ? 'selected' : ''}>${v}%</option>`).join('')}</select></label>
+        <label class="full">달성하면 (보상, 선택)<input id="tmReward" maxlength="30" value="${esc(tg.reward)}" placeholder="예) 회식 🍖 / 아이스크림 🍦"></label></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm pri" data-act="tmSave">저장</button></div>
+      ${tgNow ? `<p class="small" style="margin:8px 0 0">${fmtYM(ym)} 지금 <b>${tgNow.rate == null ? '-' : pct(tgNow.rate)}</b> / 목표 ${tgNow.target}% ${tgNow.ok ? '🎉 달성 중' : ''}</p>` : ''}
+      <p class="hint">경쟁보다 함께 노력하는 분위기를 만들어요. 매달 1일에 새로 계산해요.</p></section>`;
+  const thx = [...S.thanks.values()].filter(x => (x.date || '').startsWith(ym)).sort((a, b) => b.at - a.at);
+  const thxCount = Object.entries(thx.reduce((m, x) => ((m[x.to] = (m[x.to] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
+  const thanksPanel = `<section class="panel"><h3>🙏 직원끼리 고마워요 <small>${thx.length}개 · 점수에는 안 들어가요 (사장님 참고용)</small></h3>
+      ${thx.length ? `<div class="small" style="margin-bottom:6px">받은 수: ${thxCount.map(([id, n]) => `<b>${esc(staffById(id)?.name || '직원')}</b> ${n}`).join(' · ')}</div>
+        ${thx.slice(0, 15).map(x => `<div class="small rcline">💌 <b>${esc(staffById(x.from)?.name || '직원')}</b> → <b>${esc(staffById(x.to)?.name || '직원')}</b>${x.text ? `: ${esc(x.text)}${x.textKo ? ` <span class="muted">(번역: ${esc(x.textKo)})</span>` : ''}` : ''} <span class="muted">${fmtMD(x.date)}</span></div>`).join('')}`
+        : '<p class="muted small" style="margin:0">아직 없어요. 직원이 태블릿(번호 누른 뒤)이나 휴대폰에서 하루 한 번 보낼 수 있어요.</p>'}
+      <p class="hint">사장님이 못 본 팀워크를 알 수 있어요. 업무태도 평가의 🤝 팀워크에 참고하세요.</p></section>`;
+  const badgePanel = `<section class="panel"><h3>🏅 직원 배지 <small>한 번 받으면 계속 남아요 · 직원은 자기 배지만 봐요</small></h3>
+      <div class="slist">${activeStaff().map(s => { const got = S.badges.get(s.id)?.got || {}, mine = BADGES.filter(b => got[b.id]); return `<div class="sitem"><div><b>${esc(s.name)}</b> <span class="small muted">${mine.length}/${BADGES.length}</span><div class="sub" style="font-size:18px">${mine.map(b => `<span title="${esc(b.ko)}">${b.icon}</span>`).join(' ') || '<span class="small muted">아직 없음 (직원 화면을 열면 채워져요)</span>'}</div></div></div>`; }).join('')}</div>
+      <details class="small" style="margin-top:8px"><summary>배지 기준 보기</summary>${BADGES.map(b => `<div>${b.icon} ${b.ko}</div>`).join('')}</details></section>`;
+  const evalPanel = `<section class="panel"><h3>📝 업무태도 평가 <small>사장님만 · 별이 많을수록 최종 점수 가중치 (감점 없음)</small></h3>
+      ${list.length ? list.map(o => { const s = attStars(o.st.id, ym) || { h:3, k:3, t:3, r:3 }; return `<div class="evrow"><div class="row" style="gap:6px;align-items:center"><b>${esc(o.st.name)}</b><span class="chip ${o.w > 1 ? 'ok' : 'faint'}">×${o.w}</span></div>
+        ${ATT_CATS.map(([c, ic, l]) => `<div class="evcat"><span>${ic} ${l}</span><span class="stars">${[1, 2, 3, 4, 5].map(v => `<button type="button" data-act="attStar" data-sid="${esc(o.st.id)}" data-c="${c}" data-v="${v}" class="${v <= s[c] ? 'on' : ''}" aria-label="${esc(o.st.name)} ${l} 별 ${v}개" ${aw || future ? 'disabled' : ''}>★</button>`).join('')}</span></div>`).join('')}</div>`; }).join('') : '<p class="muted small">이달 근무한 직원이 없어요.</p>'}
+      <p class="hint">4가지 평균이 별 3개(보통) 이하면 ×1.0, 4개면 ×1.15, 5개면 ×1.3. 직원 화면에는 보이지 않아요. 달마다 새로 매기고, 확정한 달은 바꿀 수 없어요.</p></section>`;
+  const criteriaPanel = `<section class="panel"><h3>점수 기준 <small>감점 없음</small></h3>
+        <dl class="kv small">
+          <dt>정시 출근</dt><dd>+${SCORE.onTime} (근무날마다)</dd><dt>근무 완료</dt><dd>+${SCORE.done} (퇴근까지 기록)</dd>
+          <dt>업무 보고</dt><dd>마감 전 +${SCORE.taskOnTime} · 늦게 +${SCORE.taskLate} · 사장님 확인 +${SCORE.taskOk}</dd><dt>공지 읽음</dt><dd>+${SCORE.read}</dd>
+          <dt>보너스</dt><dd>🔥 정시 ${SCORE.streakEvery}일 연속마다 +${SCORE.streak} · 🎯 주간 미션(한 주 개근) +${SCORE.week} · 한 달 개근 +${SCORE.month} · 쉬는 날 추가 근무 +${SCORE.extra} · ⭐ 칭찬</dd>
+          <dt>레벨</dt><dd>${LEVELS.map(l => `${l[1]} ${l[2]} ${l[0]}`).join(' → ')} (매달 새로)</dd>
+        </dl>
+        <h3 style="margin-top:14px">기본 포상금</h3>
+        <div class="row"><input id="awDefault" type="number" min="0" step="1000" value="${esc(cfg().award.amount)}" style="max-width:160px;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:6px 10px">원 <button class="btn sm" data-act="awDefaultSave">저장</button></div>
+        <p class="hint">확정할 때 그달 금액을 따로 바꿀 수 있어요. 여기는 처음 채워지는 금액이에요.</p>
+      </section>`;
+  const head = `<div class="sec-head"><h2>🎮 동기부여 · 이달의 우수직원</h2>${monthNav()}</div>`;
+  if (!on) return head + `
+  <div class="cols"><div class="stack">${toggle}<section class="panel"><h3>🏆 ${m}월 이달의 우수직원</h3><p class="muted" style="margin:0">이 달은 우수직원 선발을 하지 않아요. 직원 화면의 내 점수·레벨·미션·배지는 평소처럼 보여요.<br>진행하려면 위의 <b>[이 달 진행하기]</b>를 눌러 주세요. 그달 처음부터의 기록으로 점수를 계산해요.</p></section>${teamPanel}${thanksPanel}</div>
+    <div class="stack">${badgePanel}${criteriaPanel}${pastPanel}</div></div>`;
+  return head + `
   <div class="cols">
     <div class="stack">${toggle}${card}
       <section class="panel"><h3>직원별 점수·순위 <small>사장님만 보여요 · 최종 점수 순 (직원끼리는 서로의 점수·순위를 몰라요)</small></h3>
         ${list.length ? `<div class="tscroll"><table class="t awt"><thead><tr><th>직원</th><th class="r">최종 점수</th><th>업무태도</th><th class="r">달성률</th><th class="r">기본 점수</th><th class="r">보너스</th><th class="r">총점</th><th>출근</th><th>업무 보고</th><th>공지</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">이달 근무한 직원이 없어요.</p>'}
-        <p class="hint"><b>최종 점수 = 달성률 × 100 × 업무태도</b>. 달성률 = 받은 기본 점수 ÷ 받을 수 있었던 기본 점수 (근무일 수가 달라도 공정하게 비교돼요). <b>업무태도</b>는 점수 항목에 없는 태도·성실함·팀워크를 사장님이 달마다 정해요 (보통 ×1.0 ~ 최고 ×1.3, 감점 없음). 직원 화면에는 업무태도와 순위가 보이지 않아요. 보너스는 총점에만 더해지고, 최종 점수가 같으면 총점이 높은 직원을 추천해요.</p>
+        <p class="hint"><b>최종 점수 = 달성률 × 100 × 업무태도</b>. 달성률 = 받은 기본 점수 ÷ 받을 수 있었던 기본 점수 (근무일 수가 달라도 공정하게 비교돼요). <b>업무태도</b>는 점수 항목에 없는 태도·성실함·팀워크를 사장님이 오른쪽 '업무태도 평가'에서 별로 매겨요 (×1.0 ~ ×1.3, 감점 없음). 직원 화면에는 업무태도와 순위가 보이지 않아요. 보너스는 총점에만 더해지고, 최종 점수가 같으면 총점이 높은 직원을 추천해요.</p>
       </section>
+      ${teamPanel}${thanksPanel}
     </div>
-    <div class="stack">
+    <div class="stack">${evalPanel}
       <section class="panel"><h3>⭐ 칭찬 점수 주기 <small>손님 칭찬, 센스 있는 일 처리 등</small></h3>
         <div class="form"><label>직원<select id="prStaff">${activeStaff().map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
           <label>점수<select id="prPts">${[5, 10, 20, 30].map(p => `<option value="${p}">+${p}점</option>`).join('')}</select></label>
@@ -3401,17 +3479,7 @@ function awardView(){
         ${praises.length ? `<div class="slist" style="margin-top:10px">${praises.map(x => `<div class="sitem"><div><b>${esc(staffById(x.staffId)?.name || '직원')}</b> <span class="chip ok">+${x.pts}</span><div class="sub">${esc(x.note || '')} · ${fmtMD(ymd(new Date(x.at)))}</div></div><button class="btn sm" data-act="prDel" data-id="${esc(x.id)}">지우기</button></div>`).join('')}</div>` : ''}
         <p class="hint">칭찬 점수는 보너스라 총점에만 더해져요 (달성률은 그대로).</p>
       </section>
-      <section class="panel"><h3>점수 기준 <small>감점 없음</small></h3>
-        <dl class="kv small">
-          <dt>정시 출근</dt><dd>+${SCORE.onTime} (근무날마다)</dd><dt>근무 완료</dt><dd>+${SCORE.done} (퇴근까지 기록)</dd>
-          <dt>업무 보고</dt><dd>마감 전 +${SCORE.taskOnTime} · 늦게 +${SCORE.taskLate} · 사장님 확인 +${SCORE.taskOk}</dd><dt>공지 읽음</dt><dd>+${SCORE.read}</dd>
-          <dt>보너스</dt><dd>🔥 정시 ${SCORE.streakEvery}일 연속마다 +${SCORE.streak} · 한 주 개근 +${SCORE.week} · 한 달 개근 +${SCORE.month} · 쉬는 날 추가 근무 +${SCORE.extra} · ⭐ 칭찬</dd>
-        </dl>
-        <h3 style="margin-top:14px">기본 포상금</h3>
-        <div class="row"><input id="awDefault" type="number" min="0" step="1000" value="${esc(cfg().award.amount)}" style="max-width:160px;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:6px 10px">원 <button class="btn sm" data-act="awDefaultSave">저장</button></div>
-        <p class="hint">확정할 때 그달 금액을 따로 바꿀 수 있어요. 여기는 처음 채워지는 금액이에요.</p>
-      </section>
-      ${pastPanel}
+      ${badgePanel}${criteriaPanel}${pastPanel}
     </div>
   </div>`;
 }
@@ -3481,27 +3549,196 @@ const AWACT = {
   async prDel(d){ await write(() => S.db.collection('praise').doc(d.id).delete()); render(true); },
 };
 document.addEventListener('change', e => { if (['awStaff', 'awAmount', 'awNote', 'awNotice', 'awShowAmt'].includes(e.target.id)) readAwForm(); });
-// 업무태도 가중치 고르기 → 바로 저장하고 순위 다시 계산 (사장님 화면 우수직원 탭)
-document.addEventListener('change', async e => {
-  if (e.target.name !== 'awAtt' || !S.db) return;
-  const sid = e.target.dataset.sid, w = +e.target.value, ym = S.month, att = { ...(cfg().award.att || {}) };
-  att[ym] = { ...(att[ym] || {}), [sid]: w };
-  if (w === 1) delete att[ym][sid];
-  await write(() => S.db.doc('config/main').set({ ...S.config, award:{ ...cfg().award, att } }));
-  S.awForm = null;   // 추천이 바뀔 수 있어서 확정 칸을 새로 채움
-  toast(`${staffById(sid)?.name || '직원'} 업무태도 ${ATT_LEVELS.find(([v]) => v === w)?.[1] || ''}`, '최종 점수와 순위에 반영했어요.', 'ok'); render(true);
+// 동기부여 탭 동작 (v32): 업무태도 별점, 팀 목표 저장
+async function putConfig(next){ S.config = next; await write(() => S.db.doc('config/main').set(next)); }
+Object.assign(AWACT, {
+  async attStar(d){   // 별을 누르면 바로 저장하고 최종 점수·추천 다시 계산
+    const ym = S.month, att = { ...(cfg().award.att || {}) }, cur = attStars(d.sid, ym) || { h:3, k:3, t:3, r:3 };
+    att[ym] = { ...(att[ym] || {}), [d.sid]: { ...cur, [d.c]: Math.min(5, Math.max(1, +d.v || 3)) } };
+    await putConfig({ ...S.config, award:{ ...cfg().award, att } });
+    S.awForm = null; render(true);
+  },
+  async tmSave(){
+    const on = !!$('#tmOn')?.checked, target = +($('#tmTarget')?.value || 90), reward = ($('#tmReward')?.value || '').trim().slice(0, 30);
+    const rewardVi = reward && reward !== cfg().team.reward ? (await tryTranslate([reward], 'vi'))?.[0] || reward : (reward ? cfg().team.rewardVi || reward : '');
+    await putConfig({ ...S.config, team:{ on, target, reward, rewardVi } });
+    toast(on ? `팀 목표 ${target}%를 보여 줘요` : '팀 목표를 숨겼어요', on && reward ? `달성하면 ${reward}` : '', 'ok'); render(true);
+  },
 });
 document.addEventListener('input', e => { if (['awAmount', 'awNote'].includes(e.target.id)) readAwForm(); });
-// 직원 화면: 내 점수 (본인 것만) + 지난달 우수직원
+/* ===================== 동기부여: 내 성장 (v32) ===================== */
+// 직원이 출퇴근하면서 '내 성실함'을 재미있게 보고 힘을 내도록:
+//   레벨(매달 새로) · 🎯 이번 주 미션 · 🔥 신기록(나와 비교) · 🏅 배지 모음집(한 번 따면 계속) · 🤝 팀 목표(가게 전체) · 🙏 동료 고마워요(점수 아님)
+// 직원은 자기 것만 보고 다른 직원 점수·순위는 몰라요. 이달의 우수직원은 이 기록 + 사장님 평가(업무태도 체크리스트)로 사장님이 정해요.
+// 저장: badges/{직원} { got:{배지id:받은 시각}, best:{ streak, points }, months:{ 'YYYY-MM':{ ontime, late, absent, work, reports, missions, total, end } } }
+//       thanks/{YYYY-MM-DD}_{보낸 직원} { date, from, to, text, textKo, textVi, at } — 직원마다 하루 한 번
+//       config.team { on, target(%), reward, rewardVi } — 가게 전체 정시 출근률 목표 (매달 새로)
+const BADGES = [
+  { id:'first', icon:'🌅', ko:'첫 정시 출근', vi:'Lần đầu đúng giờ', need:1, val:c => c.ontime },
+  { id:'on50', icon:'⏰', ko:'정시 출근 50회', vi:'Đúng giờ 50 lần', need:50, val:c => c.ontime },
+  { id:'on100', icon:'💯', ko:'정시 출근 100회', vi:'Đúng giờ 100 lần', need:100, val:c => c.ontime },
+  { id:'st10', icon:'🔥', ko:'10일 연속 정시 출근', vi:'10 ngày liên tiếp đúng giờ', need:10, val:c => c.streak },
+  { id:'st20', icon:'☄️', ko:'20일 연속 정시 출근', vi:'20 ngày liên tiếp đúng giờ', need:20, val:c => c.streak },
+  { id:'perfect', icon:'🎖', ko:'한 달 무지각·무결근', vi:'Một tháng không muộn, không vắng', need:1, val:c => c.perfect },
+  { id:'rep30', icon:'📸', ko:'사진 보고 30건', vi:'Báo cáo ảnh 30 lần', need:30, val:c => c.reports },
+  { id:'m3', icon:'🎯', ko:'주간 미션 3번 성공', vi:'Hoàn thành nhiệm vụ tuần 3 lần', need:3, val:c => c.missions },
+  { id:'m10', icon:'🏹', ko:'주간 미션 10번 성공', vi:'Hoàn thành nhiệm vụ tuần 10 lần', need:10, val:c => c.missions },
+  { id:'praise', icon:'⭐', ko:'사장님 칭찬 받기', vi:'Được chủ quán khen', need:1, val:c => c.praise },
+  { id:'thx10', icon:'🙏', ko:'고마워요 10개 받기', vi:'Nhận 10 lời cảm ơn', need:10, val:c => c.thanks },
+  { id:'legend', icon:'👑', ko:'전설 레벨 달성', vi:'Đạt cấp Huyền thoại', need:380, val:c => c.points },
+  { id:'award', icon:'🏆', ko:'이달의 우수직원', vi:'Nhân viên xuất sắc của tháng', need:1, val:c => c.awards },
+];
+const stableStr = v => v && typeof v === 'object' ? (Array.isArray(v) ? `[${v.map(stableStr).join(',')}]` : `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableStr(v[k])).join(',')}}`) : JSON.stringify(v);
+const monthStat = (o, ym) => ({ ontime:o.att.ontime, late:o.att.late, absent:o.att.absent, work:o.att.ontime + o.att.late, reports:o.task.sent + o.task.late, missions:Math.round(o.b.week / SCORE.week), total:o.total, end: ym < ymOf(todayStr()) });
+function badgeCtx(st, doc){
+  const ms = Object.values(doc.months || {}), sum = k => ms.reduce((t, m) => t + (+m[k] || 0), 0);
+  return { ontime:sum('ontime'), reports:sum('reports'), missions:sum('missions'), perfect: ms.filter(m => m.end && m.work >= 10 && !m.late && !m.absent).length,
+    streak:+doc.best?.streak || 0, points:+doc.best?.points || 0, praise: S.praise.filter(x => x.staffId === st.id).length,
+    thanks: [...S.thanks.values()].filter(x => x.to === st.id).length, awards: Object.values(S.awards).filter(a => a.staffId === st.id).length };
+}
+// 지금 기록으로 새 배지·신기록을 계산 (저장은 syncGrowth)
+function growthState(st){
+  const old = S.badges.get(st.id) || {}, ym = ymOf(todayStr()), prev = shiftYM(ym, -1);
+  const months = { ...(old.months || {}) }, cur = scoreMonth(st, ym);
+  months[ym] = monthStat(cur, ym);
+  let prevBest = 0;
+  if (S.monthLoaded[prev]){ const p = scoreMonth(st, prev); if (p.possible){ months[prev] = monthStat(p, prev); prevBest = p.best; } }
+  const oldStreak = +old.best?.streak || 0;
+  const best = { streak: Math.max(oldStreak, cur.best, prevBest), points: Math.max(+old.best?.points || 0, cur.total) };
+  const doc = { got:{ ...(old.got || {}) }, best, months }, c = badgeCtx(st, doc), fresh = [];
+  for (const b of BADGES) if (!doc.got[b.id] && b.val(c) >= b.need){ doc.got[b.id] = Date.now(); fresh.push(b); }
+  return { doc, old, cur, c, fresh, record: cur.streak >= 3 && cur.streak > oldStreak ? cur.streak : 0 };
+}
+const growthT = {};
+function queueGrowth(st){   // 직원 화면을 그릴 때 잠시 뒤 한 번 (바뀐 게 있을 때만 저장)
+  if (!st || !S.db || growthT[st.id]) return;
+  growthT[st.id] = setTimeout(() => { delete growthT[st.id]; syncGrowth(st).catch(e => console.warn('growth', e?.message || e)); }, 800);
+}
+async function syncGrowth(st){
+  if (!st || !S.db || !S.ready.staff) return null;
+  try { needMonth(shiftYM(ymOf(todayStr()), -1)); } catch {}   // 지난달 기록 (무지각 한 달 배지·이번 주 미션의 지난달 날짜)
+  const g = growthState(st);
+  if (stableStr(g.doc) === stableStr({ got:g.old.got || {}, best:g.old.best || {}, months:g.old.months || {} })) return g;
+  S.badges.set(st.id, g.doc);
+  await write(() => S.db.collection('badges').doc(st.id).set(g.doc));
+  if (g.fresh.length || g.record){
+    S.growthNews[st.id] = { badges:g.fresh.map(b => b.id), record:g.record, at:Date.now() };
+    if (g.fresh.length) toast('🎉 새 배지를 받았어요!', g.fresh.map(b => `${b.icon} ${isVi() ? b.vi : b.ko}`).join(' · '), 'ok');
+    else toast('🔥 연속 정시 출근 신기록!', isVi() ? `${g.record} ngày` : `${g.record}일`, 'ok');
+    if (S.mode !== 'owner') render(true);
+  }
+  return g;
+}
+// 방금 받은 배지·신기록 (1분 동안 출퇴근 도장 화면에 보여 줌)
+function growthNews(st){
+  const n = S.growthNews[st.id];
+  if (!n || Date.now() - n.at > 60000) return '';
+  const bs = n.badges.map(id => BADGES.find(b => b.id === id)).filter(Boolean);
+  return `<div class="gnews">${bs.length ? BI(`🎉 새 배지! ${bs.map(b => `${b.icon} ${b.ko}`).join(' · ')}`, `🎉 Huy hiệu mới! ${bs.map(b => `${b.icon} ${b.vi}`).join(' · ')}`) : ''}${n.record ? `<div>${BI(`🔥 신기록! 연속 정시 출근 <b>${n.record}일</b>`, `🔥 Kỷ lục mới! <b>${n.record} ngày</b> liên tiếp đúng giờ`)}</div>` : ''}</div>`;
+}
+// 🎯 이번 주 미션: 이번 주(월~일) 정해진 근무날 모두 정시 출근 → 성공하면 +20점(한 주 개근 보너스)
+function weekMission(st, now = Date.now()){
+  const today = todayStr(), mon = addDays(today, -((parseDate(today).getDay() + 6) % 7)), days = [];
+  for (let i = 0; i < 7; i++){
+    const ds = addDays(mon, i), p = getPunch(st.id, ds), sc = schedFor(st, ds, p);
+    if (ds <= today && !S.monthLoaded[ymOf(ds)]) continue;   // 아직 불러오지 않은 달(지난달 말)은 빼고 셈 — 불러오는 건 syncGrowth가 함
+    if (!sc || p?.kind === 'leave') continue;
+    if (ds > today){ days.push('todo'); continue; }
+    const r = dayCalc(st, ds, now);
+    days.push(r.p?.in && !r.late ? 'ok' : (r.p?.in || r.status === 'absent') ? 'miss' : 'todo');
+  }
+  const ok = days.filter(d => d === 'ok').length, fail = days.includes('miss');
+  return { days, total:days.length, ok, fail, done: !fail && days.length > 0 && ok === days.length };
+}
+function missionLine(st){
+  const m = weekMission(st);
+  if (!m.total) return '';
+  const dots = `<span class="mdots">${m.days.map(d => `<i class="${d}"></i>`).join('')}</span>`;
+  return `<div class="mission ${m.done ? 'done' : m.fail ? 'fail' : ''}">${m.done ? BI(`🎯 이번 주 미션 성공! 정해진 날 모두 정시 출근 ✅ +${SCORE.week}점`, `🎯 Hoàn thành nhiệm vụ tuần! Đúng giờ tất cả các ngày ✅ +${SCORE.week} điểm`)
+    : m.fail ? BI('🎯 이번 주 미션은 아쉽게 놓쳤어요 — 다음 주에 다시 도전! 💪', '🎯 Tuần này lỡ nhiệm vụ rồi — tuần sau thử lại nhé! 💪')
+    : BI(`🎯 이번 주 미션: 정해진 날 모두 정시 출근 · <b>${m.ok}/${m.total}일</b>`, `🎯 Nhiệm vụ tuần: đúng giờ tất cả các ngày · <b>${m.ok}/${m.total} ngày</b>`)} ${dots}</div>`;
+}
+// 🤝 팀 목표: 이번 달 가게 전체 정시 출근률 (출근했거나 결근으로 끝난 근무날 중 정시 출근)
+function teamGoal(ym = ymOf(todayStr())){
+  const t = cfg().team;
+  if (!t.on) return null;
+  let on = 0, all = 0;
+  for (const st of staffForMonth(ym)){ const o = scoreMonth(st, ym); on += o.att.ontime; all += o.att.ontime + o.att.late + o.att.absent; }
+  const target = Math.min(100, Math.max(50, +t.target || 90)), rate = all ? on / all : null;
+  return { target, reward:t.reward || '', rewardVi:t.rewardVi || '', rate, ok: rate != null && rate * 100 >= target };
+}
+function teamBanner(){
+  const g = teamGoal();
+  if (!g) return '';
+  const now = g.rate == null ? '-' : pct(g.rate), w = g.rate == null ? 0 : Math.min(100, Math.round(g.rate * 100 / g.target * 100));
+  const rw = g.reward ? BI(` · 달성하면 <b>${esc(g.reward)}</b>`, ` · Đạt được sẽ có <b>${esc(g.rewardVi || g.reward)}</b>`) : '';
+  return `<div class="teamgoal ${g.ok ? 'ok' : ''}">${BI(`🤝 이번 달 팀 목표: 가게 전체 정시 출근 <b>${g.target}%</b> · 지금 <b>${now}</b>${g.ok ? ' 🎉 달성 중!' : ''}`, `🤝 Mục tiêu cả quán tháng này: đúng giờ <b>${g.target}%</b> · hiện tại <b>${now}</b>${g.ok ? ' 🎉 Đang đạt!' : ''}`)}${rw}
+    <div class="lvbar"><i style="width:${w}%"></i></div></div>`;
+}
+// 🙏 동료 고마워요 (점수에는 안 들어가고 사장님 참고용, 하루 한 번)
+const thanksTodayFrom = sid => S.thanks.get(`${todayStr()}_${sid}`);
+const thanksTo = (sid, ym = ymOf(todayStr())) => [...S.thanks.values()].filter(x => x.to === sid && (x.date || '').startsWith(ym)).sort((a, b) => b.at - a.at);
+const thanksText = x => !x.text ? '' : isVi() ? esc(hasHangul(x.text) && x.textVi ? x.textVi : x.text) : esc(!hasHangul(x.text) && x.textKo ? x.textKo : x.text);
+function thanksView(st, clock){   // 태블릿·휴대폰 step 'thanks'
+  const f = S.thForm || {}, sent = thanksTodayFrom(st.id), others = activeStaff().filter(s => s.id !== st.id);
+  return clock + `<div class="kpanel otform"><h2>${TV('{name}님', { name:st.name })} · ${TV('🙏 동료에게 고마워요')}</h2>
+    ${sent ? `<p>${BI(`오늘은 이미 <b>${esc(staffById(sent.to)?.name || '')}</b>님에게 보냈어요 💌 내일 또 보낼 수 있어요.`, `Hôm nay bạn đã gửi cho <b>${esc(staffById(sent.to)?.name || '')}</b> rồi 💌 Ngày mai gửi tiếp nhé.`)}</p>`
+      : `<p class="small">${T('오늘 고마웠던 동료를 골라 주세요. 하루에 한 번 보낼 수 있어요.')}</p>
+      <div class="row otreasons">${others.map(s => `<button class="btn sm ${f.to === s.id ? 'pri' : ''}" data-act="thTo" data-id="${esc(s.id)}" aria-pressed="${f.to === s.id}">${esc(s.name)}</button>`).join('')}</div>
+      <label class="f">${T('한마디 (선택)')}<input type="text" id="thText" maxlength="40" value="${esc(f.text || '')}" placeholder="${esc(TV('예) 바쁠 때 도와줘서 고마워요'))}"></label>
+      <button class="bigbtn" data-act="thSend" ${f.to && !f.busy ? '' : 'disabled'}>${T('고마워요 보내기 🙏')}</button>`}
+    <button class="linkbtn" data-act="thBack">${T('돌아가기')}</button></div>`;
+}
+const THACT = {
+  thOpen(){
+    const st = staffById(S.kiosk.staffId || S.phone.staffId); if (!st) return;
+    const back = S.kiosk.step;
+    if (S.mode === 'phone' && back === 'list') S.kiosk.staffId = st.id;
+    S.thForm = { back, to:'', text:'' }; S.kiosk.step = 'thanks'; S.kiosk.at = Date.now(); S.editing = 'thanks'; render(true);
+  },
+  thTo(d){ if (!S.thForm) return; S.thForm.text = ($('#thText')?.value ?? S.thForm.text ?? '').trim(); S.thForm.to = d.id; S.kiosk.at = Date.now(); render(true); },
+  thBack(){ const b = S.thForm?.back; S.thForm = null; if (S.editing === 'thanks') S.editing = null; if (S.mode === 'phone' && b === 'list') resetKiosk(); else S.kiosk.step = b || 'action'; render(true); },
+  async thSend(){
+    const f = S.thForm, st = staffById(S.kiosk.staffId || S.phone.staffId);
+    if (!f || !st || f.busy || thanksTodayFrom(st.id)) return;
+    if (!f.to){ toast('받는 사람을 골라 주세요', '', 'warn'); return; }
+    f.text = ($('#thText')?.value ?? f.text ?? '').trim().slice(0, 40); f.busy = true; render(true);
+    const ds = todayStr(), doc = { date:ds, from:st.id, to:f.to, text:f.text, at:Date.now() };
+    if (f.text){ const tr = await tryTranslate([f.text], hasHangul(f.text) ? 'vi' : 'ko'); if (tr) doc[hasHangul(f.text) ? 'textVi' : 'textKo'] = tr[0]; }
+    S.thanks.set(`${ds}_${st.id}`, doc);
+    await write(() => S.db.collection('thanks').doc(`${ds}_${st.id}`).set(doc));
+    toast('🙏 고마워요를 보냈어요', staffById(f.to)?.name || '', 'ok');
+    const b = f.back; S.thForm = null; if (S.editing === 'thanks') S.editing = null;
+    if (S.mode === 'phone' && b === 'list') resetKiosk(); else S.kiosk.step = b || 'action';
+    render(true);
+  },
+};
+// 배지 모음집: 받은 것은 색, 아직은 흐리게 + 가장 가까운 다음 배지 진행
+function badgeShelf(st, full = true){
+  const doc = S.badges.get(st.id) || growthState(st).doc, got = doc.got || {}, c = badgeCtx(st, doc);
+  const n = BADGES.filter(b => got[b.id]).length;
+  const next = BADGES.filter(b => !got[b.id]).map(b => ({ b, p: Math.min(1, b.val(c) / b.need) })).sort((x, y) => y.p - x.p)[0];
+  return `<div class="shelf"><div class="small"><b>${BI(`🏅 내 배지 ${n}/${BADGES.length}`, `🏅 Huy hiệu của tôi ${n}/${BADGES.length}`)}</b></div>
+    <div class="badges">${BADGES.map(b => `<span class="bdg ${got[b.id] ? 'got' : ''}" title="${esc(isVi() ? b.vi : b.ko)}">${b.icon}</span>`).join('')}</div>
+    ${full && next ? `<div class="small muted">${BI(`다음 배지: ${next.b.icon} ${next.b.ko} (${num(Math.min(next.b.val(c), next.b.need))}/${num(next.b.need)})`, `Huy hiệu tiếp theo: ${next.b.icon} ${next.b.vi} (${num(Math.min(next.b.val(c), next.b.need))}/${num(next.b.need)})`)}</div>` : ''}</div>`;
+}
+// 직원 휴대폰: 내 성장 카드 (본인 것만) + 지난달 우수직원 + 팀 목표
 function myScoreCard(st){
+  queueGrowth(st);
   const ym = ymOf(todayStr()), prevYm = shiftYM(ym, -1), last = S.awards[prevYm];
   const banner = last ? `<div class="awbanner">${T('🏆 {m}월 이달의 우수직원', { m:+prevYm.slice(5) })} · <b>${esc(last.name || '')}</b>${last.staffId === st.id ? ` 🎉 ${T('축하해요!')}` : ''}</div>` : '';
-  const o = scoreMonth(st, ym), badge = badgeOf(o.rate), lv = levelOf(o.total);   // 선발을 켰는지와 상관없이 늘 보여 줌 (v31)
+  const o = scoreMonth(st, ym), badge = badgeOf(o.rate), lv = levelOf(o.total), best = Math.max(+S.badges.get(st.id)?.best?.streak || 0, o.best);
+  const got = thanksTo(st.id, ym);
   return `<section class="myscore">
-    ${banner}
+    ${banner}${teamBanner()}
     <div class="lvhead"><span class="lvicon">${lv.icon}</span><div><b>${BI(`Lv.${lv.n} ${lv.ko}`, `Lv.${lv.n} ${lv.vi}`)}</b></div></div>
     ${levelBar(lv)}
-    <div class="msrow"><div><small>${T('이번 달 달성률')}</small><b>${pct(o.rate)}</b> ${badge}</div><div><small>${T('이번 달 점수')}</small><b>${num(o.total)}</b></div><div><small>${T('🔥 연속 정시 출근')}</small><b>${o.streak}</b></div></div>
+    <div class="msrow"><div><small>${T('이번 달 달성률')}</small><b>${pct(o.rate)}</b> ${badge}</div><div><small>${T('이번 달 점수')}</small><b>${num(o.total)}</b></div><div><small>${T('🔥 연속 정시 출근')}</small><b>${o.streak}</b><small>${BI(`최고 ${best}일`, `Kỷ lục ${best} ngày`)}</small></div></div>
+    ${missionLine(st)}
+    ${badgeShelf(st)}
+    <div class="thx"><div class="small"><b>${BI(`🙏 이번 달 받은 고마워요 ${got.length}개`, `🙏 Lời cảm ơn nhận được tháng này: ${got.length}`)}</b></div>
+      ${got.slice(0, 2).map(x => `<div class="small rcline">💌 <b>${esc(staffById(x.from)?.name || '')}</b>${x.text ? `: ${thanksText(x)}` : ''}</div>`).join('')}
+      <button class="btn sm" data-act="thOpen">${TV(thanksTodayFrom(st.id) ? '💌 오늘 보낸 고마워요' : '🙏 동료에게 고마워요 보내기')}</button></div>
     <div class="small muted">${BI(`정시 출근 ${o.att.ontime}일 · 업무 보고 ${o.task.sent + o.task.late}건 · 공지 확인 ${o.read}건${o.b.praise ? ` · ⭐ 칭찬 +${o.b.praise}` : ''}`,
       `Đúng giờ ${o.att.ontime} ngày · Báo cáo ${o.task.sent + o.task.late} · Đọc thông báo ${o.read}${o.b.praise ? ` · ⭐ Khen +${o.b.praise}` : ''}`)}</div>
     ${S.praise.filter(x => x.staffId === st.id && x.ym === ym).slice(-3).map(x => `<div class="small">⭐ +${x.pts} · ${isVi() && x.noteVi ? `${esc(x.noteVi)}<span class="kosub">${esc(x.note || '')}</span>` : esc(x.note || '')}</div>`).join('')}
@@ -3879,7 +4116,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, OTACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, OTACT, THACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();
@@ -4093,7 +4330,7 @@ function tick1(){
   if ((S.mode === 'kiosk' || S.mode === 'phone') && k.step !== 'list' && !k.busy){
     const idle = now - (k.at || now), st = staffById(k.staffId);
     if (k.step === 'done' && k.didIn && idle > 2500 && kNextStep(st)){ k.step = kNextStep(st); k.at = now; render(true); }   // 출근 도장 → 새 공지·오늘 할 일
-    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
+    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
   }
   if (todayStr() !== lastDay){
     lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();
@@ -4139,6 +4376,8 @@ async function boot(){
   db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
   db.collection('awards').onSnapshot(s => { S.awards = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('awards', e));
   db.collection('award_reacts').onSnapshot(s => { S.reacts = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('award_reacts', e));
+  db.collection('badges').onSnapshot(s => { S.badges = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('badges', e));   // 동기부여 (v32)
+  db.collection('thanks').onSnapshot(s => { S.thanks = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('thanks', e));
   db.collection('ot').onSnapshot(s => { S.ots = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('ot', e));   // 추가근무 요청·승인
   db.collection('praise').onSnapshot(s => { S.praise = s.docs.map(d => ({ id:d.id, ...d.data() })); scheduleRender(); }, e => console.warn('praise', e));
   db.doc('status/autobackup').onSnapshot(s => { S.autoBackup = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('autobackup', e));

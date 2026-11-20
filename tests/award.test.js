@@ -95,7 +95,7 @@ S.trSubs['2026-11'] = () => {}; S.trSubs['2026-10'] = () => {}; S.monthSubs['202
   render(true);
   assert.ok(view.innerHTML.includes('이달의 우수직원') && view.innerHTML.includes('추천: <b>성실</b>') && view.innerHTML.includes('이 달은 안 하기'), '추천 표시');
   // 업무태도 가중치 (v30): 사장님만, 최종 점수 = 달성률 × 100 × 가중치, 감점 없음
-  assert.ok(view.innerHTML.includes('name="awAtt"') && view.innerHTML.includes('최고 ×1.3') && !view.innerHTML.includes('×0.'), '업무태도 고르기 (감점 없음)');
+  assert.ok(view.innerHTML.includes('업무태도 평가') && view.innerHTML.includes('data-act="attStar"') && view.innerHTML.includes('🧼 위생·청결') && !view.innerHTML.includes('×0.'), '업무태도 별점 체크리스트 (감점 없음)');
   const base = awardRank('2026-11');
   assert.strictEqual(base.top.st.id, 'a'); assert.strictEqual(base.top.final, 100, '가중치 없으면 달성률 그대로');
   const bRate = base.list.find(o => o.st.id === 'b').rate;

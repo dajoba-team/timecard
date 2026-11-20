@@ -106,7 +106,7 @@ export const backupToDocs = backup => {
     for (const r of list || []) add(`months/${ym}/task_reports`, r.id, body(r));
   }
   // 추가근무 요청·승인(v27), 이달의 우수직원·칭찬·축하 반응(v24~26) — 예전 백업에는 없음
-  for (const c of ["ot", "awards", "praise", "award_reacts"]) for (const r of ex[c] || []) add(c, r.id, body(r));
+  for (const c of ["ot", "awards", "praise", "award_reacts", "badges", "thanks"]) for (const r of ex[c] || []) add(c, r.id, body(r));   // 배지·고마워요 (v32)
 
   // 중복 검사
   const seen = new Set();
