@@ -47,7 +47,33 @@
   const btnCss = "width:100%;padding:14px;border:none;border-radius:12px;background:#2A3FC7;color:#fff;font-size:15px;font-weight:700;cursor:pointer";
   const inpCss = "width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #DADFE7;border-radius:10px;font-size:15px;margin-bottom:10px;outline:none";
 
-  let loginP = null, userEmail = "";
+  let loginP = null, userEmail = "", userRole = "";
+  // 직원 휴대폰 1회용 연결 (v39): 가게 태블릿 QR → 주소 끝 #join=코드 → 서버 함수 tc-phone-join이 코드를
+  // 직원용 공용 계정 로그인 토큰으로 바꿔 줌 → 이 휴대폰을 그 직원 것으로 기억하고 #phone으로 다시 열기
+  const joinCode = () => { const m = /^#join=([\w-]{16,64})$/.exec((window.location && window.location.hash) || ""); return m ? m[1] : null; };
+  const tryJoin = async (code, hasSession) => {
+    const el = overlay('<div style="font-size:18px;font-weight:700;margin-bottom:8px">📱 휴대폰 연결 중…</div><div style="font-size:13px;color:#5E6774">Đang kết nối điện thoại…</div>');
+    try {
+      const { data, error } = await sb.functions.invoke("tc-phone-join", { body: { action: "redeem", code } });
+      let msg = error && error.message;
+      if (error) { try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {} throw new Error(msg || "연결하지 못했어요"); }
+      if (!hasSession) {
+        let r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "magiclink" });
+        if (r.error) r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "email" });
+        if (r.error) throw new Error("로그인하지 못했어요: " + r.error.message);
+      }
+      try { localStorage.setItem("tc.phoneStaff", data.staffId); localStorage.setItem("tc.device", "phone"); } catch {}
+      window.location.replace(window.location.pathname + "#phone");
+      window.location.reload();
+      await new Promise(() => {});   // 다시 열리는 중
+    } catch (e) {
+      el.innerHTML = '<div style="width:100%;max-width:360px;background:#fff;border:1px solid #DADFE7;border-radius:16px;padding:28px 24px"><div style="font-size:18px;font-weight:700;margin-bottom:8px">연결하지 못했어요 · Không kết nối được</div>' +
+        '<div style="font-size:13px;color:#5E6774;line-height:1.6;margin-bottom:16px">' + esc(e && e.message || "") + '<br>가게 태블릿에서 번호를 다시 누르고 새 QR을 찍어 주세요.<br>Hãy nhập lại mã trên máy tính bảng và quét mã QR mới.</div>' +
+        '<button id="st-join-login" style="' + btnCss + '">사장님 계정으로 로그인</button></div>';
+      await new Promise(res => { el.querySelector("#st-join-login").onclick = res; });
+      try { history.replaceState(null, "", window.location.pathname + "#phone"); } catch {}
+    }
+  };
   // 같은 프로젝트의 장부 계정이 타임카드에 들어오지 않게: app_metadata.apps에 "timecard"가 있어야 함
   const hasApp = user => {
     const apps = user && user.app_metadata && user.app_metadata.apps;
@@ -70,9 +96,12 @@
         await new Promise(() => {}); // 설정 전에는 진행하지 않음
       }
       const { data } = await sb.auth.getSession();
+      const jc = joinCode();
+      if (jc) await tryJoin(jc, !!(data && data.session && hasApp(data.session.user)));   // 성공하면 다시 열림, 실패하면 아래 로그인 화면으로
       if (data && data.session) {
         if (!hasApp(data.session.user)) await denyNoApp(data.session.user);
         userEmail = data.session.user.email || "";
+        userRole = (data.session.user.app_metadata && data.session.user.app_metadata.tc_role) || "";
         return;
       }
       await new Promise(resolve => {
@@ -95,6 +124,7 @@
           if (error) { msg.textContent = "로그인하지 못했어요. 이메일과 비밀번호를 확인해 주세요."; return; }
           if (!hasApp(signed && signed.user)) { denyNoApp(signed && signed.user); return; }
           userEmail = (signed && signed.user && signed.user.email) || "";
+          userRole = (signed && signed.user && signed.user.app_metadata && signed.user.app_metadata.tc_role) || "";
           closeOverlay();
           resolve();
         };
@@ -491,6 +521,8 @@
       return data;
     },
     userEmail: () => userEmail,
+    // 'phone' = 직원용 공용 계정(1회용 QR로 연결된 직원 휴대폰): 앱이 사장님 화면을 막음 (v39)
+    userRole: () => userRole,
     pendingCount: () => pendOps.length,
     // 로그아웃: 보내지 못한 기록도 이 기기에서 지움 (앱이 먼저 경고함)
     logout: async () => {

@@ -59,6 +59,12 @@ v19부터 같은 서버 함수가 출근·퇴근·업무 보고 도착·업무 �
 
 **v27(추가근무)부터 서버 함수가 '추가근무 요청·보고' 슬랙 알림과 백업의 추가근무 기록을 다뤄요.** 화면을 올릴 때 `tc-notyet-check`도 같이 다시 배포하세요. 먼저 배포해도 예전 화면에는 영향이 없어요.
 
+## 직원 휴대폰 1회용 연결 (v39)
+
+서버 함수 `supabase/functions/tc-phone-join/`: 태블릿이 `issue`(사장님 토큰)로 10분짜리 코드를 받고, 휴대폰이 `redeem`(로그인 없이)으로 직원용 공용 계정 로그인 토큰(magiclink hashed_token)을 받아 `auth.verifyOtp`로 로그인해요. `revoke`는 공용 계정을 지워 모든 연결 휴대폰을 로그아웃시켜요. secret 추가 없음(SUPABASE_SERVICE_ROLE_KEY는 Supabase가 기본 제공).
+배포: `npx.cmd supabase@2.58.5 functions deploy tc-phone-join --no-verify-jwt --use-api --project-ref mtnuwdcxjxpnrpggbfwc`
+시험: `tests/phone-join-fn.test.js`(서버), `tests/storage-join.test.js`(휴대폰 쪽).
+
 ## 자동 번역 (Claude API, v26)
 
 서버 함수 `supabase/functions/tc-translate/`가 한국어 ↔ 베트남어를 번역해요 (모델 `claude-opus-5-5`, effort low, 안전 필터에 걸리면 서버 쪽 대체 모델이 이어서 처리). 앱은 **저장할 때 한 번만** 번역해서 함께 저장하므로 볼 때는 비용이 들지 않아요. 키가 없거나 번역이 안 되면 원문만 저장하고 계속 진행해요.

@@ -33,6 +33,8 @@
 | `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
 | `awards/{YYYY-MM}` | 이달의 우수직원 확정 `{ staffId, name, rate(달성률 0~1), points(총점), att(업무태도 가중치, v30), final(최종 점수, v30), amount(포상금), note, decidedAt, noticeId(축하 공고 tasks id), paidAt }` (v24) |
 | `praise/{id}` | 사장님 칭찬 점수 `{ staffId, ym, pts, note, noteVi(자동 번역, v26), at }` (보너스, 달성률에는 안 들어감) |
+| `phone_join/{코드의 SHA-256}` | 태블릿 1회용 연결 코드 (v39, 서버 함수만 씀) `{ staffId, exp(10분), used, at, usedAt }` — 코드 자체는 저장 안 함 |
+| `config/phone_account` | 직원용 공용 계정 `{ userId, createdAt }` (v39, 서버 함수만 씀). 계정: `app_metadata { apps:['timecard'], tc_role:'phone' }`, 장부 권한 없음 |
 | `phone_links/{staffId}` | 직원 휴대폰 연결 기록 (v38) `{ staffId, first(처음 연결), last(마지막 접속, 하루 한 번) }` — 휴대폰에서 이름+개인 번호로 연결할 때 생김, 사장님이 지우면 다시 연결 안내 |
 | `badges/{staffId}` | 동기부여 (v32): `{ got:{ 배지id: 받은 시각 }, best:{ streak(연속 정시 최고), points(한 달 최고 점수) }, months:{ 'YYYY-MM':{ ontime, late, absent, work, reports, missions, total, end, early(지난달 일찍 온 분 합계, v33), earlyTop(그달 합계 1등, v33) } } }` — 직원 화면을 열 때 앱이 바뀐 것만 저장. 배지는 한 번 받으면 지우지 않음 |
 | `thanks/{YYYY-MM-DD}_{보낸 staffId}` | 동료 고마워요 (v32, 하루 한 번) `{ date, from, to, text(40자), textKo 또는 textVi(번역), at }` — 점수에는 안 들어감 |

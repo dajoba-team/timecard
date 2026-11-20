@@ -1311,7 +1311,7 @@ function renderTop(){
   $('#top').innerHTML = `
     <button type="button" class="brand" data-act="navHome" title="처음 화면으로" aria-label="${esc(c.storeName)} · 처음 화면으로"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? TV('출퇴근 화면') : S.mode === 'phone' ? TV('직원 휴대폰') : '사장님 화면'}</small></div></button>
     ${owner ? `<nav class="tabs">${TABS.map(([k, l]) => { const n = k === 'now' ? att : k === 'tasks' && S.ready.tasks ? trWaiting().length : 0; return `<button data-act="tab" data-v="${k}" class="${S.tab === k ? 'on' : ''}">${l}${n ? `<i class="badge">${n}</i>` : ''}</button>`; }).join('')}</nav>` : ''}
-    ${S.mode !== 'owner' ? `${langSwitch()}<button class="ghost" data-act="toOwner">${TV('사장님 화면')}</button>` : `<button class="ghost" data-act="toKiosk">${deviceMode() === 'phone' ? '직원 휴대폰 화면으로' : '출퇴근 화면으로'}</button>`}`;
+    ${S.mode !== 'owner' ? `${langSwitch()}${isPhoneAcct() ? '' : `<button class="ghost" data-act="toOwner">${TV('사장님 화면')}</button>`}` : `<button class="ghost" data-act="toKiosk">${deviceMode() === 'phone' ? '직원 휴대폰 화면으로' : '출퇴근 화면으로'}</button>`}`;
   document.documentElement && (document.documentElement.lang = isVi() ? 'vi' : 'ko');
 }
 function renderBanner(){
@@ -1474,7 +1474,8 @@ function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
   Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
-  S.otForm = null; S.reactDraft = null; S.thForm = null;   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
+  S.otForm = null; S.reactDraft = null; S.thForm = null;
+  if (S.join?.err) S.join = null;   // 1회용 연결 코드를 못 받았으면 다음에 다시 시도   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
   if (S.editing === 'ot' || S.editing === 'react' || S.editing === 'thanks') S.editing = null;
 }
 function lockView(){
@@ -2914,6 +2915,8 @@ function tasksView(){
         <div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="toPhone">이 기기를 직원 휴대폰 화면으로</button></div>
         <h3 style="margin-top:6px">휴대폰 연결 현황 <small>${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명${cfg().phoneReq.on ? ` · 필수, ${fmtMD(cfg().phoneReq.deadline || todayStr())}까지` : ' · 직원·설정에서 필수로 켤 수 있어요'}</small></h3>
         <div class="srows" style="display:grid;gap:4px;margin-bottom:10px">${activeStaff().map(s => { const l = S.plinks.get(s.id); return `<div class="row small" style="gap:6px;align-items:center">${l ? '✅' : '⬜'} <b>${esc(s.name)}</b> <span class="muted">${l ? `연결 ${fmtMD(ymd(new Date(l.first)))} · 마지막 ${fmtMD(ymd(new Date(l.last)))}` : '아직 연결 안 함'}</span>${l ? `<span class="spacer"></span><button class="linkbtn" style="padding:0" data-act="plDel" data-id="${esc(s.id)}" title="휴대폰을 바꿨을 때">연결 지우기</button>` : ''}</div>`; }).join('')}</div>
+        <p class="hint" style="margin:0 0 6px">태블릿 QR로 연결된 휴대폰은 <b>직원용 공용 계정</b>으로 로그인돼요 (장부는 못 열고, 사장님 화면도 막혀 있어요). 휴대폰을 잃어버렸거나 의심되면 아래 버튼으로 모두 끊고 다시 연결하게 하세요.</p>
+        <div class="row" style="margin-bottom:10px"><button class="btn sm ${S.confirmRevoke ? 'danger' : ''}" data-act="plRevoke">${S.confirmRevoke ? '정말 끊을까요? 한 번 더 누르기' : '🔌 QR로 연결된 직원 휴대폰 모두 끊기'}</button></div>
         <h3 style="margin-top:6px">휴대폰 출퇴근 허용 <small>외근 직원만 켜요</small></h3>
         <div class="srows" style="display:grid;gap:6px">${phoneStaff.map(s => `<label class="check" for="pp-${esc(s.id)}"><input type="checkbox" id="pp-${esc(s.id)}" name="pp" data-id="${esc(s.id)}" ${s.phonePunch ? 'checked' : ''}> ${esc(s.name)} <span class="small muted">${esc(s.position || '')}</span></label>`).join('') || '<p class="muted small">직원이 없어요</p>'}</div>
         <p class="hint">켜 둔 직원은 휴대폰 맨 위에 출근·퇴근 단추가 생겨요 (사진·위치는 태블릿과 같아요). 꺼 둔 매장 직원은 가게 태블릿에서만 출퇴근하고, 휴대폰으로는 사진 보고와 공지만 봐요.</p>
@@ -3930,6 +3933,13 @@ function thanksView(st, clock){   // 태블릿·휴대폰 step 'thanks'
 const THACT = {
   phSkip(){ const k = S.kiosk; if (phoneLate()) return; k.step = 'action'; k.at = Date.now(); render(true); },   // 휴대폰 연결 안내: 기한 전엔 오늘은 넘어가기 (v38)
   async plDel(d){ await write(() => S.db.collection('phone_links').doc(d.id).delete()); S.plinks.delete(d.id); toast('휴대폰 연결 기록을 지웠어요', '다음 출근 때 다시 연결 안내가 떠요.', 'ok'); render(true); },
+  async plRevoke(){   // 1회용 QR로 연결된 직원 휴대폰 모두 끊기 (공용 계정 지움) — 두 번 눌러야
+    if (!S.confirmRevoke){ S.confirmRevoke = true; render(true); setTimeout(() => { S.confirmRevoke = false; scheduleRender(); }, 6000); return; }
+    S.confirmRevoke = false;
+    try { const r = await window.tcStore.invoke('tc-phone-join', { action:'revoke' }); S.plinks = new Map(); toast('직원 휴대폰 연결을 모두 끊었어요', r?.removed ? '모든 직원이 태블릿 QR로 다시 연결해야 해요.' : '연결된 공용 계정이 없었어요.', 'ok'); }
+    catch (e){ toast('끊지 못했어요', e?.message || '', 'warn'); }
+    render(true);
+  },
   thOpen(){
     const st = staffById(S.kiosk.staffId || S.phone.staffId); if (!st) return;
     const back = S.kiosk.step;
@@ -4240,7 +4250,27 @@ const OTACT = {
 // QR·주소와 연결 방법을 보여 줘요. 기한까지는 [오늘은 그냥 출퇴근하기]로 넘어갈 수 있고, 기한이 지나면 연결해야 출퇴근 단추가 나와요
 // (사장님 마스터 번호로 들어오면 넘어감). 휴대폰에서 이름+개인 번호로 연결하면 phone_links/{직원} 이 생기고, 태블릿 화면이 바로 넘어가요.
 // 한 번 연결한 직원에게는 다시 뜨지 않아요. 휴대폰을 열 때마다 하루 한 번 '마지막 접속'을 남겨요.
-const phoneUrl = () => `${location.origin && location.origin !== 'null' ? location.origin : 'https://timecard.dajoba.kr'}/#phone`;
+const siteOrigin = () => location.origin && location.origin !== 'null' ? location.origin : 'https://timecard.dajoba.kr';
+const phoneUrl = () => `${siteOrigin()}/#phone`;
+// 직원용 공용 계정 (v39: 태블릿 1회용 QR로 연결된 휴대폰) — 사장님 화면을 막아요
+function isPhoneAcct(){ try { return window.tcStore?.userRole?.() === 'phone'; } catch { return false; } }
+// 태블릿 1회용 연결 코드 (v39): 번호를 확인한 직원 전용, 10분, 한 번만 — 서버 함수 tc-phone-join
+let joinReq = null;
+function joinFor(st){
+  const j = S.join;
+  if (j && j.staffId === st.id && (j.code ? j.exp - Date.now() > 60000 : j.err)) return j;   // 1분 넘게 남았거나, 실패했으면 그대로
+  if (joinReq?.sid === st.id) return j && j.staffId === st.id ? j : null;
+  if (!window.tcStore?.invoke) return null;
+  const sid = st.id;
+  joinReq = { sid };
+  S.join = { staffId:sid, busy:true };
+  window.tcStore.invoke('tc-phone-join', { action:'issue', staffId:sid })
+    .then(r => { if (S.join?.staffId === sid) S.join = r?.code ? { staffId:sid, code:r.code, exp:+r.exp || Date.now() + 600000 } : { staffId:sid, err:r?.error || '코드를 받지 못했어요' }; })
+    .catch(e => { if (S.join?.staffId === sid) S.join = { staffId:sid, err:e?.message || String(e) }; console.warn('phone join', e?.message || e); })
+    .finally(() => { if (joinReq?.sid === sid) joinReq = null; if (S.kiosk.step === 'phonereq') render(true); });
+  return S.join;
+}
+const joinUrl = code => `${siteOrigin()}/#join=${code}`;
 const phoneLinked = st => !!st && S.plinks.has(st.id);
 function phoneNeeded(st){ const r = cfg().phoneReq; return !!r.on && S.mode === 'kiosk' && !!st && !phoneLinked(st); }
 const phoneLate = () => { const d = cfg().phoneReq.deadline; return !!d && todayStr() > d; };
@@ -4271,19 +4301,27 @@ function qrSvg(text){
   return '';
 }
 function phoneReqView(st, clock){
-  const late = phoneLate(), left = phoneDaysLeft(), d = cfg().phoneReq.deadline, url = phoneUrl(), qr = qrSvg(url);
+  const late = phoneLate(), left = phoneDaysLeft(), d = cfg().phoneReq.deadline;
+  const j = joinFor(st), direct = !!j?.code, url = direct ? joinUrl(j.code) : phoneUrl(), qr = j?.busy ? '' : qrSvg(url);   // 1회용 코드가 있으면 로그인 없이 바로 연결 (v39), 안 되면 주소 + 사장님 로그인
   return clock + `<div class="kpanel preq"><h2>${TV('{name}님', { name:st.name })}</h2>
     <div class="preqhead">📱 <b>${BI('휴대폰 연결이 필요해요', 'Bạn cần kết nối điện thoại')}</b></div>
     <p>${BI(`${d ? `<b>${fmtMD(d)}</b>까지 ` : ''}모든 직원이 자기 휴대폰을 연결해요. 연결하면 휴대폰으로 업무 사진 보고·공지 확인${st.phonePunch ? '·출퇴근' : ''}을 할 수 있어요.`,
       `${d ? `Trước <b>${dmVi(d)}</b>, ` : ''}tất cả nhân viên cần kết nối điện thoại của mình. Sau khi kết nối, bạn có thể báo cáo ảnh công việc, xem thông báo${st.phonePunch ? ', chấm công' : ''} bằng điện thoại.`)}</p>
-    <div class="qr" aria-label="연결 주소 QR">${qr || '<div class="small muted">QR 준비 중…</div>'}</div>
-    <div class="purl mono">${esc(url.replace(/^https?:\/\//, ''))}</div>
+    <div class="qr" aria-label="연결 QR">${qr || `<div class="small muted">${j?.busy ? BI('내 전용 QR 만드는 중…', 'Đang tạo mã QR riêng…') : 'QR 준비 중…'}</div>`}</div>
+    ${direct ? `<p class="small" style="margin:0"><b>${BI(`<b>${esc(st.name)}</b>님 전용 · 10분 동안 한 번만 쓸 수 있어요`, `Riêng cho <b>${esc(st.name)}</b> · dùng một lần trong 10 phút`)}</b></p>
+    <ol class="psteps">
+      <li>${BI('<b>내 휴대폰</b> 카메라로 위 QR을 찍어요 (다른 사람에게 보여 주지 마세요)', 'Dùng camera <b>điện thoại của bạn</b> quét mã QR (đừng cho người khác quét)')}</li>
+      <li>${BI('뜨는 주소를 열면 <b>로그인 없이 바로</b> 내 휴대폰으로 연결돼요', 'Mở địa chỉ hiện ra là <b>kết nối ngay</b>, không cần đăng nhập')}</li>
+      <li>${BI('끝나면 이 화면이 저절로 넘어가요 ✅', 'Xong thì màn hình này sẽ tự chuyển ✅')}</li>
+    </ol>`
+    : `<div class="purl mono">${esc(url.replace(/^https?:\/\//, ''))}</div>
+    ${j?.err ? `<p class="small muted">${BI('전용 QR을 만들지 못해서 주소로 안내해요', 'Không tạo được mã riêng, hãy dùng địa chỉ')}</p>` : ''}
     <ol class="psteps">
       <li>${BI('휴대폰 카메라로 QR을 찍거나 위 주소를 열어요', 'Dùng camera điện thoại quét mã QR hoặc mở địa chỉ trên')}</li>
       <li>${BI('로그인 화면이 나오면 <b>사장님께 로그인을 부탁</b>해요 (처음 한 번만)', 'Nếu thấy màn hình đăng nhập, <b>nhờ chủ quán đăng nhập</b> giúp (chỉ lần đầu)')}</li>
       <li>${BI('내 이름을 누르고 개인 번호 4자리를 넣어요', 'Chạm vào tên của bạn và nhập mã cá nhân 4 số')}</li>
       <li>${BI('끝나면 이 화면이 저절로 넘어가요 ✅', 'Xong thì màn hình này sẽ tự chuyển ✅')}</li>
-    </ol>
+    </ol>`}
     <p class="small muted">${BI('앱처럼 쓰려면: 아이폰은 공유 → 홈 화면에 추가, 안드로이드는 ⋮ → 홈 화면에 추가', 'Để dùng như ứng dụng: iPhone bấm Chia sẻ → Thêm vào MH chính, Android bấm ⋮ → Thêm vào màn hình chính')}</p>
     ${late ? `<p class="err">${BI('연결 기한이 지났어요. 휴대폰을 연결해야 출퇴근할 수 있어요. 어려우면 사장님께 말씀하세요.', 'Đã quá hạn kết nối. Bạn cần kết nối điện thoại mới chấm công được. Nếu khó, hãy báo chủ quán.')}</p>`
       : `<button class="btn" data-act="phSkip">${BI(`오늘은 그냥 출퇴근하기${left != null ? ` (D-${Math.max(0, left)})` : ''}`, `Hôm nay chấm công trước${left != null ? ` (còn ${Math.max(0, left)} ngày)` : ''}`)}</button>`}
@@ -4296,11 +4334,11 @@ const ACT = {
   lang(d){ S.lang = d.v === 'ko' ? 'ko' : 'vi'; store.set('uilang', S.lang); render(true); },
   navBack(){ navBack(); },
   navHome(){ navHome(); },
-  toOwner(){ S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },
+  toOwner(){ if (isPhoneAcct()){ toast('직원 휴대폰에서는 사장님 화면을 열 수 없어요', '', 'warn'); return; } S.mode = 'owner'; S.unlocked = store.get('ownerDevice') === '1'; S.lockPin = ''; S.lockErr = ''; store.set('mode', 'owner'); render(true); },
   toKiosk(){ S.mode = deviceMode(); S.editing = null; S.unlocked = false; resetKiosk(); store.set('mode', S.mode); render(true); requestWake(); scrollTo(0, 0); },
   // 사장님 화면 '업무 보고' → 이 기기를 직원 휴대폰 화면으로 (직원 휴대폰에서 한 번만)
   toPhone(){ store.set('device', 'phone'); ACT.toKiosk(); },
-  toTablet(){ store.set('device', 'kiosk'); ACT.toKiosk(); },
+  toTablet(){ if (isPhoneAcct()) return; store.set('device', 'kiosk'); ACT.toKiosk(); },
   sound(){ initAudio(); S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); if (S.sound){ beep('ok'); toast('소리 알림을 켰어요', '이 화면을 열어 두면 출퇴근·지각 때 소리가 나요.', 'ok'); } render(true); },
   kPick(d){ const st = staffById(d.id); Object.assign(S.kiosk, { staffId:d.id, pin:'', err:'', step: st && st.pin ? 'pin' : 'action' }); requestWake(); render(true); },
   kCancel(){ resetKiosk(); render(true); },
@@ -4662,6 +4700,7 @@ async function boot(){
   const db = window.tcStore?.use ? await window.tcStore.use('db') : null;
   if (!db){ clearTimeout(connTimer); S.noDb = true; S.ready.staff = true; render(true); return; }
   S.db = db;
+  if (isPhoneAcct()){ store.set('device', 'phone'); store.set('mode', 'phone'); S.mode = 'phone'; S.unlocked = false; }   // 직원용 공용 계정은 직원 휴대폰 화면만 (v39)
   db.doc('config/main').onSnapshot(s => { S.config = s.exists ? s.data() : {}; S.ready.config = true; if (!s.metadata.fromCache) markConnected(); scheduleRender(); }, e => console.warn('config', e));
   db.collection('staff').onSnapshot(s => {
     S.staff = s.docs.map(d => ({ id:d.id, ...d.data() })).sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.name).localeCompare(String(b.name), 'ko'));

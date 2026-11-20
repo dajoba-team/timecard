@@ -228,6 +228,24 @@ const [A, B] = S.staff;
   S.mode = 'owner'; S.tab = 'tasks'; render(true);
   assert.ok(view.innerHTML.includes('휴대폰 연결 현황') && view.innerHTML.includes('✅ <b>성실</b>') && view.innerHTML.includes('⬜ <b>가나다</b>'), '사장님: 누가 연결했는지');
   await ACT.plDel({ id:'a' }); assert.ok(!docs['phone_links/a'] && !S.plinks.has('a'), '연결 지우기 (휴대폰 바꿨을 때)');
+  // v39: 태블릿 1회용 QR — 서버 함수에서 그 직원 전용 코드를 받아 로그인 없이 연결
+  const invSave = window.tcStore.invoke, asked = [];
+  window.tcStore.invoke = async (fn, b) => { asked.push([fn, b]); return fn === 'tc-phone-join' && b.action === 'issue' ? { code:'C'.repeat(24), exp: Date.now() + 600000 } : fn === 'tc-phone-join' && b.action === 'revoke' ? { ok:true, removed:true } : { translations:(b.texts || []).map(x => x) }; };
+  S.config.phoneReq = { on:true, deadline:'2026-11-27' }; S.join = null; S.mode = 'kiosk';
+  resetKiosk(); ACT.kPick({ id:'a' }); for (const dg of '1111') padPress('staff', dg);
+  render(true); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r)); render(true);
+  assert.ok(asked.some(([fn, b]) => fn === 'tc-phone-join' && b.action === 'issue' && b.staffId === 'a'), '번호 확인한 직원 전용 코드 요청');
+  assert.ok(S.join.code === 'C'.repeat(24) && joinUrl(S.join.code).endsWith('/#join=' + 'C'.repeat(24)), '1회용 연결 주소');
+  assert.ok(view.innerHTML.includes('님 전용') && view.innerHTML.includes('로그인 없이 바로') && !view.innerHTML.includes('사장님께 로그인을 부탁'), '전용 QR 안내 (사장님 로그인 필요 없음)');
+  // 사장님: 모두 끊기 (두 번 눌러야)
+  S.mode = 'owner'; S.tab = 'tasks'; await ACT.plRevoke(); assert.ok(!asked.some(([fn, b]) => b?.action === 'revoke'), '한 번만 누르면 확인만');
+  render(true); assert.ok(view.innerHTML.includes('정말 끊을까요'));
+  await ACT.plRevoke(); assert.ok(asked.some(([fn, b]) => b?.action === 'revoke') && toasts.some(x => x.includes('모두 끊었어요')), '두 번 누르면 모두 끊기');
+  // 직원용 공용 계정은 사장님 화면을 못 엶
+  window.tcStore.userRole = () => 'phone';
+  S.mode = 'phone'; renderTop(); assert.ok(!document.querySelector('#top').innerHTML.includes('data-act="toOwner"'), '공용 계정: 사장님 화면 버튼 없음');
+  ACT.toOwner(); assert.strictEqual(S.mode, 'phone', '공용 계정: 사장님 화면으로 안 감');
+  delete window.tcStore.userRole; window.tcStore.invoke = invSave;
   console.log('휴대폰 연결 필수 통과');
 
   // ----- 10. 백업 -----
