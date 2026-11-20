@@ -433,6 +433,20 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .kosub{display:block;font-size:.72em;font-weight:500;opacity:.68;margin-top:2px;line-height:1.35}
 .kosub.kobody{font-size:.85em;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);white-space:pre-wrap}
 .kname em .kosub,.nbadge .kosub{display:inline;margin-left:4px}
+/* 🌅 오늘 가장 일찍 출근 (v33): 금빛 테두리가 반짝 + 👏가 위로 떠오름 */
+.kname{position:relative;overflow:visible}
+.kname.early1{border:2px solid var(--amber);background:linear-gradient(135deg,var(--amber-soft),var(--card) 65%);animation:ebglow 2.4s ease-in-out infinite}
+@keyframes ebglow{0%,100%{box-shadow:0 0 0 0 rgba(242,167,61,.0)}50%{box-shadow:0 0 0 6px rgba(242,167,61,.35)}}
+.ebird{grid-column:1/3;font-style:normal;font-weight:700;font-size:13px;color:var(--amber);margin-top:6px}
+.claps{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.claps span{position:absolute;bottom:20%;font-size:18px;opacity:0;animation:clap 3.2s ease-out infinite}
+.claps span:nth-child(1){left:12%;animation-delay:0s}.claps span:nth-child(2){left:30%;animation-delay:.6s}.claps span:nth-child(3){left:50%;animation-delay:1.2s}
+.claps span:nth-child(4){left:68%;animation-delay:1.8s}.claps span:nth-child(5){left:84%;animation-delay:2.4s}.claps span:nth-child(6){left:40%;animation-delay:.3s}
+@keyframes clap{0%{transform:translateY(0) scale(.6);opacity:0}15%{opacity:1}70%{opacity:.9}100%{transform:translateY(-70px) scale(1.15);opacity:0}}
+.ebcele{position:relative;margin:10px 0;padding:12px;border-radius:12px;background:var(--amber-soft);border:2px solid var(--amber)}
+.ebcele b{font-size:17px}
+.claps.big span{font-size:26px}
+@media (prefers-reduced-motion:reduce){.kname.early1,.claps span{animation:none}.claps span{opacity:1;position:static}.claps{position:static;display:inline-flex;gap:2px}}
 .seg.langsw button{padding:6px 12px;font-weight:600}
 /* 이달의 우수직원 */
 .award.won{border-color:var(--amber);background:linear-gradient(180deg,var(--amber-soft),var(--card) 70%)}
@@ -677,6 +691,9 @@ const VI = {
   '🙅 도전장을 보냈어요!':'🙅 Đã gửi lời thách đấu!', '🎉 소감을 남겼어요':'🎉 Đã để lại cảm nghĩ',
   // 추가근무 요청·보고 (v27)
   '점수는 나의 성실함 기록이에요. 이달의 우수직원은 이 기록과 사장님 평가(업무태도 등)를 함께 보고 정해요.':'Điểm là nhật ký chăm chỉ của bạn. Nhân viên xuất sắc của tháng được chọn dựa trên điểm này cùng đánh giá của chủ quán (thái độ làm việc…).',
+  // 오늘 가장 일찍 출근 (v33)
+  '출근 {a} · 퇴근 {b}':'Vào ca {a} · Tan ca {b}', '🌅 오늘 가장 일찍 출근 👏':'🌅 Đến sớm nhất hôm nay 👏',
+  '🌅 지금 오늘 가장 일찍 출근했어요!':'🌅 Bạn đang là người đến sớm nhất hôm nay!', '첫 화면 이름 카드에 👏 표시가 붙어요':'Thẻ tên của bạn ở màn hình đầu sẽ có dấu 👏',
   // 동기부여 (v32)
   '🙏 동료에게 고마워요':'🙏 Cảm ơn đồng nghiệp', '🙏 동료에게 고마워요 보내기':'🙏 Gửi lời cảm ơn đồng nghiệp', '💌 오늘 보낸 고마워요':'💌 Lời cảm ơn hôm nay',
   '오늘 고마웠던 동료를 골라 주세요. 하루에 한 번 보낼 수 있어요.':'Hãy chọn đồng nghiệp bạn muốn cảm ơn hôm nay. Mỗi ngày gửi được một lần.',
@@ -1302,25 +1319,48 @@ function schedSummary(sched){
 }
 
 /* ---------- 출퇴근 화면 (키오스크) ---------- */
+// 🌅 오늘 가장 일찍 출근한 직원 (v33): 각자 정해진 출근 시각보다 '몇 분 일찍' 왔는지로 비교 (주방·홀 출근 시각이 달라도 공정하게)
+//   1분 이상 일찍 온 직원만, 같으면 먼저 찍은 사람. extra: 방금 찍어 아직 기록이 안 들어온 출근 { sid, in }
+function earlyBird(extra){
+  const today = todayStr();
+  let best = null;
+  for (const st of activeStaff()){
+    const p = getPunch(st.id, today), inMs = extra?.sid === st.id ? extra.in : p?.in;
+    const sc = schedFor(st, today, p);
+    if (!inMs || !sc || p?.kind === 'leave') continue;
+    const min = Math.round((at(today, sc.start) - inMs) / 60000);
+    if (min >= 1 && (!best || min > best.min || (min === best.min && inMs < best.in))) best = { sid:st.id, min, in:inMs };
+  }
+  return best;
+}
 function kioskStatus(st, now){
   const today = todayStr(), op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
   // 이름 카드의 좁은 줄이라 베트남어 한 줄만 (TV)
   if (op) return { cls: op.lateMin ? 'late' : 'working', text: TV('출근 {t} · 근무 중', { t:fmtT(op.in) }) };
-  if (tp && tp.out) return { cls:'done', text: TV('퇴근 {t}', { t:fmtT(tp.out) }) };
+  if (tp && tp.out) return { cls:'done', text: tp.in ? TV('출근 {a} · 퇴근 {b}', { a:fmtT(tp.in), b:fmtT(tp.out) }) : TV('퇴근 {t}', { t:fmtT(tp.out) }) };   // 오늘 출근 시각은 모두에게 (v33)
   if (tp && tp.kind === 'leave') return { cls:'', text: TV('오늘 휴무') };
   if (sc) return { cls: now > at(today, sc.start) + cfg().graceMin*60000 ? 'wait' : '', text: TV('오늘 {a}–{b}', { a:sc.start, b:sc.end }) };
   return { cls:'', text: isRegularOff(st, today) ? TV('오늘 정기 휴무') : TV('오늘 근무 없음') };
 }
+// 일찍 출근: 정해진 출근 시각보다 1분 이상 먼저 찍은 날 (v30). 직원 화면엔 연속 일수만, 날짜·분·합계는 사장님 근무 집계에서 (v33)
+const earlyDays = o => o.days.filter(r => r.p?.in && r.sStart && r.p.in <= r.sStart - 60000).map(r => ({ ds:r.ds, min:Math.round((r.sStart - r.p.in) / 60000) }));
+function earlyStreak(o){   // 가장 최근 근무날부터 거꾸로, 연속으로 일찍 온 근무날 수 (정해진 근무가 없는 날·휴무는 건너뜀, 오늘 아직 안 왔으면 어제부터)
+  let n = 0;
+  const today = todayStr();
+  for (const r of [...o.days].reverse()){
+    if (r.ds > today || !r.sc || r.status === 'leave') continue;
+    if (!r.p?.in){ if (r.ds === today) continue; break; }
+    if (r.p.in <= r.sStart - 60000) n++; else break;
+  }
+  return n;
+}
+const minKo = m => m < 60 ? `${m}분` : fmtH(m);
 function mySummary(st){
-  const o = monthSummary(st, ymOf(todayStr()));
-  // 추가근무 대신 일찍 출근한 날·시간 (v30, 대표님 요청): 정해진 출근 시각보다 1분 이상 먼저 찍은 날
-  const early = o.days.filter(r => r.p?.in && r.sStart && r.p.in <= r.sStart - 60000).map(r => ({ ds:r.ds, min:Math.round((r.sStart - r.p.in) / 60000) }));
-  const eMin = early.reduce((t, x) => t + x.min, 0), eShow = early.slice(-5), eMore = early.length - eShow.length;
-  const minKo = m => m < 60 ? `${m}분` : fmtH(m), minVi = m => m < 60 ? `${m} phút` : fmtHvi(m);
+  const o = monthSummary(st, ymOf(todayStr())), es = earlyStreak(o);
   const ko = `일한 시간 <b>${fmtH(o.paid)}</b> · 결근 <b>${o.absentDays.length}일</b> · 지각 <b>${o.lateDays.length}회</b><br>
-    일찍 출근 <b>${early.length ? `${early.length}일` : '없음'}</b>${early.length ? ` (${eShow.map(x => `${fmtMD(x.ds)} ${minKo(x.min)}`).join(', ')}${eMore ? ` 외 ${eMore}일` : ''}) · 합계 <b>${minKo(eMin)}</b>` : ''}`;
+    🌅 일찍 출근 <b>+${es}일</b>${es >= 2 ? ' 연속' : ''}`;
   const vi = `Giờ làm <b>${fmtHvi(o.paid)}</b> · Vắng <b>${o.absentDays.length} ngày</b> · Đi muộn <b>${o.lateDays.length} lần</b><br>
-    Đến sớm <b>${early.length ? `${early.length} ngày` : 'không có'}</b>${early.length ? ` (${eShow.map(x => `${dmVi(x.ds)} ${minVi(x.min)}`).join(', ')}${eMore ? ` và ${eMore} ngày khác` : ''}) · Tổng <b>${minVi(eMin)}</b>` : ''}`;
+    🌅 Đến sớm <b>+${es} ngày</b>${es >= 2 ? ' liên tiếp' : ''}`;
   // 내 점수·레벨은 우수직원 선발을 켰는지와 상관없이 늘 보여 줌 (v31, 동기 부여용 · 본인 것만)
   queueGrowth(st);   // 배지·신기록 확인 (v32)
   const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total);
@@ -1339,7 +1379,8 @@ function kioskView(){
     const hint = BI(`본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}`,
       `${VI['본인 이름을 누르고 개인 번호 4자리를 입력하세요']}${cfg().photo.on ? ' · ' + VI['📷 출퇴근할 때 얼굴 사진을 찍어요'] : ''}${cfg().geo.on ? ' · ' + VI['📍 위치도 함께 기록돼요'] : ''}`);
     return clock + teamBanner() + pinBoard() + `<p class="khint">${hint}</p>
-      <div class="kgrid">${list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length; return `<button class="kname" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${st.position ? esc(st.position) : TV('직원')}</small><em>${i.text}</em>${nn ? `<i class="nbadge">${TV('새 공지 {n}', { n:nn })}</i>` : ''}</button>`; }).join('')}</div>`;
+      <div class="kgrid">${(() => { const eb = earlyBird(); return list.map(st => { const i = kioskStatus(st, now), nn = unreadFor(st).length, first = eb?.sid === st.id;
+        return `<button class="kname ${first ? 'early1' : ''}" data-act="kPick" data-id="${st.id}"><span class="dot ${i.cls}"></span><b>${esc(st.name)}</b><small>${st.position ? esc(st.position) : TV('직원')}</small><em>${i.text}</em>${first ? `<i class="ebird">${TV('🌅 오늘 가장 일찍 출근 👏')}</i><span class="claps" aria-hidden="true"><span>👏</span><span>✨</span><span>👏</span><span>🎉</span><span>👏</span></span>` : ''}${nn ? `<i class="nbadge">${TV('새 공지 {n}', { n:nn })}</i>` : ''}</button>`; }).join(''); })()}</div>`;
   }
   const st = staffById(k.staffId);
   if (!st){ resetKiosk(); return kioskView(); }
@@ -1386,7 +1427,7 @@ function kioskView(){
       ${res.kind === 'in' && !res.late ? `<p class="plus">${TV('+{n}점', { n:SCORE.onTime })}${(() => { const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total); return `${sc.streak >= 2 ? ` · ${TV('🔥 {n}일 연속 정시 출근', { n:sc.streak })}` : ''} · ${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
       ${res.kind === 'out' && res.worked != null ? `<p class="plus">${TV('+{n}점', { n:SCORE.done })} · ${(() => { const lv = levelOf(scoreMonth(st, ymOf(todayStr())).total); return `${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
       <p class="${res.late ? 'err' : ''}">${res.msgArgs ? T(...res.msgArgs) : res.kind === 'out' && res.worked != null ? BI(esc(res.msg), fillT(VI['오늘 {h} 근무했어요. 수고하셨어요!'], { h:fmtHvi(res.worked) })) : res.msg && res.msg in VI ? T(res.msg) : (res.msg || '')}</p>
-      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${growthNews(st)}${mySummary(st)}
+      ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${res.kind === 'in' && earlyBird({ sid:st.id, in:res.t })?.sid === st.id ? `<div class="ebcele"><span class="claps big" aria-hidden="true"><span>👏</span><span>🎉</span><span>👏</span><span>✨</span><span>👏</span><span>🎊</span></span><b>${T('🌅 지금 오늘 가장 일찍 출근했어요!')}</b><div class="small">${T('첫 화면 이름 카드에 👏 표시가 붙어요')}</div></div>` : ''}${growthNews(st)}${mySummary(st)}
       ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? T('새 공지 {n}건 확인하기', { n:unreadFor(st).length }) : T('오늘 할 일 보기')}</button><p class="hint">${T('잠시 뒤 자동으로 넘어가요.')}</p>` : `<button class="linkbtn" data-act="kCancel">${T('확인')}</button>`}</div>`;
   }
   return clock;
@@ -1636,6 +1677,7 @@ function timecardView(){
         <span>추가근무날 <b>${otDaysText(o)}</b></span> /
         <span>추가근무시간 <b>${fmtH(o.ot)}</b></span>
       </div>
+      ${(() => { const e = earlyDays(o), top = earlyTopOf(S.month).ids.includes(st.id); return `<div class="tcline small">🌅 일찍 출근 <b>${e.length}일</b>${e.length ? ` · 합계 <b>${minKo(e.reduce((t, x) => t + x.min, 0))}</b>${top ? ` <span class="chip amber">🐓 합계 1등${S.month < ymOf(todayStr()) ? '' : ' (지금까지)'}</span>` : ''} (${e.map(x => `${fmtMD(x.ds)} ${minKo(x.min)}`).join(', ')})` : ''} <span class="muted">· 직원 화면엔 연속 일수만 보여요</span></div>`; })()}
       <div class="tcmeta">
         <div><small>근무일수</small><b>${o.workDays}일</b></div>
         <div><small>지각</small><b class="${o.lateDays.length ? 'late' : ''}" style="${o.lateDays.length ? 'color:var(--red)' : ''}">${o.lateDays.length}회 · ${o.lateMin}분</b></div>
@@ -3587,12 +3629,19 @@ const BADGES = [
   { id:'thx10', icon:'🙏', ko:'고마워요 10개 받기', vi:'Nhận 10 lời cảm ơn', need:10, val:c => c.thanks },
   { id:'legend', icon:'👑', ko:'전설 레벨 달성', vi:'Đạt cấp Huyền thoại', need:380, val:c => c.points },
   { id:'award', icon:'🏆', ko:'이달의 우수직원', vi:'Nhân viên xuất sắc của tháng', need:1, val:c => c.awards },
+  { id:'ebird', icon:'🐓', ko:'일찍 출근 합계 한 달 1등', vi:'Tổng giờ đến sớm nhiều nhất tháng', need:1, val:c => c.earlyTop },   // v33: 달이 끝나면 그달 일찍 온 분 합계 1등 (같으면 함께)
 ];
+// 그달 일찍 출근 분 합계 (사장님 근무 집계와 같은 기준)
+const earlyTotal = (st, ym) => earlyDays(monthSummary(st, ym)).reduce((t, x) => t + x.min, 0);
+function earlyTopOf(ym){   // 그달 일찍 출근 합계 1등 직원 id들 (1분 이상, 같으면 함께)
+  const tot = staffForMonth(ym).map(s => [s.id, earlyTotal(s, ym)]), max = Math.max(0, ...tot.map(x => x[1]));
+  return { max, ids: max > 0 ? tot.filter(x => x[1] === max).map(x => x[0]) : [] };
+}
 const stableStr = v => v && typeof v === 'object' ? (Array.isArray(v) ? `[${v.map(stableStr).join(',')}]` : `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableStr(v[k])).join(',')}}`) : JSON.stringify(v);
 const monthStat = (o, ym) => ({ ontime:o.att.ontime, late:o.att.late, absent:o.att.absent, work:o.att.ontime + o.att.late, reports:o.task.sent + o.task.late, missions:Math.round(o.b.week / SCORE.week), total:o.total, end: ym < ymOf(todayStr()) });
 function badgeCtx(st, doc){
   const ms = Object.values(doc.months || {}), sum = k => ms.reduce((t, m) => t + (+m[k] || 0), 0);
-  return { ontime:sum('ontime'), reports:sum('reports'), missions:sum('missions'), perfect: ms.filter(m => m.end && m.work >= 10 && !m.late && !m.absent).length,
+  return { ontime:sum('ontime'), reports:sum('reports'), missions:sum('missions'), perfect: ms.filter(m => m.end && m.work >= 10 && !m.late && !m.absent).length, earlyTop: ms.filter(m => m.end && m.earlyTop).length,
     streak:+doc.best?.streak || 0, points:+doc.best?.points || 0, praise: S.praise.filter(x => x.staffId === st.id).length,
     thanks: [...S.thanks.values()].filter(x => x.to === st.id).length, awards: Object.values(S.awards).filter(a => a.staffId === st.id).length };
 }
@@ -3602,7 +3651,7 @@ function growthState(st){
   const months = { ...(old.months || {}) }, cur = scoreMonth(st, ym);
   months[ym] = monthStat(cur, ym);
   let prevBest = 0;
-  if (S.monthLoaded[prev]){ const p = scoreMonth(st, prev); if (p.possible){ months[prev] = monthStat(p, prev); prevBest = p.best; } }
+  if (S.monthLoaded[prev]){ const p = scoreMonth(st, prev); if (p.possible){ const top = earlyTopOf(prev); months[prev] = { ...monthStat(p, prev), early:earlyTotal(st, prev), earlyTop: top.ids.includes(st.id) }; prevBest = p.best; } }
   const oldStreak = +old.best?.streak || 0;
   const best = { streak: Math.max(oldStreak, cur.best, prevBest), points: Math.max(+old.best?.points || 0, cur.total) };
   const doc = { got:{ ...(old.got || {}) }, best, months }, c = badgeCtx(st, doc), fresh = [];

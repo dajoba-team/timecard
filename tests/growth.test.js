@@ -114,7 +114,25 @@ const [A, B] = S.staff;
   assert.ok(S.config.team.on && S.config.team.target === 95, '팀 목표 저장');
   console.log('고마워요·팀 목표·평가 통과');
 
-  // ----- 7. 백업 -----
+  // ----- 7. 일찍 출근 (v33): 직원 화면엔 연속 일수만, 첫 화면에 오늘 출근 시각·가장 일찍 효과 -----
+  S.mode = 'kiosk'; resetKiosk(); Object.assign(S.kiosk, { staffId:'a', step:'action' }); render(true);
+  assert.ok(view.innerHTML.includes('일찍 출근 <b>+20일</b> 연속') && !view.innerHTML.includes('합계 <b>') && !view.innerHTML.includes('11/19 5분'), '직원 화면: 일찍 출근 +20일 연속만');
+  resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('class="kname early1" data-act="kPick" data-id="a"') && view.innerHTML.includes('오늘 가장 일찍 출근') && view.innerHTML.includes('class="claps"'), '첫 화면: 성실(5분 일찍)에게 효과');
+  assert.ok(!view.innerHTML.includes('class="kname early1" data-act="kPick" data-id="b"'), '가나다(2분 일찍)는 효과 없음');
+  assert.ok(view.innerHTML.includes('출근 08:55') && view.innerHTML.includes('출근 08:58'), '모든 직원의 오늘 출근 시각');
+  assert.strictEqual(earlyBird({ sid:'b', in:t('2026-11-20', '08:40') }).sid, 'b', '더 일찍 찍으면 바뀜 (정해진 시각 기준)');
+  S.mode = 'owner'; S.tab = 'timecard'; render(true);
+  assert.ok(view.innerHTML.includes('🌅 일찍 출근 <b>20일</b> · 합계 <b>1시간 40분</b>') && view.innerHTML.includes('11/1 5분'), '사장님 근무 집계: 날짜·분·합계');
+  assert.ok(view.innerHTML.includes('🐓 합계 1등 (지금까지)'), '사장님: 이번 달 합계 1등 표시');
+  // 지난달 일찍 출근 합계 1등 배지 (달이 끝난 뒤): 10월엔 성실만 10분 일찍(08:50)
+  assert.deepStrictEqual(earlyTopOf('2026-10').ids, ['a']);
+  await syncGrowth(A);
+  assert.ok(docs['badges/a'].got.ebird && docs['badges/a'].months['2026-10'].earlyTop && docs['badges/a'].months['2026-10'].early === 310, '🐓 일찍 출근 합계 한 달 1등 배지');
+  await syncGrowth(B); assert.ok(!docs['badges/b'].got.ebird, '1등이 아니면 없음');
+  console.log('일찍 출근 통과');
+
+  // ----- 8. 백업 -----
   const Bk = await import('../supabase/functions/tc-notyet-check/backup.mjs');
   const bk = Bk.buildBackup([{ collection:'badges', id:'a', data: docs['badges/a'] }, { collection:'thanks', id:'2026-11-20_a', data: th }], NOW, '가게');
   assert.ok(bk.extra.badges[0].id === 'a' && bk.extra.thanks[0].id === '2026-11-20_a', '자동 백업에 배지·고마워요');

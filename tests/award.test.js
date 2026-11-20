@@ -107,7 +107,7 @@ S.trSubs['2026-11'] = () => {}; S.trSubs['2026-10'] = () => {}; S.monthSubs['202
   S.config.award.att = {};
   // 직원 요약: 추가근무날 대신 일찍 출근한 날·시간 (v30)
   S.mode = 'kiosk'; resetKiosk(); Object.assign(S.kiosk, { staffId:'a', step:'action' }); render(true);
-  assert.ok(view.innerHTML.includes('일찍 출근 <b>') && view.innerHTML.includes(' 5분') && !view.innerHTML.includes('추가근무날'), '일찍 출근 표시, 추가근무날은 뺌');
+  assert.ok(view.innerHTML.includes('일찍 출근 <b>+') && !view.innerHTML.includes(' 5분') && !view.innerHTML.includes('추가근무날'), '일찍 출근 +N일만 (분·합계는 사장님 화면), 추가근무날은 뺌');
   assert.ok(!view.innerHTML.includes('업무태도') && !view.innerHTML.includes('최종 점수'), '직원 화면엔 업무태도·순위 없음');
   resetKiosk(); S.mode = 'owner'; render(true);
   assert.ok(view.innerHTML.includes('100%') && view.innerHTML.includes('근무 적음'), '점수표');
