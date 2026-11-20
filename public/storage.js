@@ -50,6 +50,20 @@
   let loginP = null, userEmail = "", userRole = "";
   // 직원 휴대폰 1회용 연결 (v39): 가게 태블릿 QR → 주소 끝 #join=코드 → 서버 함수 tc-phone-join이 코드를
   // 직원용 공용 계정 로그인 토큰으로 바꿔 줌 → 이 휴대폰을 그 직원 것으로 기억하고 #phone으로 다시 열기
+  // 공용 계정이 끊긴 휴대폰 자동 정리 (v39): 이 기기가 직원용 공용 계정으로 쓰였는데 로그인이 풀렸으면
+  // (사장님이 [모두 끊기] → 계정 지움 → 다음 새로고침 때 로그인 실패) 이 기기에 남은 타임카드 설정·못 보낸 기록·로그인 정보를 지움
+  const PHONE_FLAG = "tc.phoneAcct";
+  const markPhoneDevice = user => { try { if (!user) return; if (user.app_metadata && user.app_metadata.tc_role === "phone") localStorage.setItem(PHONE_FLAG, "1"); else localStorage.removeItem(PHONE_FLAG); } catch {} };   // 사장님 계정으로 로그인하면 표시를 지움
+  const wasPhoneDevice = () => { try { return localStorage.getItem(PHONE_FLAG) === "1"; } catch { return false; } };
+  const wipeDevice = async () => {
+    pendOps = [];
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+      keys.filter(k => k && (k.startsWith("tc.") || k === PENDING_KEY)).forEach(k => localStorage.removeItem(k));
+    } catch {}
+    try { await sb.auth.signOut({ scope: "local" }); } catch {}
+  };
   const joinCode = () => { const m = /^#join=([\w-]{16,64})$/.exec((window.location && window.location.hash) || ""); return m ? m[1] : null; };
   const tryJoin = async (code, hasSession) => {
     const el = overlay('<div style="font-size:18px;font-weight:700;margin-bottom:8px">📱 휴대폰 연결 중…</div><div style="font-size:13px;color:#5E6774">Đang kết nối điện thoại…</div>');
@@ -61,6 +75,7 @@
         let r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "magiclink" });
         if (r.error) r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "email" });
         if (r.error) throw new Error("로그인하지 못했어요: " + r.error.message);
+        markPhoneDevice(r.data && (r.data.user || (r.data.session && r.data.session.user)));
       }
       try { localStorage.setItem("tc.phoneStaff", data.staffId); localStorage.setItem("tc.device", "phone"); } catch {}
       window.location.replace(window.location.pathname + "#phone");
@@ -98,8 +113,16 @@
       const { data } = await sb.auth.getSession();
       const jc = joinCode();
       if (jc) await tryJoin(jc, !!(data && data.session && hasApp(data.session.user)));   // 성공하면 다시 열림, 실패하면 아래 로그인 화면으로
+      if (!(data && data.session) && !jc && wasPhoneDevice()) {   // 공용 계정이 끊긴 휴대폰: 남은 것 지우고 다시 연결 안내
+        await wipeDevice();
+        const el = overlay('<div style="font-size:18px;font-weight:700;margin-bottom:8px">📱 휴대폰 연결이 끊겼어요<br><span style="font-size:15px">Điện thoại đã bị ngắt kết nối</span></div>' +
+          '<div style="font-size:13px;color:#5E6774;line-height:1.6;margin-bottom:16px">이 휴대폰에 남아 있던 타임카드 정보를 지웠어요. 가게 태블릿에서 번호를 누르고 새 QR을 찍어 다시 연결해 주세요.<br>Đã xóa dữ liệu chấm công trên điện thoại này. Hãy nhập mã trên máy tính bảng và quét mã QR mới để kết nối lại.</div>' +
+          '<button id="st-wiped" style="' + btnCss + '">사장님 계정으로 로그인</button>');
+        await new Promise(res => { el.querySelector("#st-wiped").onclick = res; });
+      }
       if (data && data.session) {
         if (!hasApp(data.session.user)) await denyNoApp(data.session.user);
+        markPhoneDevice(data.session.user);
         userEmail = data.session.user.email || "";
         userRole = (data.session.user.app_metadata && data.session.user.app_metadata.tc_role) || "";
         return;
@@ -125,6 +148,7 @@
           if (!hasApp(signed && signed.user)) { denyNoApp(signed && signed.user); return; }
           userEmail = (signed && signed.user && signed.user.email) || "";
           userRole = (signed && signed.user && signed.user.app_metadata && signed.user.app_metadata.tc_role) || "";
+          markPhoneDevice(signed && signed.user);
           closeOverlay();
           resolve();
         };
