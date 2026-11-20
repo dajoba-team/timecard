@@ -17,7 +17,7 @@ const mk = p => ({ set: async d => { writes++; docs[p] = JSON.parse(JSON.stringi
 S.db = { doc: p => mk(p), collection: c => ({ doc: id => mk(c + '/' + id), onSnapshot: () => () => {} }) };
 window.tcStore = { invoke: async (fn, b) => ({ translations: b.texts.map(x => '[' + b.to + '] ' + x) }) };
 const day = { on:true, start:'09:00', end:'18:00', brk:60 };
-S.config = { graceMin:5, otUnit:10, earlyClamp:true, photo:{ on:false }, geo:{ on:false }, award:{ amount:50000 } };
+S.config = { graceMin:5, otUnit:10, earlyClamp:true, photo:{ on:false }, geo:{ on:false }, award:{ amount:50000 }, evalStart:'' };   // 평가 시작일 규칙은 맨 아래에서 따로
 S.staff = [
   { id:'a', name:'성실', position:'홀', sched:Array(7).fill(day), active:true, hireDate:'2026-01-01', pin:'1111' },
   { id:'b', name:'가나다', position:'주방', sched:Array(7).fill(day), active:true, hireDate:'2026-01-01', pin:'2222' },
@@ -132,7 +132,25 @@ const [A, B] = S.staff;
   await syncGrowth(B); assert.ok(!docs['badges/b'].got.ebird, '1등이 아니면 없음');
   console.log('일찍 출근 통과');
 
-  // ----- 8. 백업 -----
+  // ----- 8. 출퇴근 평가 시작일 (v34): 11/17 전은 지각·결근·점수에서 뺌, 일한 시간은 그대로 -----
+  S.config.evalStart = '2026-11-17';
+  let r = dayCalc(B, '2026-11-15');   // 가나다 11/15: 09:20 출근 (원래 지각 20분)
+  assert.ok(r.late === 0 && r.worked > 0 && r.paid > 0 && r.status === 'done', '시작일 전: 지각 아님, 일한 시간은 그대로');
+  m.delete('b_2026-11-14'); r = dayCalc(B, '2026-11-14');
+  assert.ok(r.status !== 'absent' && r.preEval, '시작일 전: 기록 없어도 결근 아님');
+  assert.ok(statusChips(r).includes('평가 시작 전'), '기록 화면 표시');
+  assert.ok(dayCalc(B, '2026-11-17').late === 20, '시작일부터는 지각');
+  const so = scoreMonth(A, '2026-11');
+  assert.strictEqual(so.att.ontime, 4, '점수는 11/17~11/20만 (4일)');
+  const ms = monthSummary(B, '2026-11');
+  assert.ok(ms.absentDays.length === 0 && ms.lateDays.every(x => x.ds >= '2026-11-17'), '이번 달 결근·지각도 시작일부터');
+  assert.strictEqual(earlyStreak(monthSummary(A, '2026-11')), 4, '일찍 출근 연속도 시작일부터 (+4일)');
+  assert.ok(earlyDays(monthSummary(A, '2026-11')).every(x => x.ds >= '2026-11-17'), '일찍 출근 합계도 시작일부터');
+  assert.ok(weekMission(A).total === 6 && weekMission(A).ok === 4 && weekMission(B).fail, '이번 주 미션: 11/16 월요일은 빼고 6일 중 4일');
+  S.config.evalStart = '';
+  console.log('평가 시작일 통과');
+
+  // ----- 9. 백업 -----
   const Bk = await import('../supabase/functions/tc-notyet-check/backup.mjs');
   const bk = Bk.buildBackup([{ collection:'badges', id:'a', data: docs['badges/a'] }, { collection:'thanks', id:'2026-11-20_a', data: th }], NOW, '가게');
   assert.ok(bk.extra.badges[0].id === 'a' && bk.extra.thanks[0].id === '2026-11-20_a', '자동 백업에 배지·고마워요');

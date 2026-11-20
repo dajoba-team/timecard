@@ -25,7 +25,7 @@ const S = globalThis.__S, ACT = globalThis.__ACT;
   const R = await import('../supabase/functions/tc-notyet-check/rules.mjs');
 
   // 예시 데이터 + 바뀐 상황들: 휴무 처리, 퇴사자, 입사 전, 야간 근무, 기록에 근무표가 따로 붙은 경우
-  const config = { ...W.find(w => w.collection === 'config').data, graceMin: 5 };
+  const config = { ...W.find(w => w.collection === 'config').data, graceMin: 5, evalStart:'' };   // 평가 시작일 없이 (하루 전체 비교)
   const staff = W.filter(w => w.collection === 'staff').map(w => ({ id:w.doc_id, ...w.data }));
   const base = staff[0];
   const allDays = [0,1,2,3,4,5,6].map(() => ({ on:true, start:'09:00', end:'18:00', brk:60 }));

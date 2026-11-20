@@ -22,7 +22,7 @@ function apply(p){
 }
 S.db = { doc: p => mk(p), collection: c => ({ doc: id => mk(c + '/' + id), onSnapshot: () => () => {} }) };
 const day = { on:true, start:'09:00', end:'18:00', brk:60 };
-S.config = { graceMin:5, otUnit:10, earlyClamp:true, award:{ amount:50000 } };
+S.config = { graceMin:5, otUnit:10, earlyClamp:true, award:{ amount:50000 }, evalStart:'' };   // 11월 1일부터 점수 계산 (평가 시작일 규칙은 growth.test.js)
 S.staff = [
   { id:'a', name:'성실', position:'홀', sched:Array(7).fill(day), active:true, hireDate:'2026-01-01', pin:'1111' },
   { id:'b', name:'가끔늦음', position:'주방', sched:Array(7).fill(day), active:true, hireDate:'2026-01-01', pin:'2222' },
