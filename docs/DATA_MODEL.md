@@ -33,6 +33,7 @@
 | `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
 | `awards/{YYYY-MM}` | 이달의 우수직원 확정 `{ staffId, name, rate(달성률 0~1), points(총점), att(업무태도 가중치, v30), final(최종 점수, v30), amount(포상금), note, decidedAt, noticeId(축하 공고 tasks id), paidAt }` (v24) |
 | `praise/{id}` | 사장님 칭찬 점수 `{ staffId, ym, pts, note, noteVi(자동 번역, v26), at }` (보너스, 달성률에는 안 들어감) |
+| `phone_links/{staffId}` | 직원 휴대폰 연결 기록 (v38) `{ staffId, first(처음 연결), last(마지막 접속, 하루 한 번) }` — 휴대폰에서 이름+개인 번호로 연결할 때 생김, 사장님이 지우면 다시 연결 안내 |
 | `badges/{staffId}` | 동기부여 (v32): `{ got:{ 배지id: 받은 시각 }, best:{ streak(연속 정시 최고), points(한 달 최고 점수) }, months:{ 'YYYY-MM':{ ontime, late, absent, work, reports, missions, total, end, early(지난달 일찍 온 분 합계, v33), earlyTop(그달 합계 1등, v33) } } }` — 직원 화면을 열 때 앱이 바뀐 것만 저장. 배지는 한 번 받으면 지우지 않음 |
 | `thanks/{YYYY-MM-DD}_{보낸 staffId}` | 동료 고마워요 (v32, 하루 한 번) `{ date, from, to, text(40자), textKo 또는 textVi(번역), at }` — 점수에는 안 들어감 |
 | `ot/{staffId}_{YYYY-MM-DD}` | 추가근무 요청·승인 (직원·날짜당 1개, v27) `{ staffId, date, kind('pre' 먼저 요청 / 'post' 먼저 하고 보고), status('pending' / 'approved' / 'rejected'), reqMin(요청·보고한 분), okMin(승인된 분 — 먼저 받은 승인 포함), until(요청한 퇴근 시각), reason('busy' 손님 많음 / 'close' 마감 청소 / 'prep' 재료 손질 / 'cover' 동료 대신 / 'etc'), note, noteKo(번역), ownerNote, ownerNoteVi(번역), at, decidedAt, via('tablet'/'phone'/'owner'), pre(먼저 요청이 보고로 바뀌면 처음 요청) }`. 급여 계산: 승인제를 켠 날부터 정해진 시간을 넘긴 근무는 `okMin`까지만 추가근무, 나머지는 확인 대기(보고 결정 전) 또는 불인정(사장님이 '먼저 하고 보고'를 결정한 뒤) — 출퇴근 기록 자체는 바꾸지 않음 |
@@ -91,6 +92,7 @@
 | `ownerPin` | 사장님 화면 관리 번호 | 0000 |
 | `masterPin` | 출퇴근 마스터 번호 (비면 안 씀) | '' |
 | `graceMin` | 지각 봐주는 분 | 5 |
+| `phoneReq` | 직원 휴대폰 연결 필수 `{on, deadline}` — 켜면 연결 안 한 직원에게 태블릿에서 안내, 기한 뒤엔 연결해야 출퇴근 (v38) | 꺼짐 |
 | `evalStart` | 출퇴근 평가 시작일 `YYYY-MM-DD` — 이 날 전은 지각·조퇴·결근·점수·배지에서 뺌, 일한 시간은 그대로 (v34, 비우면 처음부터) | 2026-11-17 |
 | `otUnit` | 추가근무 인정 단위(분) | 10 |
 | `earlyClamp` | 일찍 와도 정해진 시각부터 계산 | true |

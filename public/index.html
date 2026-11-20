@@ -480,6 +480,12 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .thx .btn{justify-self:start}
 .teamgoal{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--amber-soft);font-size:14px;text-align:left}
 .teamgoal.ok{background:var(--green-soft)}
+.preq{max-width:460px}
+.preqhead{font-size:20px;margin:6px 0}
+.preq .qr{display:grid;place-items:center;margin:10px auto;background:#fff;border-radius:12px;padding:8px;width:fit-content;min-height:60px}
+.preq .qr svg{width:200px;height:200px}
+.purl{font-size:18px;font-weight:700;margin:4px 0 8px;word-break:break-all}
+.psteps{text-align:left;margin:6px 0;padding-left:22px;display:grid;gap:4px;font-size:14px}
 .teamnow{padding:8px 10px;border-radius:10px;background:var(--amber-soft);font-size:14px;margin-bottom:8px}
 .teamnow.ok{background:var(--green-soft)}.teamnow.ended{background:var(--soft)}
 .gnews{margin:6px 0;padding:8px 10px;border-radius:10px;background:var(--amber-soft);font-weight:700}
@@ -578,7 +584,8 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   award:{ amount:50000, months:{} },   // 이달의 우수직원 기본 포상금 (매달 확정할 때 바꿀 수 있음), months: 진행하는 달 { 'YYYY-MM': true } (v29)
   ot:{ on:false, since:'' },
   team:{ on:false, target:90, reward:'', rewardVi:'' },
-  evalStart:'2026-11-17' };   // 출퇴근 평가 시작일 (v34): 이 날 전은 시험 기간이라 지각·결근·점수에서 뺌 (일한 시간은 급여에 그대로)   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
+  evalStart:'2026-11-17',
+  phoneReq:{ on:false, deadline:'' } };   // 직원 휴대폰 연결 필수 (v38): 켜면 기한까지 모든 직원이 휴대폰 연결   // 출퇴근 평가 시작일 (v34): 이 날 전은 시험 기간이라 지각·결근·점수에서 뺌 (일한 시간은 급여에 그대로)   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
 const TABS = [['now','현황'],['tasks','업무 보고'],['award','동기부여'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
   db:null, noDb:false, connected:false, connNote:'',
@@ -595,7 +602,8 @@ const S = {
   photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0,
   // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
   ots:new Map(), otForm:null, otEdit:null,
-  badges:new Map(), thanks:new Map(), growthNews:{}, thForm:null,   // 동기부여(v32): 배지·신기록, 동료 고마워요, 방금 받은 배지, 고마워요 입력   // 추가근무 요청·승인: ot/{직원}_{날짜}, 직원 요청 입력, 사장님 '시간 바꿔 승인' 입력
+  badges:new Map(), thanks:new Map(), growthNews:{}, thForm:null,
+  plinks:new Map(),   // 직원 휴대폰 연결 기록 phone_links/{직원} (v38)   // 동기부여(v32): 배지·신기록, 동료 고마워요, 방금 받은 배지, 고마워요 입력   // 추가근무 요청·승인: ot/{직원}_{날짜}, 직원 요청 입력, 사장님 '시간 바꿔 승인' 입력
   awards:{}, praise:[], awForm:null, reacts:new Map(), reactDraft:null,   // 이달의 우수직원: awards/{YYYY-MM} 확정 기록, praise 칭찬 점수
   tasks:[], treads:new Map(), trep:{}, trSubs:{}, trLoaded:{}, trPrimed:{}, trDate:todayStr(), tform:null, redoFor:null, confirmTDel:null,
   // 직원 휴대폰 화면 (mode 'phone'): 이 휴대폰에 연결된 직원, 연결할 때 고른 직원·번호, 연 업무, 찍은 사진
@@ -604,7 +612,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -1439,6 +1447,7 @@ function kioskView(){
         <button class="linkbtn" data-act="kNoPhoto">${T(`사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)`)}</button>` : ''}
       ${k.busy ? '' : `<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button>`}</div>`;
   }
+  if (k.step === 'phonereq'){ if (!phoneNeeded(st)){ k.step = 'action'; return kioskView(); } return phoneReqView(st, clock); }   // 휴대폰 연결 안내 (연결되면 저절로 넘어감)
   if (k.step === 'thanks'){ if (!S.thForm){ k.step = 'action'; return kioskView(); } return thanksView(st, clock); }   // 동료 고마워요 (v32)
   if (k.step === 'otreq' || k.step === 'ot'){ if (!S.otForm){ k.step = k.step === 'ot' ? 'done' : 'action'; return kioskView(); } return k.step === 'ot' ? otPostView(st, clock) : otReqView(st, clock); }   // 추가근무 요청 / 퇴근 뒤 이유
   if (k.step === 'done'){
@@ -1887,6 +1896,8 @@ function configForm(){
       <label>지각 봐주는 시간 (분)<input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
       <label>추가근무 인정 단위 (분)<input id="c-unit" type="number" min="1" value="${c.otUnit}"></label>
       <label>출퇴근 평가 시작일 <small class="muted">이 날부터 지각·결근·점수 계산</small><input id="c-evalStart" type="date" value="${esc(c.evalStart || '')}"></label>
+      <label class="check full"><input type="checkbox" id="c-phoneReq" ${c.phoneReq.on ? 'checked' : ''}> 📱 직원 휴대폰 연결 필수 — 아직 연결 안 한 직원은 가게 태블릿에서 번호를 누르면 QR·연결 방법이 먼저 떠요. 기한이 지나면 연결해야 출퇴근할 수 있어요 (마스터 번호는 통과)</label>
+      <label>휴대폰 연결 기한<input id="c-phoneDeadline" type="date" value="${esc(c.phoneReq.deadline || addDays(todayStr(), 7))}"></label>
       <label class="check full"><input type="checkbox" id="c-early" ${c.earlyClamp ? 'checked' : ''}> 정해진 시간보다 일찍 와도 정해진 출근 시각부터 계산</label>
       <label class="check full"><input type="checkbox" id="c-prem" ${c.otPremium ? 'checked' : ''}> 추가근무 1.5배 가산 (상시 5인 이상 사업장)</label>
       <label class="check full"><input type="checkbox" id="c-otapp" ${c.ot.on ? 'checked' : ''}> ⏱ 추가근무 승인제 — 사장님이 승인한 추가근무만 급여에 넣기. 직원은 미리 요청하거나, 퇴근할 때 이유를 남겨요${c.ot.on && c.ot.since ? ` (${fmtMD(c.ot.since)}부터 적용 중)` : ' (켠 날부터 적용, 지난 기록은 그대로)'}</label>
@@ -1937,6 +1948,7 @@ function staffView(){
         <dt>관리 번호</dt><dd>${c.ownerPin === '0000' ? '<span style="color:var(--red)">처음 번호(0000) 그대로예요 — 바꿔 주세요</span>' : '설정됨'}</dd>
         <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
         <dt>지각 기준</dt><dd>정해진 시간 + ${c.graceMin}분 넘으면 지각</dd>
+        <dt>휴대폰 연결</dt><dd>${c.phoneReq.on ? `<b style="color:var(--green)">필수</b> · ${c.phoneReq.deadline ? `${fmtDateLong(c.phoneReq.deadline)}까지` : ''} · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명 (업무 보고 탭 → 직원 휴대폰에서 누가 했는지 볼 수 있어요)` : `선택 · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명`}</dd>
         <dt>평가 시작일</dt><dd>${c.evalStart ? `${fmtDateLong(c.evalStart)}부터 지각·결근·점수·배지를 계산해요 (그 전은 시험 기간, 일한 시간은 급여에 그대로)` : '처음 기록부터 계산해요'}</dd>
         <dt>추가근무</dt><dd>${c.otUnit}분 단위 인정 · ${c.otPremium ? '1.5배 가산' : '시급 그대로'}</dd>
         <dt>추가근무 승인제</dt><dd>${c.ot.on ? `<b style="color:var(--green)">켜짐</b> · ${fmtMD(c.ot.since)}부터 사장님이 승인한 추가근무만 급여에 들어가요` : '꺼짐 · 정해진 시간을 넘긴 근무는 모두 추가근무로 계산해요'}</dd>
@@ -2900,6 +2912,8 @@ function tasksView(){
       <section class="panel"><h3>직원 휴대폰 <small>사진 보고·공지 확인</small></h3>
         <p class="small" style="margin:0 0 8px">직원 휴대폰에서 <b class="mono">${esc(location.host || 'timecard.dajoba.kr')}/#phone</b> 을 열어요. 처음 한 번 사장님 계정으로 로그인하고, 직원이 자기 이름과 개인 번호를 넣으면 그 휴대폰은 그 직원 것으로 기억돼요.</p>
         <div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="toPhone">이 기기를 직원 휴대폰 화면으로</button></div>
+        <h3 style="margin-top:6px">휴대폰 연결 현황 <small>${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명${cfg().phoneReq.on ? ` · 필수, ${fmtMD(cfg().phoneReq.deadline || todayStr())}까지` : ' · 직원·설정에서 필수로 켤 수 있어요'}</small></h3>
+        <div class="srows" style="display:grid;gap:4px;margin-bottom:10px">${activeStaff().map(s => { const l = S.plinks.get(s.id); return `<div class="row small" style="gap:6px;align-items:center">${l ? '✅' : '⬜'} <b>${esc(s.name)}</b> <span class="muted">${l ? `연결 ${fmtMD(ymd(new Date(l.first)))} · 마지막 ${fmtMD(ymd(new Date(l.last)))}` : '아직 연결 안 함'}</span>${l ? `<span class="spacer"></span><button class="linkbtn" style="padding:0" data-act="plDel" data-id="${esc(s.id)}" title="휴대폰을 바꿨을 때">연결 지우기</button>` : ''}</div>`; }).join('')}</div>
         <h3 style="margin-top:6px">휴대폰 출퇴근 허용 <small>외근 직원만 켜요</small></h3>
         <div class="srows" style="display:grid;gap:6px">${phoneStaff.map(s => `<label class="check" for="pp-${esc(s.id)}"><input type="checkbox" id="pp-${esc(s.id)}" name="pp" data-id="${esc(s.id)}" ${s.phonePunch ? 'checked' : ''}> ${esc(s.name)} <span class="small muted">${esc(s.position || '')}</span></label>`).join('') || '<p class="muted small">직원이 없어요</p>'}</div>
         <p class="hint">켜 둔 직원은 휴대폰 맨 위에 출근·퇴근 단추가 생겨요 (사진·위치는 태블릿과 같아요). 꺼 둔 매장 직원은 가게 태블릿에서만 출퇴근하고, 휴대폰으로는 사진 보고와 공지만 봐요.</p>
@@ -3174,7 +3188,7 @@ function phoneView(){
   return `<div class="phone tr">
     <div class="phead"><span class="mark">IN</span><div><b>${TV('{name}님', { name:me.name })}</b><div class="small muted">${me.position ? `${esc(me.position)} · ` : ''}${fmtDateK(ds)}</div></div><button class="linkbtn" data-act="phSwitch">${TV('다른 사람')}</button></div>
     ${pinBoard(me)}
-    ${phonePunchCard(me)}
+    ${(phoneHeartbeat(me), '')}${phonePunchCard(me)}
     ${otKioskBit(me) || otStaffLine(me)}
     ${myScoreCard(me)}
     <div class="ptabs" role="tablist">
@@ -3914,6 +3928,8 @@ function thanksView(st, clock){   // 태블릿·휴대폰 step 'thanks'
     <button class="linkbtn" data-act="thBack">${T('돌아가기')}</button></div>`;
 }
 const THACT = {
+  phSkip(){ const k = S.kiosk; if (phoneLate()) return; k.step = 'action'; k.at = Date.now(); render(true); },   // 휴대폰 연결 안내: 기한 전엔 오늘은 넘어가기 (v38)
+  async plDel(d){ await write(() => S.db.collection('phone_links').doc(d.id).delete()); S.plinks.delete(d.id); toast('휴대폰 연결 기록을 지웠어요', '다음 출근 때 다시 연결 안내가 떠요.', 'ok'); render(true); },
   thOpen(){
     const st = staffById(S.kiosk.staffId || S.phone.staffId); if (!st) return;
     const back = S.kiosk.step;
@@ -4219,6 +4235,61 @@ const OTACT = {
   },
 };
 
+/* ===================== 직원 휴대폰 연결 필수 (v38) ===================== */
+// 사장님이 켜면(config.phoneReq { on, deadline }) 가게 태블릿에서 번호를 누른 직원 중 휴대폰을 아직 연결하지 않은 사람에게
+// QR·주소와 연결 방법을 보여 줘요. 기한까지는 [오늘은 그냥 출퇴근하기]로 넘어갈 수 있고, 기한이 지나면 연결해야 출퇴근 단추가 나와요
+// (사장님 마스터 번호로 들어오면 넘어감). 휴대폰에서 이름+개인 번호로 연결하면 phone_links/{직원} 이 생기고, 태블릿 화면이 바로 넘어가요.
+// 한 번 연결한 직원에게는 다시 뜨지 않아요. 휴대폰을 열 때마다 하루 한 번 '마지막 접속'을 남겨요.
+const phoneUrl = () => `${location.origin && location.origin !== 'null' ? location.origin : 'https://timecard.dajoba.kr'}/#phone`;
+const phoneLinked = st => !!st && S.plinks.has(st.id);
+function phoneNeeded(st){ const r = cfg().phoneReq; return !!r.on && S.mode === 'kiosk' && !!st && !phoneLinked(st); }
+const phoneLate = () => { const d = cfg().phoneReq.deadline; return !!d && todayStr() > d; };
+const phoneDaysLeft = () => { const d = cfg().phoneReq.deadline; return d ? Math.round((parseDate(d) - parseDate(todayStr())) / 86400000) : null; };
+async function savePhoneLink(sid){   // 휴대폰 연결·접속 기록
+  if (!S.db || !sid) return;
+  const old = S.plinks.get(sid), now = Date.now(), doc = { staffId:sid, first: old?.first || now, last: now };
+  S.plinks.set(sid, doc);
+  await write(() => S.db.collection('phone_links').doc(sid).set(doc));
+}
+const plinkBeat = {};
+function phoneHeartbeat(st){   // 직원 휴대폰 화면을 열면 하루 한 번
+  const old = S.plinks.get(st.id);
+  if (plinkBeat[st.id] || (old && ymd(new Date(old.last || 0)) === todayStr())) return;
+  plinkBeat[st.id] = true; savePhoneLink(st.id).catch(e => console.warn('phone link', e?.message || e));
+}
+// QR: 이 안내가 보일 때만 QR 그리는 작은 도구를 불러옴 (안 되면 주소만)
+const qrCache = {}; let qrLoading = false;
+function qrSvg(text){
+  if (qrCache[text]) return qrCache[text];
+  if (typeof window.qrcode === 'function'){ try { const q = window.qrcode(0, 'M'); q.addData(text); q.make(); return (qrCache[text] = q.createSvgTag(6, 2)); } catch { return ''; } }
+  if (!qrLoading && document.head && document.head.appendChild){
+    qrLoading = true;
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'; sc.onload = () => render(true); sc.onerror = () => console.warn('QR 도구를 불러오지 못했어요');
+    document.head.appendChild(sc);
+  }
+  return '';
+}
+function phoneReqView(st, clock){
+  const late = phoneLate(), left = phoneDaysLeft(), d = cfg().phoneReq.deadline, url = phoneUrl(), qr = qrSvg(url);
+  return clock + `<div class="kpanel preq"><h2>${TV('{name}님', { name:st.name })}</h2>
+    <div class="preqhead">📱 <b>${BI('휴대폰 연결이 필요해요', 'Bạn cần kết nối điện thoại')}</b></div>
+    <p>${BI(`${d ? `<b>${fmtMD(d)}</b>까지 ` : ''}모든 직원이 자기 휴대폰을 연결해요. 연결하면 휴대폰으로 업무 사진 보고·공지 확인${st.phonePunch ? '·출퇴근' : ''}을 할 수 있어요.`,
+      `${d ? `Trước <b>${dmVi(d)}</b>, ` : ''}tất cả nhân viên cần kết nối điện thoại của mình. Sau khi kết nối, bạn có thể báo cáo ảnh công việc, xem thông báo${st.phonePunch ? ', chấm công' : ''} bằng điện thoại.`)}</p>
+    <div class="qr" aria-label="연결 주소 QR">${qr || '<div class="small muted">QR 준비 중…</div>'}</div>
+    <div class="purl mono">${esc(url.replace(/^https?:\/\//, ''))}</div>
+    <ol class="psteps">
+      <li>${BI('휴대폰 카메라로 QR을 찍거나 위 주소를 열어요', 'Dùng camera điện thoại quét mã QR hoặc mở địa chỉ trên')}</li>
+      <li>${BI('로그인 화면이 나오면 <b>사장님께 로그인을 부탁</b>해요 (처음 한 번만)', 'Nếu thấy màn hình đăng nhập, <b>nhờ chủ quán đăng nhập</b> giúp (chỉ lần đầu)')}</li>
+      <li>${BI('내 이름을 누르고 개인 번호 4자리를 넣어요', 'Chạm vào tên của bạn và nhập mã cá nhân 4 số')}</li>
+      <li>${BI('끝나면 이 화면이 저절로 넘어가요 ✅', 'Xong thì màn hình này sẽ tự chuyển ✅')}</li>
+    </ol>
+    <p class="small muted">${BI('앱처럼 쓰려면: 아이폰은 공유 → 홈 화면에 추가, 안드로이드는 ⋮ → 홈 화면에 추가', 'Để dùng như ứng dụng: iPhone bấm Chia sẻ → Thêm vào MH chính, Android bấm ⋮ → Thêm vào màn hình chính')}</p>
+    ${late ? `<p class="err">${BI('연결 기한이 지났어요. 휴대폰을 연결해야 출퇴근할 수 있어요. 어려우면 사장님께 말씀하세요.', 'Đã quá hạn kết nối. Bạn cần kết nối điện thoại mới chấm công được. Nếu khó, hãy báo chủ quán.')}</p>`
+      : `<button class="btn" data-act="phSkip">${BI(`오늘은 그냥 출퇴근하기${left != null ? ` (D-${Math.max(0, left)})` : ''}`, `Hôm nay chấm công trước${left != null ? ` (còn ${Math.max(0, left)} ngày)` : ''}`)}</button>`}
+    <button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
+}
+
 /* ===================== 동작 ===================== */
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
@@ -4382,7 +4453,7 @@ function padPress(ctx, v){
     P.pin = v === 'back' ? P.pin.slice(0, -1) : (P.pin + v).slice(0, 4);
     P.err = '';
     if (P.pin.length === 4){
-      if (st && P.pin === String(st.pin)){ Object.assign(P, { staffId:st.id, pickId:null, pin:'', tab:'tasks' }); store.set('phoneStaff', st.id); }
+      if (st && P.pin === String(st.pin)){ Object.assign(P, { staffId:st.id, pickId:null, pin:'', tab:'tasks' }); store.set('phoneStaff', st.id); plinkBeat[st.id] = true; savePhoneLink(st.id).catch(e => console.warn('phone link', e?.message || e)); }   // 연결 기록 (v38)
       else { P.err = '번호가 맞지 않아요. 다시 넣어 주세요'; P.pin = ''; }
     }
     render(true); return;
@@ -4394,7 +4465,7 @@ function padPress(ctx, v){
   if (k.pin.length === 4){
     const st = staffById(k.staffId);
     const master = String(cfg().masterPin || '');
-    if (st && k.pin === String(st.pin)){ k.step = 'action'; k.pin = ''; k.master = false; startGeo(); }
+    if (st && k.pin === String(st.pin)){ k.step = phoneNeeded(st) ? 'phonereq' : 'action'; k.pin = ''; k.master = false; startGeo(); }   // 휴대폰 연결 안 했으면 안내부터 (v38)
     else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; startGeo(); }   // 사장님 마스터 번호: 어느 직원이든 통과
     else { k.err = '번호가 맞지 않아요. 다시 입력해 주세요'; k.pin = ''; }
   }
@@ -4508,6 +4579,7 @@ async function saveConfig(){
     earlyClamp: $('#c-early').checked, otPremium: $('#c-prem').checked, weeklyHoliday: $('#c-hol').checked,
     ot: $('#c-otapp')?.checked ? { on:true, since: cfg().ot.on && cfg().ot.since ? cfg().ot.since : todayStr() } : { on:false, since:'' },   // 켠 날부터 적용
     evalStart: $('#c-evalStart') ? ($('#c-evalStart').value || '') : cfg().evalStart,   // 출퇴근 평가 시작일 (v34, 비우면 처음부터)
+    phoneReq: $('#c-phoneReq') ? { on: !!$('#c-phoneReq').checked, deadline: $('#c-phoneDeadline')?.value || addDays(todayStr(), 7) } : cfg().phoneReq,   // 직원 휴대폰 연결 필수 (v38)
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
     mail: readMailForm(), photo:{ ...cfg().photo, on: $('#p-on').checked }, geo:{ ...cfg().geo, radius: Math.max(30, Math.round(+$('#c-georad').value || 200)) } };
   if (doc.mail.on && !mailAddrs(doc.mail.to).length){ toast('받을 메일 주소를 넣어 주세요', '메일 알림을 켜려면 주소가 필요해요.', 'warn'); return; }
@@ -4555,7 +4627,7 @@ function tick1(){
   if ((S.mode === 'kiosk' || S.mode === 'phone') && k.step !== 'list' && !k.busy){
     const idle = now - (k.at || now), st = staffById(k.staffId);
     if (k.step === 'done' && k.didIn && idle > 2500 && kNextStep(st)){ k.step = kNextStep(st); k.at = now; render(true); }   // 출근 도장 → 새 공지·오늘 할 일
-    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
+    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks', 'phonereq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
   }
   if (todayStr() !== lastDay){
     lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();
@@ -4601,6 +4673,7 @@ async function boot(){
   db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
   db.collection('awards').onSnapshot(s => { S.awards = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('awards', e));
   db.collection('award_reacts').onSnapshot(s => { S.reacts = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('award_reacts', e));
+  db.collection('phone_links').onSnapshot(s => { S.plinks = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('phone_links', e));   // 직원 휴대폰 연결 (v38)
   db.collection('badges').onSnapshot(s => { S.badges = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('badges', e));   // 동기부여 (v32)
   db.collection('thanks').onSnapshot(s => { S.thanks = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('thanks', e));
   db.collection('ot').onSnapshot(s => { S.ots = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('ot', e));   // 추가근무 요청·승인

@@ -204,7 +204,33 @@ const [A, B] = S.staff;
   S.config.evalStart = '';
   console.log('평가 시작일 통과');
 
-  // ----- 9. 백업 -----
+  // ----- 9. 직원 휴대폰 연결 필수 (v38) -----
+  S.config.phoneReq = { on:true, deadline:'2026-11-27' }; S.plinks = new Map(); S.mode = 'kiosk'; S.lang = 'ko';
+  resetKiosk(); ACT.kPick({ id:'a' }); for (const dg of '1111') padPress('staff', dg);
+  assert.strictEqual(S.kiosk.step, 'phonereq', '연결 안 한 직원은 번호 뒤 안내부터'); render(true);
+  assert.ok(view.innerHTML.includes('휴대폰 연결이 필요해요') && view.innerHTML.includes('/#phone') && view.innerHTML.includes('사장님께 로그인을 부탁') && view.innerHTML.includes('data-act="phSkip"') && view.innerHTML.includes('D-7'), '안내: 주소·방법·기한 전 넘어가기');
+  ACT.phSkip(); assert.strictEqual(S.kiosk.step, 'action', '기한 전엔 오늘은 넘어가기');
+  S.config.phoneReq.deadline = '2026-11-19';
+  resetKiosk(); ACT.kPick({ id:'a' }); for (const dg of '1111') padPress('staff', dg); render(true);
+  assert.ok(view.innerHTML.includes('연결 기한이 지났어요') && !view.innerHTML.includes('data-act="phSkip"'), '기한 지나면 넘어가기 없음');
+  ACT.phSkip(); assert.strictEqual(S.kiosk.step, 'phonereq', '기한 지나면 출퇴근 단추 안 나옴');
+  // 휴대폰에서 이름+번호로 연결 → 기록 → 태블릿이 저절로 넘어감
+  const kioskSave = { ...S.kiosk };
+  S.mode = 'phone'; S.phone.staffId = null; S.phone.pickId = 'a'; for (const dg of '1111') padPress('phone', dg);
+  assert.ok(docs['phone_links/a'] && docs['phone_links/a'].first && S.phone.staffId === 'a', '휴대폰 연결 기록');
+  S.mode = 'kiosk'; Object.assign(S.kiosk, kioskSave); render(true);
+  assert.ok(S.kiosk.step === 'action' && !view.innerHTML.includes('휴대폰 연결이 필요해요'), '연결되면 태블릿 화면이 바로 출퇴근으로');
+  resetKiosk(); ACT.kPick({ id:'a' }); for (const dg of '1111') padPress('staff', dg); assert.strictEqual(S.kiosk.step, 'action', '연결한 직원에게는 다시 안 뜸');
+  // 마스터 번호는 통과, 꺼져 있으면 안 뜸
+  S.config.masterPin = '9999'; resetKiosk(); ACT.kPick({ id:'b' }); for (const dg of '9999') padPress('staff', dg); assert.strictEqual(S.kiosk.step, 'action', '마스터 번호는 통과');
+  S.config.phoneReq.on = false; resetKiosk(); ACT.kPick({ id:'b' }); for (const dg of '2222') padPress('staff', dg); assert.strictEqual(S.kiosk.step, 'action', '꺼져 있으면 안 뜸');
+  // 사장님: 연결 현황
+  S.mode = 'owner'; S.tab = 'tasks'; render(true);
+  assert.ok(view.innerHTML.includes('휴대폰 연결 현황') && view.innerHTML.includes('✅ <b>성실</b>') && view.innerHTML.includes('⬜ <b>가나다</b>'), '사장님: 누가 연결했는지');
+  await ACT.plDel({ id:'a' }); assert.ok(!docs['phone_links/a'] && !S.plinks.has('a'), '연결 지우기 (휴대폰 바꿨을 때)');
+  console.log('휴대폰 연결 필수 통과');
+
+  // ----- 10. 백업 -----
   const Bk = await import('../supabase/functions/tc-notyet-check/backup.mjs');
   const bk = Bk.buildBackup([{ collection:'badges', id:'a', data: docs['badges/a'] }, { collection:'thanks', id:'2026-11-20_a', data: th }], NOW, '가게');
   assert.ok(bk.extra.badges[0].id === 'a' && bk.extra.thanks[0].id === '2026-11-20_a', '자동 백업에 배지·고마워요');
