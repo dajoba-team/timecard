@@ -145,6 +145,33 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .kdate{color:var(--muted);font-size:16px}
 .ktime{font-size:clamp(48px,11vw,96px);font-weight:600;letter-spacing:.02em;line-height:1.1}
 .khint{text-align:center;color:var(--muted);margin:6px 0 18px}
+/* 🎄 시즌 장식 (v40): 트리·눈사람·전구 줄·인사말 + 화면 전체 눈 내림 */
+.kclock.season{position:relative;max-width:960px;margin:0 auto;padding-top:26px}
+.xlights{display:flex;justify-content:center;gap:clamp(8px,2.4vw,22px);margin:0 auto 6px;max-width:720px;height:20px;border-top:2px solid rgba(90,110,90,.45);border-radius:50% 50% 0 0/14px 14px 0 0}
+.xlights i{width:10px;height:14px;border-radius:50% 50% 45% 45%;margin-top:-2px;background:#e63946;box-shadow:0 0 10px currentColor;color:#e63946;animation:bulb 1.4s ease-in-out infinite}
+.xlights i:nth-child(4n+2){background:#ffd166;color:#ffd166}.xlights i:nth-child(4n+3){background:#2fbf71;color:#2fbf71}.xlights i:nth-child(4n){background:#4cc9f0;color:#4cc9f0}
+@keyframes bulb{0%,100%{opacity:1;filter:brightness(1.15)}50%{opacity:.35;filter:brightness(.8)}}
+.xtree,.xsnow,.xfire{position:absolute;bottom:4px;width:clamp(78px,13vw,140px);height:auto;pointer-events:none}
+.xtree,.xfire{left:max(0px,calc(50% - 470px))}.xsnow{right:max(0px,calc(50% - 470px));width:clamp(68px,11vw,118px);animation:wobble 4s ease-in-out infinite;transform-origin:50% 100%}
+.xtree .orn{animation:twinkle 1.6s ease-in-out infinite}
+.xtree .xstar{transform-origin:60px 25px;animation:starglow 2.2s ease-in-out infinite}
+@keyframes twinkle{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes starglow{0%,100%{transform:scale(1);filter:drop-shadow(0 0 2px #ffd166)}50%{transform:scale(1.12);filter:drop-shadow(0 0 9px #ffd166)}}
+@keyframes wobble{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.xfire{display:flex;gap:4px;font-size:clamp(34px,6vw,58px);align-items:flex-end;justify-content:center}
+.xfire span{animation:pop 2.4s ease-in-out infinite}.xfire span:nth-child(2){animation-delay:.8s;font-size:.7em}.xfire span:nth-child(3){animation-delay:1.6s}
+@keyframes pop{0%,100%{transform:scale(.7);opacity:.4}40%{transform:scale(1.1);opacity:1}}
+.xmsg{margin-top:4px;font-weight:700;font-size:clamp(15px,2.2vw,20px);color:#c2283a}
+.season.newyear .xmsg{color:#b7791f}
+:root[data-theme="dark"] .xmsg{color:#ff8a8a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .xmsg{color:#ff8a8a}}
+@media (max-width:620px){.xtree,.xfire{left:0;width:58px;bottom:auto;top:30px}.xsnow{right:0;width:50px;bottom:auto;top:34px}.xfire{font-size:28px}}
+#snowfx{position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden}
+#snowfx i,#snowfx b{position:absolute;top:-16px;display:block;animation:snowfall var(--d) linear var(--delay) infinite}
+#snowfx i{width:var(--s);height:var(--s);border-radius:50%;background:#fff;box-shadow:0 0 4px 1px rgba(130,165,215,.75);opacity:.9}
+#snowfx b{color:#b9d3f2;text-shadow:0 0 4px rgba(90,130,190,.6);font-weight:400}
+@keyframes snowfall{0%{transform:translate3d(0,-16px,0)}50%{transform:translate3d(var(--x),52vh,0)}100%{transform:translate3d(0,106vh,0)}}
+@media (prefers-reduced-motion:reduce){#snowfx{display:none}.xlights i,.xtree .orn,.xtree .xstar,.xsnow,.xfire span{animation:none}}
 .kgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));max-width:960px;margin:0 auto}
 .kname{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:10px;text-align:left;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-height:110px}
 .kname:hover{border-color:var(--stamp)}
@@ -591,6 +618,7 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   geo:{ on:false, lat:null, lng:null, acc:0, radius:200, setAt:0 },
   award:{ amount:50000, months:{} },   // 이달의 우수직원 기본 포상금 (매달 확정할 때 바꿀 수 있음), months: 진행하는 달 { 'YYYY-MM': true } (v29)
   ot:{ on:false, since:'' },
+  season:'auto',   // 시즌 장식 (v40): 'auto' 크리스마스 11/20~12/25·새해 12/26~1/5 / 'on' / 'off'
   team:{ on:false, target:90, reward:'', rewardVi:'' },
   evalStart:'2026-11-17',
   phoneReq:{ on:false, deadline:'' } };   // 직원 휴대폰 연결 필수 (v38): 켜면 기한까지 모든 직원이 휴대폰 연결   // 출퇴근 평가 시작일 (v34): 이 날 전은 시험 기간이라 지각·결근·점수에서 뺌 (일한 시간은 급여에 그대로)   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
@@ -1237,6 +1265,7 @@ function render(force){
   const html = S.mode === 'phone' ? phoneView() : S.mode === 'kiosk' ? kioskView() : !S.unlocked ? lockView()
     : ({ now:nowView, tasks:tasksView, award:awardView, records:recordsView, timecard:timecardView, payroll:payrollView, contract:contractView, staff:staffView }[S.tab] || nowView)();
   v.innerHTML = navBar() + html;
+  seasonFx(S.mode === 'kiosk' && S.kiosk.step === 'list' ? seasonNow() : null);   // 눈 내림은 태블릿 첫 화면에서만
   if (S.mode !== 'owner') attachCam();
   initSigs();
   if (!atHome()) navGuard();
@@ -1408,11 +1437,13 @@ function mySummary(st){
 }
 function kioskView(){
   const k = S.kiosk, now = Date.now(), today = todayStr();
-  const clock = `<div class="kclock"><div class="kdate" id="kdate">${fmtDateK(today)}</div><div class="ktime mono" id="ktime">${fmtClock(now)}</div></div>`;
+  let clock = `<div class="kclock"><div class="kdate" id="kdate">${fmtDateK(today)}</div><div class="ktime mono" id="ktime">${fmtClock(now)}</div></div>`;
   if (S.noDb) return clock + `<div class="empty"><b>기록을 저장할 수 없어요</b>위 안내처럼 인터넷 연결을 확인하고 새로고침해 주세요.</div>`;
   if (!S.ready.staff) return clock + loadingNote();
   const list = activeStaff();
   if (k.step === 'list'){
+    const th = seasonNow();
+    if (th) clock = seasonClock(th, clock.replace(/^<div class="kclock">|<\/div>$/g, ''));   // 🎄 시즌 장식 (v40)
     if (!list.length) return clock + `<div class="empty"><b>${T('아직 등록된 직원이 없어요')}</b>오른쪽 위 ‘사장님 화면’ → ‘직원·설정’에서 직원과 근무 시간을 먼저 등록해 주세요.</div>`;
     const hint = BI(`본인 이름을 누르고 개인 번호 4자리를 입력하세요${cfg().photo.on ? ' · 📷 출퇴근할 때 얼굴 사진을 찍어요' : ''}${cfg().geo.on ? ' · 📍 위치도 함께 기록돼요' : ''}`,
       `${VI['본인 이름을 누르고 개인 번호 4자리를 입력하세요']}${cfg().photo.on ? ' · ' + VI['📷 출퇴근할 때 얼굴 사진을 찍어요'] : ''}${cfg().geo.on ? ' · ' + VI['📍 위치도 함께 기록돼요'] : ''}`);
@@ -1911,6 +1942,7 @@ function configForm(){
       <p class="hint full" style="margin:0">마스터 번호는 출퇴근 화면에서 <b>어느 직원의 개인 번호 대신 넣어도 통과</b>하는 사장님용 번호예요. 직원이 번호를 잊었을 때 대신 찍어 줄 수 있어요. 마스터 번호로 찍은 기록에는 ‘사장님 대리 입력’ 표시가 남아요. 직원 개인 번호와 겹치면 안 돼요.</p>
       <label>지각 봐주는 시간 (분)<input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
       <label>추가근무 인정 단위 (분)<input id="c-unit" type="number" min="1" value="${c.otUnit}"></label>
+      <label>🎄 시즌 장식 <small class="muted">태블릿 첫 화면</small><select id="c-season">${[['auto', '자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)'], ['on', '늘 켜기'], ['off', '끄기']].map(([v, l]) => `<option value="${v}" ${(c.season || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>출퇴근 평가 시작일 <small class="muted">이 날부터 지각·결근·점수 계산</small><input id="c-evalStart" type="date" value="${esc(c.evalStart || '')}"></label>
       <label class="check full"><input type="checkbox" id="c-phoneReq" ${c.phoneReq.on ? 'checked' : ''}> 📱 직원 휴대폰 연결 필수 — 아직 연결 안 한 직원은 가게 태블릿에서 번호를 누르면 QR·연결 방법이 먼저 떠요. 기한이 지나면 연결해야 출퇴근할 수 있어요 (마스터 번호는 통과)</label>
       <label>휴대폰 연결 기한<input id="c-phoneDeadline" type="date" value="${esc(c.phoneReq.deadline || addDays(todayStr(), 7))}"></label>
@@ -1965,6 +1997,7 @@ function staffView(){
         <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
         <dt>지각 기준</dt><dd>정해진 시간 + ${c.graceMin}분 넘으면 지각</dd>
         <dt>휴대폰 연결</dt><dd>${c.phoneReq.on ? `<b style="color:var(--green)">필수</b> · ${c.phoneReq.deadline ? `${fmtDateLong(c.phoneReq.deadline)}까지` : ''} · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명 (업무 보고 탭 → 직원 휴대폰에서 누가 했는지 볼 수 있어요)` : `선택 · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명`}</dd>
+        <dt>시즌 장식</dt><dd>${{ auto:'자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)', on:'늘 켜기', off:'끄기' }[c.season || 'auto']}${seasonNow() ? ` · 지금 ${seasonNow() === 'newyear' ? '🎉 새해' : '🎄 크리스마스'} 장식 중` : ''}</dd>
         <dt>평가 시작일</dt><dd>${c.evalStart ? `${fmtDateLong(c.evalStart)}부터 지각·결근·점수·배지를 계산해요 (그 전은 시험 기간, 일한 시간은 급여에 그대로)` : '처음 기록부터 계산해요'}</dd>
         <dt>추가근무</dt><dd>${c.otUnit}분 단위 인정 · ${c.otPremium ? '1.5배 가산' : '시급 그대로'}</dd>
         <dt>추가근무 승인제</dt><dd>${c.ot.on ? `<b style="color:var(--green)">켜짐</b> · ${fmtMD(c.ot.since)}부터 사장님이 승인한 추가근무만 급여에 들어가요` : '꺼짐 · 정해진 시간을 넘긴 근무는 모두 추가근무로 계산해요'}</dd>
@@ -4381,6 +4414,64 @@ const INSTALLACT = {
   reloadApp(){ location.reload(); },
 };
 
+/* ===================== 시즌 장식 (v40) ===================== */
+// 가게 태블릿 첫 화면(이름 카드 화면) 시계에 계절 장식 — 예전 포털 첫 화면처럼.
+//   크리스마스(11/20~12/25): 🎄 트리(반짝이는 전구·별) · ⛄ 눈사람 · 전구 줄 · 눈 내림 · "Merry Christmas"
+//   새해(12/26~1/5): 🎆 불꽃 · ⛄ 눈사람 · 전구 줄 · 눈 내림 · "Happy New Year"
+// config.season: 'auto'(위 기간에만, 기본) | 'on'(늘) | 'off'. 움직임 줄이기 설정이면 눈은 멈추고 장식만.
+function seasonNow(){
+  const mode = cfg().season || 'auto';
+  if (mode === 'off') return null;
+  const d = parseDate(todayStr()), m = d.getMonth() + 1, day = d.getDate();
+  const ny = (m === 12 && day >= 26) || (m === 1 && day <= 5), xm = (m === 11 && day >= 20) || (m === 12 && day <= 25);
+  if (ny) return 'newyear';
+  if (xm || mode === 'on') return 'xmas';
+  return null;
+}
+const newYearOf = () => { const d = parseDate(todayStr()); return d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear(); };
+const XTREE = `<svg class="xtree" viewBox="0 0 120 165" aria-hidden="true" focusable="false">
+  <polygon points="60,32 92,80 28,80" fill="#2f8f4e"/><polygon points="60,56 102,114 18,114" fill="#2a7d45"/><polygon points="60,86 114,148 6,148" fill="#236b3b"/>
+  <path d="M34 78 Q60 92 86 74 M24 110 Q60 128 96 106 M14 144 Q60 160 106 140" stroke="#f6d365" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  ${[[44,70,'#e63946'],[70,64,'#f4a261'],[58,84,'#4cc9f0'],[36,104,'#f4a261'],[80,100,'#e63946'],[56,118,'#ffd166'],[26,138,'#4cc9f0'],[92,134,'#ffd166'],[62,142,'#e63946'],[76,124,'#4cc9f0']]
+    .map(([x, y, c], i) => `<circle class="orn" cx="${x}" cy="${y}" r="4.6" fill="${c}" style="animation-delay:${(i * 0.23).toFixed(2)}s"/>`).join('')}
+  <rect x="51" y="148" width="18" height="15" rx="2" fill="#8a5a2b"/>
+  <polygon class="xstar" points="60,6 65.5,20 80,20 68.5,29 73,43 60,34.5 47,43 51.5,29 40,20 54.5,20" fill="#ffd166" stroke="#f4a261" stroke-width="1.5"/>
+</svg>`;
+const XSNOWMAN = `<svg class="xsnow" viewBox="0 0 110 150" aria-hidden="true" focusable="false">
+  <ellipse cx="55" cy="146" rx="40" ry="5" fill="rgba(120,140,170,.25)"/>
+  <circle cx="55" cy="112" r="32" fill="#fff" stroke="#c9d6e6" stroke-width="2"/>
+  <circle cx="55" cy="62" r="23" fill="#fff" stroke="#c9d6e6" stroke-width="2"/>
+  <rect x="35" y="30" width="40" height="6" rx="2" fill="#1f2937"/><rect x="42" y="8" width="26" height="24" rx="3" fill="#1f2937"/><rect x="42" y="24" width="26" height="5" fill="#e63946"/>
+  <circle cx="47" cy="57" r="2.6" fill="#1f2937"/><circle cx="63" cy="57" r="2.6" fill="#1f2937"/>
+  <polygon points="55,63 75,68 55,69" fill="#f77f00"/>
+  <path d="M46 73 Q55 79 64 73" stroke="#1f2937" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M33 84 Q55 92 77 84 L77 91 Q55 99 33 91 Z" fill="#e63946"/><rect x="66" y="88" width="9" height="22" rx="3" fill="#e63946"/>
+  <circle cx="55" cy="104" r="3" fill="#1f2937"/><circle cx="55" cy="116" r="3" fill="#1f2937"/><circle cx="55" cy="128" r="3" fill="#1f2937"/>
+  <path d="M24 100 L4 84 M10 89 L4 96 M86 100 L106 84 M100 89 L106 96" stroke="#8a5a2b" stroke-width="3" stroke-linecap="round"/>
+</svg>`;
+const XFIRE = `<div class="xfire" aria-hidden="true"><span>🎆</span><span>✨</span><span>🎇</span></div>`;
+// 시계 위아래 장식 (첫 화면만)
+function seasonClock(theme, inner){
+  const lights = `<div class="xlights" aria-hidden="true">${Array.from({ length:22 }, (_, i) => `<i style="animation-delay:${((i % 4) * 0.35).toFixed(2)}s"></i>`).join('')}</div>`;
+  const msg = theme === 'newyear'
+    ? BI(`🎉 Happy New Year ${newYearOf()} · 새해 복 많이 받으세요!`, `🎉 Chúc mừng năm mới ${newYearOf()}!`)
+    : BI('🎄 Merry Christmas · 메리 크리스마스!', '🎄 Giáng sinh an lành · Merry Christmas!');
+  return `<div class="kclock season ${theme}">${lights}${theme === 'newyear' ? XFIRE : XTREE}${XSNOWMAN}${inner}<div class="xmsg">${msg}</div></div>`;
+}
+// 눈 내림: 화면 전체 위에 한 번만 깔아 두고(다시 그려도 끊기지 않게), 첫 화면이 아니면 치움
+function seasonFx(theme){
+  if (typeof document === 'undefined' || !document.body || typeof document.getElementById !== 'function') return;
+  let el = document.getElementById('snowfx');
+  if (!theme){ if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement('div'); el.id = 'snowfx'; el.setAttribute?.('aria-hidden', 'true');
+  el.innerHTML = Array.from({ length:44 }, (_, i) => {
+    const x = (i * 37 + 11) % 100, dur = 8 + (i * 13) % 9, delay = -((i * 29) % 16), sz = 5 + (i * 7) % 9, drift = ((i % 5) - 2) * 14;
+    return i % 6 === 0 ? `<b style="left:${x}%;--d:${dur + 3}s;--delay:${delay}s;--x:${drift}px;font-size:${10 + sz}px">❄</b>` : `<i style="left:${x}%;--d:${dur}s;--delay:${delay}s;--s:${sz}px;--x:${drift}px"></i>`;
+  }).join('');
+  document.body.appendChild(el);
+}
+
 /* ===================== 동작 ===================== */
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
@@ -4669,7 +4760,8 @@ async function saveConfig(){
     graceMin: Math.max(0, Math.round(+$('#c-grace').value || 0)), otUnit: Math.max(1, Math.round(+$('#c-unit').value || 1)),
     earlyClamp: $('#c-early').checked, otPremium: $('#c-prem').checked, weeklyHoliday: $('#c-hol').checked,
     ot: $('#c-otapp')?.checked ? { on:true, since: cfg().ot.on && cfg().ot.since ? cfg().ot.since : todayStr() } : { on:false, since:'' },   // 켠 날부터 적용
-    evalStart: $('#c-evalStart') ? ($('#c-evalStart').value || '') : cfg().evalStart,   // 출퇴근 평가 시작일 (v34, 비우면 처음부터)
+    evalStart: $('#c-evalStart') ? ($('#c-evalStart').value || '') : cfg().evalStart,
+    season: $('#c-season') ? ($('#c-season').value || 'auto') : cfg().season,   // 시즌 장식 (v40)   // 출퇴근 평가 시작일 (v34, 비우면 처음부터)
     phoneReq: $('#c-phoneReq') ? { on: !!$('#c-phoneReq').checked, deadline: $('#c-phoneDeadline')?.value || addDays(todayStr(), 7) } : cfg().phoneReq,   // 직원 휴대폰 연결 필수 (v38)
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
     mail: readMailForm(), photo:{ ...cfg().photo, on: $('#p-on').checked }, geo:{ ...cfg().geo, radius: Math.max(30, Math.round(+$('#c-georad').value || 200)) } };

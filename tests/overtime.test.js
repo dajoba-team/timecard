@@ -155,6 +155,24 @@ const T20 = '2026-11-20';
   const back = L.backupToDocs({ ...bk, staff:[], punches:{}, contracts:[], reports:{} });
   assert.ok(back.rows.some(x => x.collection === 'ot' && x.id === 'b_2026-11-21'), '백업에서 되살리기');
   console.log('슬랙·백업 통과');
+
+  // ----- 10. 시즌 장식 (v40): 날짜로 자동, 끄기·늘 켜기 -----
+  const seasonAt = (ds, mode) => { NOW = kt('12:00', ds); S.config.season = mode; return seasonNow(); };
+  assert.strictEqual(seasonAt('2026-11-19', 'auto'), null, '11/19 전엔 없음');
+  assert.strictEqual(seasonAt('2026-11-20', 'auto'), 'xmas', '11/20부터 크리스마스');
+  assert.strictEqual(seasonAt('2026-12-25', 'auto'), 'xmas');
+  assert.strictEqual(seasonAt('2026-12-26', 'auto'), 'newyear', '12/26부터 새해');
+  assert.strictEqual(seasonAt('2027-01-05', 'auto'), 'newyear');
+  assert.strictEqual(seasonAt('2027-01-06', 'auto'), null, '1/6부터 없음');
+  assert.strictEqual(seasonAt('2027-03-01', 'on'), 'xmas', '늘 켜기');
+  assert.strictEqual(seasonAt('2026-12-01', 'off'), null, '끄기');
+  NOW = kt('12:00', '2026-12-28'); S.config.season = 'auto'; S.mode = 'kiosk'; S.lang = 'ko'; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('kclock season newyear') && view.innerHTML.includes('Happy New Year 2027') && view.innerHTML.includes('id="ktime"') && !view.innerHTML.includes('class="xtree"'), '새해 장식 (시계는 그대로)');
+  NOW = kt('12:00', '2026-12-10'); render(true);
+  assert.ok(view.innerHTML.includes('class="xtree"') && view.innerHTML.includes('class="xsnow"') && view.innerHTML.includes('Merry Christmas') && view.innerHTML.includes('class="xlights"'), '크리스마스 트리·눈사람·전구·인사말');
+  Object.assign(S.kiosk, { staffId:'a', step:'action' }); render(true); assert.ok(!view.innerHTML.includes('class="xtree"'), '첫 화면에서만');
+  S.config.season = 'off'; resetKiosk(); render(true); assert.ok(!view.innerHTML.includes('season'), '끄면 장식 없음');
+  console.log('시즌 장식 통과');
   process.exit(0);
 })().catch(e => { console.error('Error', e); process.exit(1); });
 `;
