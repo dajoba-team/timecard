@@ -107,9 +107,27 @@ const [A, B] = S.staff;
   assert.ok(view.innerHTML.includes('🎮 동기부여') && view.innerHTML.includes('업무태도 평가') && view.innerHTML.includes('직원끼리 고마워요') && view.innerHTML.includes('직원 배지') && view.innerHTML.includes('팀 목표'), '동기부여 탭');
   assert.ok(view.innerHTML.includes('<b>성실</b> → <b>가나다</b>') && view.innerHTML.includes('(번역: [ko] Cảm ơn đã giúp nhé)'), '고마워요 목록 (사장님)');
   await ACT.attStar({ sid:'b', c:'t', v:'5' });
-  assert.deepStrictEqual(S.config.award.att['2026-11'].b, { h:3, k:3, t:5, r:3 }, '별 누르면 저장 (나머지는 보통)');
+  assert.deepStrictEqual(S.config.award.att['2026-11'].b, { mode:'stars', h:3, k:3, t:5, r:3, w:1 }, '별 누르면 저장 (나머지는 보통)');
   assert.strictEqual(attOf('b', '2026-11'), 1.08, '평균 3.5 → ×1.08');
   assert.ok(docs['config/main'].award.att['2026-11'].b.t === 5, '설정에 저장');
+  // v35: 직접 정하기 — 별점과 섞이지 않게 한 가지 방법만
+  await ACT.attMode({ sid:'b', v:'manual' });
+  assert.strictEqual(attOf('b', '2026-11'), 1, '직접으로 바꾸면 직접 가중치(처음 ×1.0)');
+  await ACT.attW({ sid:'b', v:'1.2' });
+  assert.strictEqual(attOf('b', '2026-11'), 1.2, '직접 ×1.2');
+  assert.strictEqual(S.config.award.att['2026-11'].b.t, 5, '별점은 남아 있음 (반영만 안 됨)');
+  render(true);
+  assert.ok(view.innerHTML.includes('✋ 직접 정한 ×1.2를 써요') && view.innerHTML.includes('evstars off'), '직접일 땐 별점 흐리게·반영 안 됨 안내');
+  assert.ok(view.innerHTML.includes('✋ 직접 <b>×1.2</b>'), '점수표에 방법 표시');
+  await ACT.attMode({ sid:'b', v:'stars' }); assert.strictEqual(attOf('b', '2026-11'), 1.08, '별점으로 돌아오면 별점 가중치');
+  // 예전(v30) 숫자 가중치는 '직접'으로 읽고 바꿀 수 있음
+  S.config.award.att['2026-11'].a = 1.1; render(true);
+  assert.ok(attInfo('a', '2026-11').mode === 'manual' && view.innerHTML.includes('data-act="attW" data-sid="a" data-v="1.1" class="on"'), '예전 ×1.1은 직접 ×1.1로 보이고 바꿀 수 있음');
+  await ACT.attW({ sid:'a', v:'1.3' }); assert.strictEqual(attOf('a', '2026-11'), 1.3);
+  // 로고를 누르면 처음 화면
+  S.tab = 'payroll'; ACT.navHome(); assert.strictEqual(S.tab, 'now', '로고(처음으로) → 현황');
+  renderTop(); assert.ok(document.querySelector('#top').innerHTML.includes('class="brand" data-act="navHome"'), '맨 위 우리 가게 로고가 처음으로 버튼');
+  S.tab = 'award';
   el.checked = true; el.value = '95'; await ACT.tmSave();
   assert.ok(S.config.team.on && S.config.team.target === 95, '팀 목표 저장');
   console.log('고마워요·팀 목표·평가 통과');

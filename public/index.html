@@ -48,6 +48,8 @@ h1,h2,h3{text-wrap:balance;margin:0}
 /* header */
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:12px;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+button.brand{border:0;background:none;padding:0;text-align:left;cursor:pointer;color:inherit;font:inherit;border-radius:10px}
+button.brand:focus-visible{outline:3px solid var(--stamp);outline-offset:3px}
 .mark{width:36px;height:36px;border-radius:8px;border:2px solid var(--stamp);color:var(--stamp);display:grid;place-items:center;font-family:var(--f-mono);font-weight:600;font-size:13px;transform:rotate(-6deg)}
 .brand b{display:block;font-size:16px}
 .brand small{color:var(--muted);font-size:12px}
@@ -480,6 +482,13 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .stars button{border:0;background:none;font-size:20px;line-height:1;padding:0 1px;color:var(--line);cursor:pointer}
 .stars button.on{color:var(--amber)}
 .stars button:disabled{cursor:default}
+.attguide{background:var(--soft);border-radius:10px;padding:8px 10px;display:grid;gap:2px;margin-bottom:6px}
+.attmode,.attw{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.attmode button,.attw button{border:0;background:var(--card);color:var(--muted);font:inherit;font-size:13px;font-weight:600;padding:4px 10px;cursor:pointer}
+.attmode button.on,.attw button.on{background:var(--stamp);color:#fff}
+.attmode button:disabled,.attw button:disabled{cursor:default;opacity:.6}
+.attw{margin:4px 0}
+.evstars.off{opacity:.35}
 .lvhead{display:flex;align-items:center;gap:8px;font-size:17px}
 .lvhead .lvicon{font-size:28px;line-height:1}
 .otbit{display:grid;gap:8px;margin-top:12px}
@@ -1285,7 +1294,7 @@ function attentionCount(){
 function renderTop(){
   const c = cfg(), owner = S.mode === 'owner' && S.unlocked, att = owner ? attentionCount() : 0;
   $('#top').innerHTML = `
-    <div class="brand"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? TV('출퇴근 화면') : S.mode === 'phone' ? TV('직원 휴대폰') : '사장님 화면'}</small></div></div>
+    <button type="button" class="brand" data-act="navHome" title="처음 화면으로" aria-label="${esc(c.storeName)} · 처음 화면으로"><span class="mark">IN</span><div><b>${esc(c.storeName)}</b><small>${S.mode === 'kiosk' ? TV('출퇴근 화면') : S.mode === 'phone' ? TV('직원 휴대폰') : '사장님 화면'}</small></div></button>
     ${owner ? `<nav class="tabs">${TABS.map(([k, l]) => { const n = k === 'now' ? att : k === 'tasks' && S.ready.tasks ? trWaiting().length : 0; return `<button data-act="tab" data-v="${k}" class="${S.tab === k ? 'on' : ''}">${l}${n ? `<i class="badge">${n}</i>` : ''}</button>`; }).join('')}</nav>` : ''}
     ${S.mode !== 'owner' ? `${langSwitch()}<button class="ghost" data-act="toOwner">${TV('사장님 화면')}</button>` : `<button class="ghost" data-act="toKiosk">${deviceMode() === 'phone' ? '직원 휴대폰 화면으로' : '출퇴근 화면으로'}</button>`}`;
   document.documentElement && (document.documentElement.lang = isVi() ? 'vi' : 'ko');
@@ -3407,18 +3416,27 @@ const levelBar = lv => `<div class="lvbar" role="progressbar" aria-valuemin="0" 
   <div class="small muted">${lv.next ? BI(`다음 단계 ${lv.next[1]} ${lv.next[2]}까지 <b>${num(lv.need)}점</b>`, `Còn <b>${num(lv.need)} điểm</b> nữa lên ${lv.next[1]} ${lv.next[3]}`) : BI('👑 최고 단계예요! 이대로 쭉~', '👑 Cấp cao nhất rồi! Cứ thế phát huy nhé~')}</div>`;
 // 업무태도 가중치 (v30, 사장님만 보고 정함): 점수 항목에 없는 태도·성실함을 달마다 직원별로. 감점 없이 1.0~1.3배
 // config.award.att = { 'YYYY-MM': { 직원id: 1.1 } }. 최종 점수 = 달성률 × 100 × 가중치 → 이 점수로 순위·추천
-// v32: 사장님 평가 체크리스트 — 4가지를 별 1~5개로 매기면 가중치 자동 (평균 별 3개 이하 ×1.0, 4개 ×1.15, 5개 ×1.3, 감점 없음)
-//   config.award.att[ym][직원] = { h, k, t, r } (예전 v30 숫자 1.1~1.3도 그대로 읽음)
-const ATT_LEVELS = [[1, '보통 ×1.0'], [1.1, '좋음 ×1.1'], [1.2, '아주 좋음 ×1.2'], [1.3, '최고 ×1.3']];
+// ----- 업무태도 가중치 (v35 정리) -----
+// 직원·달마다 '한 가지 방법'으로만 정해요 (두 가지가 섞이지 않게):
+//   ⭐ 별점 (기본): 위생·청결 / 친절 / 팀워크 / 책임감을 별 1~5개 → 평균으로 자동
+//        ★3 이하 ×1.0 · ★3.5 ×1.08 · ★4 ×1.15 · ★4.5 ×1.23 · ★5 ×1.3
+//   ✋ 직접: 사장님이 ×1.0 / ×1.1 / ×1.2 / ×1.3 중에서 바로 고름 (별점은 남아 있지만 반영 안 됨)
+// 최종 점수 = 달성률 × 100 × 가중치. 감점 없음, 직원 화면에는 안 보임.
+// 저장: config.award.att[ym][직원] = { mode:'stars'|'manual', h, k, t, r, w }
+//   (v30 숫자 1.1 → '직접 ×1.1'로, v32 별점만 있던 것 → '별점'으로 그대로 읽음)
+const ATT_LEVELS = [1, 1.1, 1.2, 1.3];
 const ATT_CATS = [['h', '🧼', '위생·청결'], ['k', '😊', '친절'], ['t', '🤝', '팀워크'], ['r', '💪', '책임감']];
-const attStars = (sid, ym) => { const v = cfg().award.att?.[ym]?.[sid]; return v && typeof v === 'object' ? Object.fromEntries(ATT_CATS.map(([c]) => [c, Math.min(5, Math.max(1, Math.round(+v[c] || 3)))])) : null; };
-const attAvg = s => ATT_CATS.reduce((t, [c]) => t + s[c], 0) / ATT_CATS.length;
-const attOf = (sid, ym) => {
+const starW = avg => Math.round((1 + Math.max(0, avg - 3) * 0.15) * 100) / 100;
+function attInfo(sid, ym){
   const v = cfg().award.att?.[ym]?.[sid];
-  if (typeof v === 'number') return ATT_LEVELS.some(([x]) => x === v) ? v : 1;
-  const s = attStars(sid, ym);
-  return s ? Math.round((1 + Math.max(0, attAvg(s) - 3) * 0.15) * 100) / 100 : 1;
-};
+  const o = typeof v === 'number' ? { mode:'manual', w:v } : v && typeof v === 'object' ? v : {};
+  const stars = Object.fromEntries(ATT_CATS.map(([c]) => [c, Math.min(5, Math.max(1, Math.round(+o[c] || 3)))]));
+  const avg = ATT_CATS.reduce((t, [c]) => t + stars[c], 0) / ATT_CATS.length;
+  const manualW = ATT_LEVELS.includes(+o.w) ? +o.w : 1, mode = o.mode === 'manual' ? 'manual' : 'stars';
+  return { mode, stars, avg, starW: starW(avg), manualW, w: mode === 'manual' ? manualW : starW(avg) };
+}
+const attOf = (sid, ym) => attInfo(sid, ym).w;
+const attLabel = i => i.mode === 'manual' ? `✋ 직접 <b>×${i.w}</b>` : `⭐ ★${i.avg.toFixed(1)} → <b>×${i.w}</b>`;
 const finalScore = o => o.rate == null ? null : Math.round(o.rate * 100 * (o.w || 1) * 10) / 10;
 function awardRank(ym){
   const list = staffForMonth(ym).map(st => { const o = scoreMonth(st, ym); o.w = attOf(st.id, ym); o.final = finalScore(o); return o; });
@@ -3458,7 +3476,7 @@ function awardView(){
   const rows = list.map(o => `<tr class="${winner?.id === o.st.id || (!aw && top?.st.id === o.st.id) ? 'awtop' : ''}">
       <td><b>${esc(o.st.name)}</b>${winner?.id === o.st.id ? ' 🏆' : !aw && top?.st.id === o.st.id ? ' <span class="chip amber">추천</span>' : ''}<div class="small muted">${esc(o.st.position || '')}</div></td>
       <td class="r mono"><b>${o.final ?? '-'}</b>${o.possible < AWARD_MIN_POSSIBLE ? '<div class="small muted">근무 적음</div>' : ''}</td>
-      <td class="small">${(() => { const s = attStars(o.st.id, ym); return `${s ? `★${attAvg(s).toFixed(1)} · ` : ''}<b>×${o.w}</b>`; })()}</td>
+      <td class="small" style="white-space:nowrap">${attLabel(attInfo(o.st.id, ym))}</td>
       <td class="r">${pct(o.rate)} ${badgeOf(o.rate)}</td>
       <td class="r mono">${num(o.earned)} / ${num(o.possible)}</td>
       <td class="r mono">+${num(o.bonus)}</td><td class="r mono"><b>${num(o.total)}</b></td>
@@ -3492,10 +3510,24 @@ function awardView(){
   const badgePanel = `<section class="panel"><h3>🏅 직원 배지 <small>한 번 받으면 계속 남아요 · 직원은 자기 배지만 봐요</small></h3>
       <div class="slist">${activeStaff().map(s => { const got = S.badges.get(s.id)?.got || {}, mine = BADGES.filter(b => got[b.id]); return `<div class="sitem"><div><b>${esc(s.name)}</b> <span class="small muted">${mine.length}/${BADGES.length}</span><div class="sub" style="font-size:18px">${mine.map(b => `<span title="${esc(b.ko)}">${b.icon}</span>`).join(' ') || '<span class="small muted">아직 없음 (직원 화면을 열면 채워져요)</span>'}</div></div></div>`; }).join('')}</div>
       <details class="small" style="margin-top:8px"><summary>배지 기준 보기</summary>${BADGES.map(b => `<div>${b.icon} ${b.ko}</div>`).join('')}</details></section>`;
-  const evalPanel = `<section class="panel"><h3>📝 업무태도 평가 <small>사장님만 · 별이 많을수록 최종 점수 가중치 (감점 없음)</small></h3>
-      ${list.length ? list.map(o => { const s = attStars(o.st.id, ym) || { h:3, k:3, t:3, r:3 }; return `<div class="evrow"><div class="row" style="gap:6px;align-items:center"><b>${esc(o.st.name)}</b><span class="chip ${o.w > 1 ? 'ok' : 'faint'}">×${o.w}</span></div>
-        ${ATT_CATS.map(([c, ic, l]) => `<div class="evcat"><span>${ic} ${l}</span><span class="stars">${[1, 2, 3, 4, 5].map(v => `<button type="button" data-act="attStar" data-sid="${esc(o.st.id)}" data-c="${c}" data-v="${v}" class="${v <= s[c] ? 'on' : ''}" aria-label="${esc(o.st.name)} ${l} 별 ${v}개" ${aw || future ? 'disabled' : ''}>★</button>`).join('')}</span></div>`).join('')}</div>`; }).join('') : '<p class="muted small">이달 근무한 직원이 없어요.</p>'}
-      <p class="hint">4가지 평균이 별 3개(보통) 이하면 ×1.0, 4개면 ×1.15, 5개면 ×1.3. 직원 화면에는 보이지 않아요. 달마다 새로 매기고, 확정한 달은 바꿀 수 없어요.</p></section>`;
+  const lockAtt = !!aw || future;
+  const evalPanel = `<section class="panel"><h3>📝 업무태도 가중치 <small>사장님만 · 감점 없음 · 직원에게 안 보여요</small></h3>
+      <div class="attguide small">
+        <div>직원마다 <b>한 가지 방법</b>으로 가중치를 정해요.</div>
+        <div><b>⭐ 별점</b> — 4가지 평균으로 자동: ★3 이하 ×1.0 · ★4 ×1.15 · ★5 ×1.3</div>
+        <div><b>✋ 직접</b> — ×1.0 / ×1.1 / ×1.2 / ×1.3 바로 고르기 (이때 별점은 반영 안 돼요)</div>
+        <div class="muted">최종 점수 = 달성률 × 100 × 가중치</div>
+      </div>
+      ${lockAtt ? `<p class="small" style="color:var(--amber);margin:6px 0 0">${aw ? '확정한 달이라 바꿀 수 없어요 (확정을 취소하면 다시 바꿀 수 있어요).' : '아직 오지 않은 달이에요.'}</p>` : ''}
+      ${list.length ? list.map(o => { const i = attInfo(o.st.id, ym), sid = esc(o.st.id), man = i.mode === 'manual', dis = lockAtt ? 'disabled' : '';
+        return `<div class="evrow">
+          <div class="row" style="gap:6px;align-items:center"><b>${esc(o.st.name)}</b><span class="chip ${i.w > 1 ? 'ok' : 'faint'}">가중치 ×${i.w}</span><span class="spacer"></span>
+            <span class="attmode" role="group" aria-label="${esc(o.st.name)} 가중치 정하는 방법"><button type="button" data-act="attMode" data-sid="${sid}" data-v="stars" class="${man ? '' : 'on'}" aria-pressed="${!man}" ${dis}>⭐ 별점</button><button type="button" data-act="attMode" data-sid="${sid}" data-v="manual" class="${man ? 'on' : ''}" aria-pressed="${man}" ${dis}>✋ 직접</button></span></div>
+          ${man ? `<div class="attw" role="group" aria-label="${esc(o.st.name)} 가중치 직접 고르기">${ATT_LEVELS.map(v => `<button type="button" data-act="attW" data-sid="${sid}" data-v="${v}" class="${i.manualW === v ? 'on' : ''}" aria-pressed="${i.manualW === v}" ${dis}>×${v.toFixed(1)}</button>`).join('')}</div>` : ''}
+          <div class="evstars ${man ? 'off' : ''}">${ATT_CATS.map(([c, ic, l]) => `<div class="evcat"><span>${ic} ${l}</span><span class="stars">${[1, 2, 3, 4, 5].map(v => `<button type="button" data-act="attStar" data-sid="${sid}" data-c="${c}" data-v="${v}" class="${v <= i.stars[c] ? 'on' : ''}" aria-label="${esc(o.st.name)} ${l} 별 ${v}개" ${lockAtt || man ? 'disabled' : ''}>★</button>`).join('')}</span></div>`).join('')}</div>
+          <div class="small muted">${man ? `✋ 직접 정한 ×${i.manualW}를 써요 · 별점(★${i.avg.toFixed(1)} → ×${i.starW})은 반영 안 됨` : `⭐ 별점 평균 ★${i.avg.toFixed(1)} → ×${i.starW}`}</div>
+        </div>`; }).join('') : '<p class="muted small">이달 근무한 직원이 없어요.</p>'}
+      <p class="hint">달마다 새로 정해요. 처음엔 모두 ⭐ 별점 ★3(보통) = ×1.0이에요.</p></section>`;
   const criteriaPanel = `<section class="panel"><h3>점수 기준 <small>감점 없음</small></h3>
         <dl class="kv small">
           <dt>정시 출근</dt><dd>+${SCORE.onTime} (근무날마다)</dd><dt>근무 완료</dt><dd>+${SCORE.done} (퇴근까지 기록)</dd>
@@ -3601,13 +3633,19 @@ const AWACT = {
 document.addEventListener('change', e => { if (['awStaff', 'awAmount', 'awNote', 'awNotice', 'awShowAmt'].includes(e.target.id)) readAwForm(); });
 // 동기부여 탭 동작 (v32): 업무태도 별점, 팀 목표 저장
 async function putConfig(next){ S.config = next; await write(() => S.db.doc('config/main').set(next)); }
+async function setAtt(sid, patch){   // 업무태도: 지금 값(방법·별점·직접 가중치)을 모두 남기고 바뀐 것만
+  const ym = S.month;
+  if (S.awards[ym]) return;   // 확정한 달은 바꾸지 않음
+  const i = attInfo(sid, ym), att = { ...(cfg().award.att || {}) };
+  att[ym] = { ...(att[ym] || {}), [sid]: { mode:i.mode, ...i.stars, w:i.manualW, ...patch } };
+  await putConfig({ ...S.config, award:{ ...cfg().award, att } });
+  S.awForm = null; render(true);
+}
 Object.assign(AWACT, {
-  async attStar(d){   // 별을 누르면 바로 저장하고 최종 점수·추천 다시 계산
-    const ym = S.month, att = { ...(cfg().award.att || {}) }, cur = attStars(d.sid, ym) || { h:3, k:3, t:3, r:3 };
-    att[ym] = { ...(att[ym] || {}), [d.sid]: { ...cur, [d.c]: Math.min(5, Math.max(1, +d.v || 3)) } };
-    await putConfig({ ...S.config, award:{ ...cfg().award, att } });
-    S.awForm = null; render(true);
-  },
+  // 업무태도 가중치 (v35): 누르면 바로 저장하고 최종 점수·추천 다시 계산
+  async attStar(d){ await setAtt(d.sid, { mode:'stars', [d.c]: Math.min(5, Math.max(1, +d.v || 3)) }); },
+  async attMode(d){ await setAtt(d.sid, { mode: d.v === 'manual' ? 'manual' : 'stars' }); },
+  async attW(d){ await setAtt(d.sid, { mode:'manual', w: ATT_LEVELS.includes(+d.v) ? +d.v : 1 }); },
   async tmSave(){
     const on = !!$('#tmOn')?.checked, target = +($('#tmTarget')?.value || 90), reward = ($('#tmReward')?.value || '').trim().slice(0, 30);
     const rewardVi = reward && reward !== cfg().team.reward ? (await tryTranslate([reward], 'vi'))?.[0] || reward : (reward ? cfg().team.rewardVi || reward : '');
