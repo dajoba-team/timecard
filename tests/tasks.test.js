@@ -201,6 +201,35 @@ needMonth(ym); bootTasks(S.db);
   assert.deepStrictEqual(assignees(solo).map(s => s.id), [B.id], '고른 직원에게만');
   assert.ok(todayTasksFor(B).some(t => t.id === solo.id) && !todayTasksFor(C).some(t => t.id === solo.id), '같은 홀이어도 고르지 않은 직원에게는 안 감');
   console.log('직원 개개인 지시 통과');
+
+  // ----- 올린 지시·공지 고치기 / 고쳐서 다시 올리기 (v36) -----
+  window.tcStore.invoke = async (fn, b) => ({ translations: b.texts.map(x => x ? '[vi2] ' + x : '') });
+  const nt0 = S.tasks.find(t => t.title === '대청소 안내');
+  await markRead(nt0.id, A.id);
+  assert.ok(isRead(nt0, A), '고치기 전: 성실은 읽음');
+  render(true); assert.ok(view.innerHTML.includes('data-act="trEdit" data-id="' + nt0.id + '"'), '목록에 고치기 버튼');
+  ACT.trEdit({ id: nt0.id }); render(true);
+  assert.ok(S.tform.editId === nt0.id && S.tform.title === '대청소 안내' && view.innerHTML.includes('올린 공지 고치기') && view.innerHTML.includes('다시 알리기') && view.innerHTML.includes('고쳐서 다시 올리기'), '지금 내용으로 고치기 양식');
+  const before = S.tasks.length;
+  Object.assign(S.tform, { title:'대청소 안내 (시간 변경)', body:'마감 후 1시간 대청소' });
+  await ACT.trSave();
+  const nt1 = taskById(nt0.id);
+  assert.strictEqual(S.tasks.length, before, '새로 만들지 않고 같은 공지를 고침');
+  assert.ok(nt1.title === '대청소 안내 (시간 변경)' && nt1.body === '마감 후 1시간 대청소' && nt1.createdAt === nt0.createdAt, '내용만 바뀌고 만든 날은 그대로');
+  assert.ok(nt1.titleVi === '[vi2] 대청소 안내 (시간 변경)', '한국어를 고치면 베트남어도 새로 번역');
+  assert.ok(nt1.repostAt && nt1.updatedAt === nt1.repostAt, '다시 올림 표시');
+  assert.ok(!isRead(nt1, A) && unreadFor(A).some(t => t.id === nt1.id), '다시 알리기 → 성실에게 다시 안 읽은 공지');
+  assert.strictEqual(liveTasks()[0].id, nt1.id, '목록 맨 위로');
+  render(true); assert.ok(view.innerHTML.includes('✏️ 고쳐서 다시 올림'), '목록에 고쳐서 다시 올림 표시');
+  // 다시 알리지 않고 고치기: 읽음 그대로
+  await markRead(nt1.id, A.id); assert.ok(isRead(taskById(nt1.id), A));
+  ACT.trEdit({ id: nt1.id }); S.tform.renotify = false; S.tform.titleVi = 'Tự sửa'; S.tform.title = '대청소 안내 (최종)';
+  const rp = taskById(nt1.id).repostAt;
+  await ACT.trSave();
+  const nt2 = taskById(nt1.id);
+  assert.ok(nt2.title === '대청소 안내 (최종)' && nt2.titleVi === 'Tự sửa' && nt2.repostAt === rp && isRead(nt2, A), '다시 알리지 않으면 읽음 그대로, 직접 고친 베트남어는 그대로');
+  ACT.trNew(); assert.ok(!S.tform.editId && S.tform.title === '', '새 지시 만들기는 빈 양식'); S.tform = null; S.editing = null;
+  console.log('고치기·다시 올리기 통과');
   process.exit(0);
 })().catch(e => { console.error('Error', e); process.exit(1); });
 `;

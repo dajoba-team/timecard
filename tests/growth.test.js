@@ -148,6 +148,20 @@ const [A, B] = S.staff;
   await syncGrowth(A);
   assert.ok(docs['badges/a'].got.ebird && docs['badges/a'].months['2026-10'].earlyTop && docs['badges/a'].months['2026-10'].early === 310, '🐓 일찍 출근 합계 한 달 1등 배지');
   await syncGrowth(B); assert.ok(!docs['badges/b'].got.ebird, '1등이 아니면 없음');
+  // 지난달 기록이 아예 없으면 아무도 🐓를 받지 않음 (v36 확인)
+  const octSave = S.months['2026-10']; S.months['2026-10'] = new Map();
+  assert.deepStrictEqual(earlyTopOf('2026-10').ids, [], '기록 없는 달은 1등 없음');
+  S.badges.delete('b'); delete docs['badges/b']; await syncGrowth(B);
+  assert.ok(!docs['badges/b'].got.ebird && !docs['badges/b'].got.perfect, '기록 없는 지난달로는 🐓·한 달 배지 안 줌');
+  S.months['2026-10'] = octSave;
+  // 직원 화면: 받은 배지만 금빛, 안 받은 🐓는 흐리게
+  S.badges = new Map(Object.entries(docs).filter(([k]) => k.startsWith('badges/')).map(([k, v]) => [k.slice(7), v]));
+  S.mode = 'phone'; S.phone.staffId = 'b'; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('class="bdg " title="일찍 출근 합계 한 달 1등 · 아직"') && view.innerHTML.includes('class="bdg got" title="사장님 칭찬 받기 · 받음"'), '받은 것과 아직인 것이 구분됨');
+  // 사장님 동기부여 탭: 배지 안내표
+  S.mode = 'owner'; S.tab = 'award'; render(true);
+  assert.ok(view.innerHTML.includes('📖 배지 안내') && view.innerHTML.includes('일찍 온 분을 모두 더해 1등') && view.innerHTML.includes(BADGE_WHEN.st10), '배지 안내표 (언제 받나요)');
+  S.tab = 'timecard'; render(true);
   console.log('일찍 출근 통과');
 
   // ----- 8. 출퇴근 평가 시작일 (v34): 11/17 전은 지각·결근·점수에서 뺌, 일한 시간은 그대로 -----

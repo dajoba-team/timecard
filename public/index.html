@@ -348,6 +348,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .tr textarea{min-height:76px;resize:vertical}
 .tr .f{display:grid;gap:4px;font-size:13px;color:var(--muted)}
 .trform{display:grid;gap:12px;margin-bottom:14px;background:var(--paper)}
+.editbar{background:var(--amber-soft);border-radius:10px;padding:8px 12px}
 .reps{display:grid;gap:12px}
 .rep{border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;background:var(--card)}
 .rep header{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
@@ -469,8 +470,12 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .mdots i.ok{background:var(--green)}.mdots i.miss{background:var(--red)}
 .shelf{margin-top:8px;text-align:left}
 .badges{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
-.bdg{font-size:20px;line-height:1;filter:grayscale(1);opacity:.28}
-.bdg.got{filter:none;opacity:1}
+.bdg{font-size:18px;line-height:1;width:30px;height:30px;display:inline-grid;place-items:center;border-radius:50%;border:1px dashed var(--line);filter:grayscale(1);opacity:.22}
+.bdg.got{filter:none;opacity:1;border:2px solid var(--amber);background:var(--amber-soft)}   /* 받은 배지만 금빛 동그라미 (안 받은 건 흐린 점선) */
+.bguide{display:grid;gap:6px}
+.bgrow{display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:6px}
+.bgrow:first-child{border-top:0;padding-top:0}
+.bgi{font-size:22px;text-align:center}
 .thx{margin-top:8px;display:grid;gap:4px;text-align:left}
 .thx .btn{justify-self:start}
 .teamgoal{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--amber-soft);font-size:14px;text-align:left}
@@ -2769,8 +2774,10 @@ function trStatus(t, st, ds){
   if (ds < today || (ds === today && t.due && Date.now() > at(ds, t.due))) return { s:'late' };
   return { s:'todo' };
 }
-const isRead = (t, st) => S.treads.has(`${t.id}_${st.id}`);
-const liveTasks = () => S.tasks.filter(t => t.active !== false).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+// 읽음: '고쳐서 다시 올리기'(repostAt) 뒤에 읽은 것만 읽음으로 셈 (v36)
+const isRead = (t, st) => { const r = S.treads.get(`${t.id}_${st.id}`); return !!r && (!t.repostAt || (+r.at || 0) >= t.repostAt); };
+const postedAt = t => t.repostAt || t.createdAt || 0;   // 목록 순서·첫 화면 날짜: 다시 올린 시각이 있으면 그것
+const liveTasks = () => S.tasks.filter(t => t.active !== false).sort((a, b) => postedAt(b) - postedAt(a));
 const mineAll = st => liveTasks().filter(t => assignees(t).some(a => a.id === st.id));
 const unreadFor = st => S.ready.tasks && S.ready.treads ? mineAll(st).filter(t => !isRead(t, st)) : [];
 const todayTasksFor = st => mineAll(st).filter(t => appliesOn(t, todayStr()));
@@ -2804,7 +2811,8 @@ function bootTasks(db){
   needTR(ymOf(todayStr()));
 }
 async function markRead(taskId, staffId){
-  if (!staffId || S.treads.has(`${taskId}_${staffId}`)) return;
+  const t = taskById(taskId), st = staffById(staffId);
+  if (!staffId || (t && st ? isRead(t, st) : S.treads.has(`${taskId}_${staffId}`))) return;   // 다시 올린 공지는 다시 읽음으로 남김 (v36)
   await write(() => S.db.collection('task_reads').doc(`${taskId}_${staffId}`).set({ taskId, staffId, at:Date.now(), where: S.mode === 'phone' ? 'phone' : 'tablet' }));
 }
 
@@ -2885,7 +2893,7 @@ function tasksView(){
     <div class="stack">
       <section class="panel"><h3>지시·공지<span class="spacer"></span><button class="btn pri sm" data-act="trNew">새 지시 만들기</button></h3>
         ${S.tform ? taskForm() : ''}
-        ${S.tasks.length ? `<div class="tlist">${[...S.tasks].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(taskItem).join('')}</div>` : `<div class="empty"><b>아직 지시가 없어요</b>‘새 지시 만들기’로 첫 지시를 써 보세요.</div>`}
+        ${S.tasks.length ? `<div class="tlist">${[...S.tasks].sort((a, b) => postedAt(b) - postedAt(a)).map(taskItem).join('')}</div>` : `<div class="empty"><b>아직 지시가 없어요</b>‘새 지시 만들기’로 첫 지시를 써 보세요.</div>`}
       </section>
       <section class="panel"><h3>직원 휴대폰 <small>사진 보고·공지 확인</small></h3>
         <p class="small" style="margin:0 0 8px">직원 휴대폰에서 <b class="mono">${esc(location.host || 'timecard.dajoba.kr')}/#phone</b> 을 열어요. 처음 한 번 사장님 계정으로 로그인하고, 직원이 자기 이름과 개인 번호를 넣으면 그 휴대폰은 그 직원 것으로 기억돼요.</p>
@@ -2920,13 +2928,13 @@ function trRow(t, ds){
 function taskItem(t){
   const list = assignees(t), unread = list.filter(st => !isRead(t, st)), del = S.confirmTDel === t.id;
   return `<div class="titem ${t.active === false ? 'off' : ''}">
-    <div class="ttop"><b>${esc(t.title)}</b><span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.pinned ? '<span class="chip red">📌 첫 화면 고정</span>' : ''}${t.titleVi || t.bodyVi ? '<span class="chip faint" title="베트남어 내용 있음">🇻🇳</span>' : ''}${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
+    <div class="ttop"><b>${esc(t.title)}</b>${t.updatedAt ? `<span class="chip faint" title="${esc(fmtMD(ymd(new Date(t.updatedAt))))} ${esc(fmtT(t.updatedAt))} 고침">✏️ ${t.repostAt === t.updatedAt ? '고쳐서 다시 올림' : '고침'} ${esc(fmtMD(ymd(new Date(t.updatedAt))))}</span>` : ''}<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.pinned ? '<span class="chip red">📌 첫 화면 고정</span>' : ''}${t.titleVi || t.bodyVi ? '<span class="chip faint" title="베트남어 내용 있음">🇻🇳</span>' : ''}${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
     ${t.body ? `<p>${esc(t.body)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}
     <div class="small muted">${esc(targetText(t))} · ${t.kind === 'task' ? `${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''} · 사진 ${t.minPhotos || 1}장 이상 · ` : ''}읽음 ${list.length - unread.length}/${list.length}${unread.length ? ` (${esc(unread.map(s => s.name).join(', '))} 안 읽음)` : ''}</div>
     <div class="row">${del
       ? `<span class="small">이 지시를 지울까요? 받은 보고 기록은 남아요.</span><button class="btn danger sm" data-act="trDelDo" data-id="${esc(t.id)}">지우기</button><button class="btn sm" data-act="trDelNo">취소</button>`
-      : `<button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button>${t.kind === 'notice' ? `<button class="btn sm" data-act="trPinToggle" data-id="${esc(t.id)}">${t.pinned ? '첫 화면에서 내리기' : '📌 첫 화면에 고정'}</button>` : ''}<button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
+      : `<button class="btn sm" data-act="trEdit" data-id="${esc(t.id)}">✏️ 고치기</button><button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button>${t.kind === 'notice' ? `<button class="btn sm" data-act="trPinToggle" data-id="${esc(t.id)}">${t.pinned ? '첫 화면에서 내리기' : '📌 첫 화면에 고정'}</button>` : ''}<button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
   </div>`;
 }
 function freshTForm(){ return { kind:'task', title:'', body:'', titleVi:'', bodyVi:'', refPhotos:[], target:{ mode:'all', ids:[] }, repeat:'daily', days:[], due:'15:00', minPhotos:1, pinned:false, uploading:false }; }
@@ -2969,6 +2977,7 @@ function taskForm(){
   const f = S.tform, pos = positions();
   const opt = (name, val, label, checked, type = 'radio') => `<label class="opt"><input type="${type}" name="${name}" value="${esc(val)}" ${checked ? 'checked' : ''}><span>${esc(label)}</span></label>`;
   return `<div class="panel trform" id="trForm">
+    ${f.editId ? `<div class="editbar"><b>✏️ 올린 ${f.kind === 'task' ? '지시' : '공지'} 고치기</b> <span class="small muted">받은 보고·사진 기록은 그대로 남아요</span></div>` : ''}
     <div class="opts" role="radiogroup" aria-label="종류">${opt('tkind', 'task', '사진 보고 업무', f.kind === 'task')}${opt('tkind', 'notice', '공지만 (읽기)', f.kind === 'notice')}</div>
     ${f.kind === 'notice' ? `<label class="check"><input type="checkbox" id="trPin" ${f.pinned ? 'checked' : ''}> 📌 출퇴근 첫 화면에 고정 (공고) — 가게 태블릿과 직원 휴대폰 첫 화면에 늘 보여요</label>
     <div class="row small muted">예시 문구: <button type="button" class="btn sm" data-act="trTpl" data-v="attendance">지각·결근 규정</button></div>` : ''}
@@ -2999,7 +3008,9 @@ function taskForm(){
       <label class="f" for="trDue" style="flex:1;min-width:130px">마감 시각<input type="time" id="trDue" value="${esc(f.due)}"></label>
       <label class="f" for="trMin" style="flex:1;min-width:130px">필요한 사진 수<select id="trMin">${[1,2,3,4].map(n => `<option value="${n}" ${f.minPhotos === n ? 'selected' : ''}>${n}장 이상</option>`).join('')}</select></label>
     </div>` : ''}
-    <div class="row"><button class="btn pri" data-act="trSave" ${f.uploading || S.trBusy ? 'disabled' : ''}>${S.trBusy === 'save' ? '번역하고 올리는 중…' : f.kind === 'task' ? '지시 보내기' : '공지 올리기'}</button><button class="btn" data-act="trCancel">취소</button></div>
+    ${f.editId ? `<label class="check"><input type="checkbox" id="trRenotify" ${f.renotify ? 'checked' : ''}> 📣 고친 내용을 직원들에게 <b>다시 알리기</b> — 읽음 표시를 지우고, 출근할 때 공지 확인과 휴대폰 '새 공지'에 다시 떠요 (목록 맨 위로)</label>
+    <p class="hint" style="margin:0">한국어를 고치고 베트남어 칸은 그대로 두면, 베트남어도 새로 자동 번역해요.</p>` : ''}
+    <div class="row"><button class="btn pri" data-act="trSave" ${f.uploading || S.trBusy ? 'disabled' : ''}>${S.trBusy === 'save' ? '번역하고 올리는 중…' : f.editId ? (f.renotify ? '📣 고쳐서 다시 올리기' : '고친 내용 저장') : f.kind === 'task' ? '지시 보내기' : '공지 올리기'}</button><button class="btn" data-act="trCancel">취소</button></div>
     <p class="hint">${f.kind === 'task' ? '담당 직원의 휴대폰 ‘오늘 할 일’에 뜨고, 출근할 때 태블릿에서 공지로 한 번 보여 줘요.' : '출근할 때 태블릿(또는 휴대폰)에서 공지로 보여 주고, 누가 읽었는지 여기서 볼 수 있어요.'}</p>
   </div>`;
 }
@@ -3012,6 +3023,7 @@ function readTForm(){
   f.title = $('#trTitle')?.value ?? f.title; f.body = $('#trBody')?.value ?? f.body;
   f.pinned = f.kind === 'notice' && !!$('#trPin')?.checked;
   f.titleVi = $('#trTitleVi')?.value ?? f.titleVi; f.bodyVi = $('#trBodyVi')?.value ?? f.bodyVi;
+  if (f.editId && $('#trRenotify')) f.renotify = !!$('#trRenotify').checked;   // 고치기: 직원에게 다시 알리기
   // 담당: 이름을 하나라도 고르면 그 직원들만, 아니면 전체 / 담당별 (화면에서는 한쪽을 고르면 다른 쪽이 풀림)
   const tg = val('input[name=tgt]:checked') || 'all', ids = all('input[name=tids]:checked');
   f.target = ids.length ? { mode:'staff', ids } : tg.startsWith('pos:') ? { mode:'pos', pos: tg.slice(4), ids:[] } : { mode:'all', ids:[] };
@@ -3028,6 +3040,12 @@ async function saveTask(){
   if (!f.title.trim()){ toast('제목을 넣어 주세요', '', 'warn'); return; }
   if (f.target.mode === 'staff' && !f.target.ids.length){ toast('담당 직원을 골라 주세요', '', 'warn'); return; }
   if (f.kind === 'task' && f.repeat === 'days' && !f.days.length){ toast('요일을 골라 주세요', '', 'warn'); return; }
+  // 고치기: 한국어를 바꿨는데 베트남어 칸은 예전 그대로면, 예전 번역은 비우고 새로 번역 (v36)
+  if (f.editId && f.orig){
+    const koChanged = f.title.trim() !== f.orig.title.trim() || f.body.trim() !== f.orig.body.trim();
+    const viSame = (f.titleVi || '').trim() === f.orig.titleVi.trim() && (f.bodyVi || '').trim() === f.orig.bodyVi.trim();
+    if (koChanged && viSame){ f.titleVi = ''; f.bodyVi = ''; }
+  }
   // 베트남어 칸이 비어 있으면 자동 번역해서 함께 올림 (안 되면 한국어만)
   let autoTr = false;
   if (!(f.titleVi || '').trim() && !(f.bodyVi || '').trim() && S.trBusy !== 'save'){
@@ -3036,6 +3054,16 @@ async function saveTask(){
     S.trBusy = false;
     if (tr){ f.titleVi = tr[0]; f.bodyVi = tr[1]; autoTr = true; }
     else toast('자동 번역을 못 했어요', '한국어로만 올려요. 베트남어 칸에 직접 넣을 수도 있어요.', 'warn');
+  }
+  if (f.editId){   // 고치기 (v36): 같은 지시를 바꿈 — 만든 날·켜짐·보고 기록은 그대로
+    const now = Date.now(), t = taskById(f.editId);
+    const upd = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), titleVi:(f.titleVi || '').trim(), bodyVi:(f.bodyVi || '').trim(), refPhotos:f.refPhotos, target:f.target, updatedAt:now,
+      ...(f.kind === 'task' ? { repeat:f.repeat, days:f.days, due:f.due, minPhotos:f.minPhotos } : { pinned: !!f.pinned }), ...(f.renotify ? { repostAt:now } : {}) };
+    if (t) Object.assign(t, upd);   // 화면에 바로 반영
+    await write(() => S.db.collection('tasks').doc(f.editId).update(upd));
+    if (f.renotify) slackKick();
+    toast(f.renotify ? '📣 고쳐서 다시 올렸어요' : '고친 내용을 저장했어요', upd.title + (f.renotify ? ' · 직원들에게 다시 보여요' : '') + (autoTr ? ' · 🇻🇳 다시 번역' : ''), 'ok');
+    S.tform = null; S.editing = null; render(true); return;
   }
   const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const doc = { kind:f.kind, title:f.title.trim(), body:f.body.trim(), titleVi:(f.titleVi || '').trim(), bodyVi:(f.bodyVi || '').trim(), refPhotos:f.refPhotos, target:f.target, active:true, createdAt:Date.now(), start:todayStr(),
@@ -3063,7 +3091,7 @@ function pinBoard(st){
   if (!list.length) return '';
   // 공고는 접지 않고 내용 전체를 바로 보여 줌 (v28, 대표님 요청). 베트남어 화면이면 베트남어 + 아래 한국어
   return `<section class="pinboard" aria-label="공고">${list.map(t => `<article class="pin">
-    <div class="pinhead"><span class="chip red">${TV('📌 공고')}</span><b>${taskTitle(t)}</b><span class="small muted">${fmtMD(ymd(new Date(t.createdAt || Date.now())))}</span></div>
+    <div class="pinhead"><span class="chip red">${TV('📌 공고')}</span><b>${taskTitle(t)}</b><span class="small muted">${fmtMD(ymd(new Date(postedAt(t) || Date.now())))}${t.repostAt ? ' ✏️' : ''}</span></div>
     ${t.body || t.bodyVi ? `<p>${taskBody(t)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
     ${awardReactBox(t, st)}
@@ -3241,8 +3269,15 @@ async function phoneSend(){
 
 const TRACT = {
   // 사장님
-  trNew(){ S.tform = S.tform || freshTForm(); S.editing = 'tform'; render(true); $('#trTitle')?.focus?.(); },
+  trNew(){ S.tform = S.tform && !S.tform.editId ? S.tform : freshTForm(); S.editing = 'tform'; render(true); $('#trTitle')?.focus?.(); },
   trCancel(){ S.tform = null; S.editing = null; render(true); },
+  trEdit(d){   // 올린 지시·공지 고치기 (v36): 지금 내용을 양식에 채워서 열기
+    const t = taskById(d.id); if (!t) return;
+    S.tform = { ...freshTForm(), kind:t.kind || 'task', title:t.title || '', body:t.body || '', titleVi:t.titleVi || '', bodyVi:t.bodyVi || '', refPhotos:[...(t.refPhotos || [])],
+      target:{ mode:'all', ids:[], ...(t.target || {}), ids:[...(t.target?.ids || [])] }, repeat:t.repeat || 'daily', days:[...(t.days || [])], due:t.due || '15:00', minPhotos:t.minPhotos || 1, pinned:!!t.pinned,
+      editId:t.id, orig:{ title:t.title || '', body:t.body || '', titleVi:t.titleVi || '', bodyVi:t.bodyVi || '' }, renotify:true };
+    S.editing = 'tform'; render(true); $('#trForm')?.scrollIntoView?.({ block:'start' });
+  },
   trSave(){ return saveTask(); },
   trRefDel(d){ readTForm(); S.tform.refPhotos.splice(+d.i, 1); render(true); },
   trTpl(d){   // 예시 문구 넣기 (공고로 고정까지 켬)
@@ -3321,7 +3356,7 @@ document.addEventListener('change', async e => {
     const fm = $('#trForm');
     if (el.name === 'tgt') fm.querySelectorAll('input[name=tids]').forEach(i => { i.checked = false; });
     if (el.name === 'tids' && el.checked) fm.querySelectorAll('input[name=tgt]').forEach(i => { i.checked = false; });
-    readTForm(); if (el.type === 'radio' || el.name === 'tids') render(true); return;
+    readTForm(); if (el.type === 'radio' || el.name === 'tids' || el.id === 'trRenotify') render(true); return;
   }
   if (el.id === 'trCam' && el.files?.[0]){
     const P = S.phone, me = staffById(P.staffId), t = taskById(P.open);
@@ -3509,7 +3544,11 @@ function awardView(){
       <p class="hint">사장님이 못 본 팀워크를 알 수 있어요. 업무태도 평가의 🤝 팀워크에 참고하세요.</p></section>`;
   const badgePanel = `<section class="panel"><h3>🏅 직원 배지 <small>한 번 받으면 계속 남아요 · 직원은 자기 배지만 봐요</small></h3>
       <div class="slist">${activeStaff().map(s => { const got = S.badges.get(s.id)?.got || {}, mine = BADGES.filter(b => got[b.id]); return `<div class="sitem"><div><b>${esc(s.name)}</b> <span class="small muted">${mine.length}/${BADGES.length}</span><div class="sub" style="font-size:18px">${mine.map(b => `<span title="${esc(b.ko)}">${b.icon}</span>`).join(' ') || '<span class="small muted">아직 없음 (직원 화면을 열면 채워져요)</span>'}</div></div></div>`; }).join('')}</div>
-      <details class="small" style="margin-top:8px"><summary>배지 기준 보기</summary>${BADGES.map(b => `<div>${b.icon} ${b.ko}</div>`).join('')}</details></section>`;
+      <p class="hint">받은 배지만 색으로 보여요. 직원 화면에서 흐린 그림은 아직 못 받은 배지예요.</p></section>`;
+  // 📖 배지 안내표 (v36): 사장님은 늘 볼 수 있게 — 이름 · 언제 받나요 · 받은 직원 수
+  const badgeGuide = `<section class="panel"><h3>📖 배지 안내 <small>사장님용 기준표 · 직원은 자기 배지만 봐요</small></h3>
+      <div class="bguide">${BADGES.map(b => { const n = activeStaff().filter(s => S.badges.get(s.id)?.got?.[b.id]).length; return `<div class="bgrow"><span class="bgi">${b.icon}</span><div><b>${esc(b.ko)}</b><div class="small muted">${esc(BADGE_WHEN[b.id] || '')}</div></div><span class="small ${n ? '' : 'muted'}" style="white-space:nowrap">${n}명</span></div>`; }).join('')}</div>
+      <p class="hint">기록은 출퇴근 평가 시작일(${cfg().evalStart ? fmtMD(cfg().evalStart) : '처음'})부터 세요. 직원이 태블릿·휴대폰을 열 때 자동으로 확인해서 주고, 한 번 받은 배지는 없어지지 않아요.</p></section>`;
   const lockAtt = !!aw || future;
   const evalPanel = `<section class="panel"><h3>📝 업무태도 가중치 <small>사장님만 · 감점 없음 · 직원에게 안 보여요</small></h3>
       <div class="attguide small">
@@ -3542,7 +3581,7 @@ function awardView(){
   const head = `<div class="sec-head"><h2>🎮 동기부여 · 이달의 우수직원</h2>${monthNav()}</div>`;
   if (!on) return head + `
   <div class="cols"><div class="stack">${toggle}<section class="panel"><h3>🏆 ${m}월 이달의 우수직원</h3><p class="muted" style="margin:0">이 달은 우수직원 선발을 하지 않아요. 직원 화면의 내 점수·레벨·미션·배지는 평소처럼 보여요.<br>진행하려면 위의 <b>[이 달 진행하기]</b>를 눌러 주세요. 그달 처음부터의 기록으로 점수를 계산해요.</p></section>${teamPanel}${thanksPanel}</div>
-    <div class="stack">${badgePanel}${criteriaPanel}${pastPanel}</div></div>`;
+    <div class="stack">${badgePanel}${badgeGuide}${criteriaPanel}${pastPanel}</div></div>`;
   return head + `
   <div class="cols">
     <div class="stack">${toggle}${card}
@@ -3561,7 +3600,7 @@ function awardView(){
         ${praises.length ? `<div class="slist" style="margin-top:10px">${praises.map(x => `<div class="sitem"><div><b>${esc(staffById(x.staffId)?.name || '직원')}</b> <span class="chip ok">+${x.pts}</span><div class="sub">${esc(x.note || '')} · ${fmtMD(ymd(new Date(x.at)))}</div></div><button class="btn sm" data-act="prDel" data-id="${esc(x.id)}">지우기</button></div>`).join('')}</div>` : ''}
         <p class="hint">칭찬 점수는 보너스라 총점에만 더해져요 (달성률은 그대로).</p>
       </section>
-      ${badgePanel}${criteriaPanel}${pastPanel}
+      ${badgePanel}${badgeGuide}${criteriaPanel}${pastPanel}
     </div>
   </div>`;
 }
@@ -3677,6 +3716,23 @@ const BADGES = [
   { id:'award', icon:'🏆', ko:'이달의 우수직원', vi:'Nhân viên xuất sắc của tháng', need:1, val:c => c.awards },
   { id:'ebird', icon:'🐓', ko:'일찍 출근 합계 한 달 1등', vi:'Tổng giờ đến sớm nhiều nhất tháng', need:1, val:c => c.earlyTop },   // v33: 달이 끝나면 그달 일찍 온 분 합계 1등 (같으면 함께)
 ];
+// 배지마다 '언제 받나요' (사장님 동기부여 탭 배지 안내표, v36). 기록은 평가 시작일부터, 한 번 받으면 계속 남음
+const BADGE_WHEN = {
+  first: '처음으로 정해진 출근 시각에 맞춰(지각 없이) 출근한 날 — 성실함의 첫걸음',
+  on50: '정시 출근이 모두 합쳐 50번 (달이 바뀌어도 계속 쌓여요) — 꾸준함',
+  on100: '정시 출근이 모두 합쳐 100번 — 오래 믿고 맡길 수 있는 사람',
+  st10: '한 달 안에서 정시 출근 10일 연속 (지각·결근이 있으면 다시 0부터, 쉬는 날은 건너뜀)',
+  st20: '한 달 안에서 정시 출근 20일 연속',
+  perfect: '한 달 동안 지각·결근 0번 (그달 근무 10일 이상) — 달이 끝난 뒤에 받아요',
+  rep30: '사진 업무 보고를 모두 합쳐 30건 보냄 (늦게 보낸 것도 포함)',
+  m3: '🎯 주간 미션(그 주 정해진 날 모두 정시 출근) 성공이 모두 합쳐 3번',
+  m10: '🎯 주간 미션 성공이 모두 합쳐 10번',
+  praise: '사장님에게 ⭐ 칭찬 점수를 처음 받았을 때',
+  thx10: '동료에게 🙏 고마워요를 모두 합쳐 10개 받았을 때 — 팀워크',
+  legend: '한 달 점수 380점 이상 (👑 전설 레벨)을 한 번이라도 찍었을 때',
+  award: '🏆 이달의 우수직원으로 확정됐을 때',
+  ebird: '달이 끝나면, 그달 정해진 출근 시각보다 일찍 온 분을 모두 더해 1등 (같으면 함께) — 매일 첫 화면의 "오늘 가장 일찍"과는 달라요',
+};
 // 그달 일찍 출근 분 합계 (사장님 근무 집계와 같은 기준)
 const earlyTotal = (st, ym) => earlyDays(monthSummary(st, ym)).reduce((t, x) => t + x.min, 0);
 function earlyTopOf(ym){   // 그달 일찍 출근 합계 1등 직원 id들 (1분 이상, 같으면 함께)
@@ -3814,7 +3870,7 @@ function badgeShelf(st, full = true){
   const n = BADGES.filter(b => got[b.id]).length;
   const next = BADGES.filter(b => !got[b.id]).map(b => ({ b, p: Math.min(1, b.val(c) / b.need) })).sort((x, y) => y.p - x.p)[0];
   return `<div class="shelf"><div class="small"><b>${BI(`🏅 내 배지 ${n}/${BADGES.length}`, `🏅 Huy hiệu của tôi ${n}/${BADGES.length}`)}</b></div>
-    <div class="badges">${BADGES.map(b => `<span class="bdg ${got[b.id] ? 'got' : ''}" title="${esc(isVi() ? b.vi : b.ko)}">${b.icon}</span>`).join('')}</div>
+    <div class="badges">${BADGES.map(b => `<span class="bdg ${got[b.id] ? 'got' : ''}" title="${esc(isVi() ? b.vi : b.ko)}${got[b.id] ? (isVi() ? ' · đã nhận' : ' · 받음') : (isVi() ? ' · chưa nhận' : ' · 아직')}" aria-label="${esc(b.ko)} ${got[b.id] ? '받음' : '아직'}">${b.icon}</span>`).join('')}</div>
     ${full && next ? `<div class="small muted">${BI(`다음 배지: ${next.b.icon} ${next.b.ko} (${num(Math.min(next.b.val(c), next.b.need))}/${num(next.b.need)})`, `Huy hiệu tiếp theo: ${next.b.icon} ${next.b.vi} (${num(Math.min(next.b.val(c), next.b.need))}/${num(next.b.need)})`)}</div>` : ''}</div>`;
 }
 // 직원 휴대폰: 내 성장 카드 (본인 것만) + 지난달 우수직원 + 팀 목표
