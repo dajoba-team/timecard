@@ -88,6 +88,8 @@ const put = (c, id, data) => rows.set(K(c, id), { collection:c, id, data, delete
   put('tasks', 't1', { kind:'task', title:'그린홍합 손질', target:{ mode:'pos', pos:'주방' }, repeat:'daily', due: canDue ? hhmm(dueM) : '23:59', minPhotos:1, active:true, start:ds, createdAt: now - 86400000 });
   put('tasks', 't2', { kind:'task', title:'홀 바닥 사진', target:{ mode:'pos', pos:'홀' }, repeat:'daily', due:'23:59', minPhotos:1, active:true, start:ds, createdAt: now - 86400000 });
   put(`months/${ym}/task_reports`, `t2_b_${ds}`, { taskId:'t2', staffId:'b', date:ds, photos:['w_1', 'w_2'], note:'다 닦았어요', sentAt: now - 5 * min, status:'sent', round:1 });
+  put('ot', `a_${ds}`, { staffId:'a', date:ds, kind:'pre', status:'pending', reqMin:60, until:'23:00', reason:'busy', note:'Đông khách', noteKo:'손님이 많아요', at: now - 3 * min });   // 추가근무 요청 (v27)
+  put('ot', `c_2026-01-01`, { staffId:'c', date:'2026-01-01', kind:'pre', status:'pending', reqMin:30, reason:'etc', at: now - 2 * min });   // 오늘·어제 날짜가 아니면 안 봄
 
   // 1. 예약 실행
   let r = await call();
@@ -101,6 +103,7 @@ const put = (c, id, data) => rows.set(K(c, id), { collection:c, id, data, delete
   assert.ok(/박도윤 업무 보고 도착/.test(all) && /홀 바닥 사진 · 사진 2장/.test(all) && /다 닦았어요/.test(all), '보고 도착');
   if (canDue) assert.ok(/업무 마감 지남/.test(all) && /그린홍합 손질 \(\d\d:\d\d까지\): 김하늘 아직 안 보냄/.test(all), '마감 지남');
   assert.ok(!/홀 바닥 사진 \(23:59까지\)/.test(all), '마감 전 업무는 알리지 않음');
+  assert.ok(/김하늘 추가근무 요청/.test(all) && /\+1시간 미리 요청 \(퇴근 23:00까지\) · 손님 많음 · “손님이 많아요”/.test(all) && !/이서연 추가근무/.test(all), '추가근무 요청 알림 (사장님용 한국어 번역)');
   console.log(slack.map(m => m.split('\n')[0]).join(' | '));
   const st = rows.get(K('status', 'alert')).data;
   assert.ok(st.ok && st.kind === 'events' && /퇴근/.test(st.text), '현황 화면용 결과 기록');

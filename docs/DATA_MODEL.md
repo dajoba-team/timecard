@@ -33,9 +33,12 @@
 | `months/{YYYY-MM}/task_reports/{taskId}_{staffId}_{YYYY-MM-DD}` | 업무 사진 보고 (아래 표, 직원·업무·날짜당 1개) |
 | `awards/{YYYY-MM}` | 이달의 우수직원 확정 `{ staffId, name, rate(달성률 0~1), points(총점), amount(포상금), note, decidedAt, noticeId(축하 공고 tasks id), paidAt }` (v24) |
 | `praise/{id}` | 사장님 칭찬 점수 `{ staffId, ym, pts, note, noteVi(자동 번역, v26), at }` (보너스, 달성률에는 안 들어감) |
+| `ot/{staffId}_{YYYY-MM-DD}` | 추가근무 요청·승인 (직원·날짜당 1개, v27) `{ staffId, date, kind('pre' 먼저 요청 / 'post' 먼저 하고 보고), status('pending' / 'approved' / 'rejected'), reqMin(요청·보고한 분), okMin(승인된 분 — 먼저 받은 승인 포함), until(요청한 퇴근 시각), reason('busy' 손님 많음 / 'close' 마감 청소 / 'prep' 재료 손질 / 'cover' 동료 대신 / 'etc'), note, noteKo(번역), ownerNote, ownerNoteVi(번역), at, decidedAt, via('tablet'/'phone'/'owner'), pre(먼저 요청이 보고로 바뀌면 처음 요청) }`. 급여 계산: 승인제를 켠 날부터 정해진 시간을 넘긴 근무는 `okMin`까지만 추가근무, 나머지는 확인 대기(보고 결정 전) 또는 불인정(사장님이 '먼저 하고 보고'를 결정한 뒤) — 출퇴근 기록 자체는 바꾸지 않음 |
 | `award_reacts/{YYYY-MM}_{staffId}` | 우수직원 축하 공고 반응 `{ ym, staffId, react('yes' 인정 / 'no' 인정 못 함 / 'thanks' 뽑힌 본인 소감), text(80자까지), textKo 또는 textVi(자동 번역), at }` — 한 사람당 한 달 한 개 (v26) |
 | `backups/{YYYY-MM-DD}` | 자동 백업 목록 `{ at, ok, date, size, counts, removed, manual, keepDays }` (서버가 씀, v20) |
 | `status/autobackup` | 마지막 자동 백업 결과 `{ at, ok, date, size, counts, err }` (서버가 씀) |
+
+전체 백업·자동 백업의 `extra`에는 업무 지시·보고(`tasks`, `task_reads`, `task_reports`)와 v27부터 `ot`, `awards`, `praise`, `award_reacts`가 들어가요 (`scripts/lib.mjs`가 되살림).
 
 자동 백업 파일은 `tc_docs`가 아니라 Storage **`tc-backups` 버킷(비공개, 서버만 열 수 있음)**에 `{YYYY-MM-DD}.json`으로 있어요. 90일 지나면 서버가 지워요. 모양은 '전체 백업'과 같아요 (`supabase/functions/tc-notyet-check/backup.mjs`).
 
@@ -96,7 +99,8 @@
 | `contract` | 계약서 `{on, autoOwnerSign, payDay, payMethod, special}` | 꺼짐 |
 | `tax` | 세무사 전달 `{email, auto}` | 빈 값 / 꺼짐 |
 | `award` | 이달의 우수직원 기본 포상금 `{amount}` (확정할 때 그달 금액을 바꿀 수 있음, v24) | 50,000 |
-| `slack` | 슬랙 미출근 알림 `{on}` (슬랙 주소는 서버 secret에만 있음) | 꺼짐 |
+| `ot` | 추가근무 승인제 `{on, since}` — 켜면 `since`(켠 날)부터 승인한 추가근무만 급여에 (v27) | 꺼짐 |
+| `slack` | 슬랙 알림 `{on, ev:{notyet, in, out, report, due, ot}}` (슬랙 주소는 서버 secret에만 있음, ev가 없으면 모두 켜짐) | 꺼짐 |
 | `geo` | 위치 확인 `{on, lat, lng, acc, radius, setAt}` — 가게 좌표와 '가게 밖' 기준 거리(m) (v12) | 꺼짐 / 200m |
 
 ## staff/{staffId}

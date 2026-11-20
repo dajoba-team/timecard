@@ -93,6 +93,32 @@ export function appliesOn(t, ds) {
   if (t.repeat === "days") return (t.days || []).includes(weekday(ds));
   return ds === t.start;
 }
+// 추가근무 요청·보고 (v27): 사장님 확인을 기다리는(pending) 것 중 최근에 보낸 것. key에 종류·보낸 시각을 넣어
+// '미리 요청' → 퇴근 때 '먼저 하고 보고'로 바뀌거나 다시 요청하면 또 알림. ots: { "직원_날짜": 문서 }
+const OT_REASON_KO = { busy: "손님 많음", close: "마감 청소", prep: "재료 손질", cover: "동료 대신", etc: "기타" };
+const minKo = m => { m = Math.max(0, Math.round(+m || 0)); const h = Math.floor(m / 60), r = m % 60; return h ? (r ? `${h}시간 ${r}분` : `${h}시간`) : `${r}분`; };
+export function otEvents({ ots = {}, now, windowMs = EVENT_WINDOW }) {
+  const out = [];
+  for (const [id, o] of Object.entries(ots)) {
+    const t = +o.at || 0;
+    if (o.status === "pending" && t && t <= now + 60000 && now - t <= windowMs) out.push({ id, o, t, key: `ot_${id}_${o.kind}_${t}` });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+export function otMessage(storeName, events, { staff = [] } = {}) {
+  const byId = new Map(staff.map(s => [s.id, s]));
+  const name = e => byId.get(e.o.staffId)?.name || "직원";
+  const head = events.length === 1 ? `${name(events[0])} 추가근무 ${events[0].o.kind === "pre" ? "요청" : "보고"}` : `추가근무 요청·보고 ${events.length}건`;
+  return [
+    `*[${storeName || "우리 가게"}] ⏱ ${head}*`,
+    ...events.map(e => {
+      const o = e.o, why = [OT_REASON_KO[o.reason], o.note ? `“${String(o.noteKo || o.note).slice(0, 80)}”` : ""].filter(Boolean).join(" · ");
+      return `• ${name(e)}: ${o.kind === "pre" ? `+${minKo(o.reqMin)} 미리 요청${o.until ? ` (퇴근 ${o.until}까지)` : ""}` : `${minKo(o.reqMin)} 더 일함 (먼저 하고 보고)${o.okMin ? ` · 이미 승인 ${minKo(o.okMin)}` : ""}`}${why ? ` · ${why}` : ""}`;
+    }),
+    "",
+    "사장님 화면 → 현황 맨 위 '확인할 추가근무'에서 [승인] / [시간 바꿔 승인] / [거절]을 눌러 주세요. 승인한 시간만 급여에 들어가요.",
+  ].join("\n");
+}
 // 보고 도착: 확인 대기(sent) 보고 중 최근에 보낸 것. key에 회차를 넣어 '다시 보내기'도 알림
 // reports: { "업무_직원_날짜": 보고 }
 export function reportEvents({ reports = {}, now, windowMs = EVENT_WINDOW }) {

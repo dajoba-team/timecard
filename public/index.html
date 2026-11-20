@@ -443,6 +443,16 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .myscore .msrow small{display:block;color:var(--muted);font-size:11px}
 .myscore .msrow b{font-family:var(--f-mono);font-size:22px}
 .reacts{display:grid;gap:6px;border-top:1px dashed var(--line);padding-top:10px;text-align:left}
+.otbit{display:grid;gap:8px;margin-top:12px}
+.otline{border-radius:10px;padding:8px 10px;background:var(--soft);font-size:14px;text-align:left}
+.otline.approved{background:var(--green-soft)}
+.otline.rejected{background:var(--red-soft)}
+.otline.pending{background:var(--amber-soft)}
+.otform .otmins,.otform .otreasons{justify-content:center;gap:6px;margin:6px 0 10px}
+.otform .f{display:grid;gap:4px;text-align:left;margin:4px 0 12px;font-size:14px}
+.otform .f input{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px;background:var(--card);color:var(--ink)}
+.otq-item{border-top:1px solid var(--line);padding:10px 0;display:grid;gap:3px}
+.otq-item:first-of-type{border-top:0}
 .reacts .rcline{background:var(--soft);border-radius:8px;padding:4px 8px}
 .awbanner{background:var(--amber-soft);color:var(--amber);border-radius:10px;padding:8px 10px;font-weight:600;font-size:14px}
 /* 뒤로 · 처음으로 */
@@ -510,7 +520,8 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   contract:{ on:false, autoOwnerSign:true, payDay:10, payMethod:'근로자 명의 예금통장에 입금', special:'' },
   tax:{ email:'', auto:false },
   geo:{ on:false, lat:null, lng:null, acc:0, radius:200, setAt:0 },
-  award:{ amount:50000 } };   // 이달의 우수직원 기본 포상금 (매달 확정할 때 바꿀 수 있음)
+  award:{ amount:50000 },   // 이달의 우수직원 기본 포상금 (매달 확정할 때 바꿀 수 있음)
+  ot:{ on:false, since:'' } };   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
 const TABS = [['now','현황'],['tasks','업무 보고'],['award','우수직원'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
   db:null, noDb:false, connected:false, connNote:'',
@@ -526,6 +537,7 @@ const S = {
   mailStatus:null, mailed:new Set(), mailBusy:false, alertStatus:null, slackBusy:false,
   photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0,
   // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
+  ots:new Map(), otForm:null, otEdit:null,   // 추가근무 요청·승인: ot/{직원}_{날짜}, 직원 요청 입력, 사장님 '시간 바꿔 승인' 입력
   awards:{}, praise:[], awForm:null, reacts:new Map(), reactDraft:null,   // 이달의 우수직원: awards/{YYYY-MM} 확정 기록, praise 칭찬 점수
   tasks:[], treads:new Map(), trep:{}, trSubs:{}, trLoaded:{}, trPrimed:{}, trDate:todayStr(), tform:null, redoFor:null, confirmTDel:null,
   // 직원 휴대폰 화면 (mode 'phone'): 이 휴대폰에 연결된 직원, 연결할 때 고른 직원·번호, 연 업무, 찍은 사진
@@ -534,7 +546,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -636,6 +648,18 @@ const VI = {
   '🎉 축하 고마워요! 소감 남기기':'🎉 Cảm ơn lời chúc! Để lại cảm nghĩ', '🎉 소감 한마디':'🎉 Một lời cảm nghĩ', '인정 못 하는 이유 (선택)':'Lý do không phục (không bắt buộc)',
   '예) 모두 고마워요! 다음 달도 열심히 할게요 🙏':'VD: Cảm ơn mọi người! Tháng sau mình sẽ cố gắng tiếp 🙏', '예) 내가 더 일찍 왔는데? 😤':'VD: Tôi đến sớm hơn mà? 😤',
   '🙅 도전장을 보냈어요!':'🙅 Đã gửi lời thách đấu!', '🎉 소감을 남겼어요':'🎉 Đã để lại cảm nghĩ',
+  // 추가근무 요청·보고 (v27)
+  '⏱ 추가근무 요청':'⏱ Xin làm thêm giờ', '⏱ 추가근무 다시 요청':'⏱ Xin làm thêm lại', '사장님':'Chủ quán', '돌아가기':'Quay lại',
+  '✅ 추가근무 승인됨 · 퇴근 {t}':'✅ Đã duyệt làm thêm · Tan ca {t}', '✅ 추가근무 {h} 인정됐어요':'✅ Đã công nhận làm thêm {h}',
+  '❌ 추가근무 요청이 거절됐어요 · 정해진 시간에 퇴근해 주세요':'❌ Yêu cầu làm thêm bị từ chối · Vui lòng tan ca đúng giờ', '❌ 추가근무가 인정되지 않았어요':'❌ Giờ làm thêm không được công nhận',
+  '⏳ 추가근무 요청 · 사장님 답을 기다리는 중':'⏳ Đã xin làm thêm · Đang chờ chủ quán trả lời', '⏳ 추가근무 보고 · 사장님 확인을 기다리는 중':'⏳ Đã báo làm thêm · Đang chờ chủ quán xác nhận',
+  '🍽 손님 많음':'🍽 Đông khách', '🧹 마감 청소':'🧹 Dọn dẹp cuối ca', '🦪 재료 손질':'🦪 Sơ chế nguyên liệu', '🙋 동료 대신':'🙋 Làm thay đồng nghiệp', '✏️ 기타':'✏️ Khác',
+  '예) 단체 손님 예약 20명':'VD: Đặt bàn đoàn 20 người', '오늘 예정 퇴근 {t}':'Dự kiến tan ca hôm nay {t}', '얼마나 더 일해야 하나요?':'Bạn cần làm thêm bao lâu?',
+  '퇴근 {a} → {b}':'Tan ca {a} → {b}', '이유를 골라 주세요':'Hãy chọn lý do', '사장님께 요청 보내기':'Gửi yêu cầu cho chủ quán',
+  '정해진 시간보다 {h} 더 일했어요.':'Bạn đã làm hơn giờ quy định {h}.', '그중 {h}은 이미 승인됐어요.':'Trong đó {h} đã được duyệt.',
+  '이유를 남기면 사장님이 확인하고 추가근무로 인정해요.':'Hãy để lại lý do, chủ quán sẽ xác nhận và tính là làm thêm giờ.', '이유 보내기':'Gửi lý do',
+  '나중에 (사장님께 ‘보고 없음’으로 보여요)':'Để sau (chủ quán sẽ thấy là “chưa báo”)',
+  '⏱ 사장님께 추가근무를 요청했어요':'⏱ Đã gửi yêu cầu làm thêm cho chủ quán', '⏱ 추가근무 이유를 보냈어요':'⏱ Đã gửi lý do làm thêm',
   '달성률이 가장 높은 직원이 이달의 우수직원이 돼요. 감점은 없어요.':'Người có tỷ lệ hoàn thành cao nhất sẽ là nhân viên xuất sắc của tháng. Không bị trừ điểm.',
   // 안내·오류 (토스트, 안내줄)
   '출근 기록이 없어요':'Không có bản ghi vào ca', '사장님께 확인을 요청하세요.':'Hãy hỏi chủ quán.', '저장하지 못했어요':'Không lưu được',
@@ -704,8 +728,8 @@ function isRegularOff(st, ds){   // 근무 기간 안인데 근무표에서 체�
 function shiftMin(sc){ let a = hm2min(sc.start), b = hm2min(sc.end); if (b <= a) b += 1440; return Math.max(0, b - a - (+sc.brk||0)); }
 function weeklySchedMin(st){ return (st.sched||[]).reduce((t, s) => t + (s && s.on ? shiftMin(s) : 0), 0); }
 
-function dayCalc(st, ds, now = Date.now()){
-  const C = cfg(), p = getPunch(st.id, ds), sc = schedFor(st, ds, p);
+function dayCalc(st, ds, now = Date.now(), pOver){   // pOver: 저장 전 기록으로 미리 계산 (퇴근 직후 추가근무 확인)
+  const C = cfg(), p = pOver || getPunch(st.id, ds), sc = schedFor(st, ds, p);
   const r = { ds, p, sc, status:'off', worked:0, paid:0, ot:0, late:0, early:0, running:false, schedMin:0, regOff: !sc && isRegularOff(st, ds) };
   const grace = (+C.graceMin||0) * 60000;
   if (sc){
@@ -729,6 +753,12 @@ function dayCalc(st, ds, now = Date.now()){
     if (sc){
       const unit = Math.max(1, +C.otUnit||1);
       r.ot = r.running ? 0 : Math.floor(Math.max(0, r.worked - r.schedMin)/unit)*unit;
+      r.otRaw = r.ot;   // 실제로 더 일한 시간 (승인과 상관없이)
+      if (r.ot && otApplies(ds)){   // 추가근무 승인제: 승인된 만큼만 급여에, 나머지는 확인 대기(급여에 안 들어감) 또는 불인정
+        // 사장님이 '먼저 하고 보고'를 결정했으면(승인·일부 승인·불인정) 나머지는 불인정. 미리 요청만 있는 상태에서 더 일한 시간은 다시 확인 대기
+        const o = otDoc(st.id, ds), ok = Math.min(r.ot, Math.floor((+o?.okMin || 0)/unit)*unit), no = !!o && o.kind === 'post' && o.status !== 'pending';
+        r.otDoc = o || null; r.otWait = no ? 0 : r.ot - ok; r.otNo = no ? r.ot - ok : 0; r.ot = ok;
+      }
       r.paid = Math.min(r.worked, r.schedMin) + r.ot;
     } else { r.ot = r.worked; r.paid = r.worked; }
     r.status = r.running ? 'working' : (sc ? 'done' : 'extra');
@@ -779,12 +809,13 @@ function deductions(st, gross){
 
 function monthSummary(st, ym, now = Date.now()){
   const w = +st.wage||0, n = daysIn(ym);
-  const o = { st, ym, workDays:0, paid:0, worked:0, ot:0, otDays:[], absentDays:[], lateDays:[], lateMin:0, earlyDays:[], leaveDays:[], restDays:[], nooutDays:[], days:[], weeks:[], holiday:0, projGross:0 };
+  const o = { st, ym, workDays:0, paid:0, worked:0, ot:0, otDays:[], absentDays:[], lateDays:[], lateMin:0, earlyDays:[], leaveDays:[], restDays:[], nooutDays:[], days:[], weeks:[], holiday:0, projGross:0, otWait:0, otWaitDays:[] };
   for (let d = 1; d <= n; d++){
     const ds = `${ym}-${pad(d)}`, r = dayCalc(st, ds, now);
     o.days.push(r);
     if (WORKED.has(r.status)){ o.workDays++; o.paid += r.paid; o.worked += r.worked; }
     if (r.ot > 0){ o.otDays.push({ ds, min:r.ot }); o.ot += r.ot; }
+    if (r.otWait > 0){ o.otWaitDays.push({ ds, min:r.otWait }); o.otWait += r.otWait; }   // 확인 안 한 추가근무 (급여에 안 들어감)
     if (r.status === 'absent') o.absentDays.push(ds);
     if (r.late){ o.lateDays.push({ ds, min:r.late }); o.lateMin += r.late; }
     if (r.early) o.earlyDays.push({ ds, min:r.early });
@@ -1219,7 +1250,9 @@ function statusChips(r){
   if (r.late) c.push(`<span class="chip red">지각 ${r.late}분</span>`);
   if (r.status !== 'done' || !r.late) c.push(`<span class="chip ${m[1]}">${m[0]}</span>`);
   if (r.early) c.push(`<span class="chip amber">조퇴 ${r.early}분</span>`);
-  if (r.ot && r.status === 'done') c.push(`<span class="chip blue">추가 ${fmtHM(r.ot)}</span>`);
+  if (r.ot && r.status === 'done') c.push(`<span class="chip blue">추가 ${fmtHM(r.ot)}${r.otDoc ? ' 승인' : ''}</span>`);
+  if (r.otWait) c.push(`<span class="chip amber" title="승인제: 확인하기 전에는 급여에 안 들어가요">추가 ${fmtHM(r.otWait)} 확인 대기</span>`);
+  if (r.otNo) c.push(`<span class="chip faint" title="${esc(r.otDoc?.ownerNote || '')}">추가 ${fmtHM(r.otNo)} 불인정</span>`);
   if (r.p?.inVia === 'phone' || r.p?.outVia === 'phone') c.push(`<span class="chip blue" title="직원이 자기 휴대폰으로 기록: ${[r.p.inVia === 'phone' && '출근', r.p.outVia === 'phone' && '퇴근'].filter(Boolean).join('·')}">휴대폰</span>`);
   if (r.p?.inBy === 'master' || r.p?.outBy === 'master') c.push(`<span class="chip amber" title="마스터 번호로 기록: ${[r.p.inBy === 'master' && '출근', r.p.outBy === 'master' && '퇴근'].filter(Boolean).join('·')}">사장님 대리 입력</span>`);
   c.push(geoChip(r.p?.inGeo, '출근'), geoChip(r.p?.outGeo, '퇴근'));
@@ -1277,12 +1310,12 @@ function kioskView(){
     if (op){
       const r = dayCalc(st, op.date, now);
       body = `<p>${BI(`출근 ${fmtT(op.in)} · 지금까지 ${fmtH(r.worked)} 근무`, fillT(VI['출근 {t} · 지금까지 {h} 근무'], { t:fmtT(op.in), h:fmtHvi(r.worked) }))}</p>${op.sched ? `<p>${T('퇴근 예정 {t}', { t:op.sched.end })}</p>` : ''}
-        <button class="bigbtn out" data-act="kOut" ${k.busy ? 'disabled' : ''}>${T('퇴근하기')}</button>`;
+        <button class="bigbtn out" data-act="kOut" ${k.busy ? 'disabled' : ''}>${T('퇴근하기')}</button>${otKioskBit(st)}`;
     } else if (tp && tp.out){
       body = `<p>${T('오늘은 {a} 출근, {b} 퇴근으로 이미 기록됐어요.', { a:fmtT(tp.in), b:fmtT(tp.out) })}${isVi() ? '' : '<br>'}${T('잘못됐다면 사장님께 수정을 요청하세요.')}</p>`;
     } else {
       body = `<p>${sc ? T('오늘 예정 {a}–{b}', { a:sc.start, b:sc.end }) : (isRegularOff(st, today) ? T('오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.') : T('오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)'))}</p>
-        <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>${T('출근하기')}</button>`;
+        <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>${T('출근하기')}</button>${otKioskBit(st)}`;
     }
     return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>${k.master ? `<p><span class="chip amber">${TV('사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요')}</span></p>` : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
   }
@@ -1303,6 +1336,7 @@ function kioskView(){
         <button class="linkbtn" data-act="kNoPhoto">${T(`사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)`)}</button>` : ''}
       ${k.busy ? '' : `<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button>`}</div>`;
   }
+  if (k.step === 'otreq' || k.step === 'ot'){ if (!S.otForm){ k.step = k.step === 'ot' ? 'done' : 'action'; return kioskView(); } return k.step === 'ot' ? otPostView(st, clock) : otReqView(st, clock); }   // 추가근무 요청 / 퇴근 뒤 이유
   if (k.step === 'done'){
     const res = k.result || {}, pe = res.photoErr;
     return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>
@@ -1328,6 +1362,8 @@ function resetKiosk(){
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
   Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
   S.pinOpen?.clear();   // 첫 화면 공고는 다시 접어 둠
+  S.otForm = null; S.reactDraft = null;   // 쓰다 만 추가근무 요청·축하 반응은 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
+  if (S.editing === 'ot' || S.editing === 'react') S.editing = null;
 }
 function lockView(){
   return `<div class="kpanel ${S.lockErr ? 'shake' : ''}" style="margin-top:24px">${pinPad('사장님 확인', '관리 번호 4자리 (처음 번호는 0000)', S.lockPin, 'owner', S.lockErr)}
@@ -1352,8 +1388,8 @@ function buildFeed(today, now){
   return items.sort((a, b) => b.t - a.t);
 }
 // 슬랙 알림 종류 (서버 함수 tc-notyet-check가 보냄). config/main slack.ev에 켜기·끄기, 없으면 모두 켜짐
-const SLACK_EV = [['notyet','미출근 (지각)'],['in','출근'],['out','퇴근'],['report','업무 보고 도착'],['due','업무 마감 지남']];
-const slackEv = () => ({ notyet:true, in:true, out:true, report:true, due:true, ...(cfg().slack.ev || {}) });
+const SLACK_EV = [['notyet','미출근 (지각)'],['in','출근'],['out','퇴근'],['report','업무 보고 도착'],['due','업무 마감 지남'],['ot','추가근무 요청·보고']];
+const slackEv = () => ({ notyet:true, in:true, out:true, report:true, due:true, ot:true, ...(cfg().slack.ev || {}) });
 function slackBar(){   // 현황 탭의 슬랙 알림 칸 (직원이 없을 때도 보여서 시험 알림을 먼저 해 볼 수 있게)
   const k = cfg().slack, ev = slackEv();
   return `<div class="alertbar mailbar ${k.on ? 'on' : ''}" id="slackBar">
@@ -1394,6 +1430,7 @@ function nowView(){
   rows.sort((a, b) => (order[a.r.status] ?? 9) - (order[b.r.status] ?? 9));
   return `
   ${reportReminder()}
+  ${otReminder()}
   <div class="alertbar">
     <span>${S.sound ? '🔔 <b>소리 알림 켜짐</b>' : '이 화면을 켜 두면 직원이 출근·퇴근할 때, 그리고 <b>정해진 시간이 지나도 출근하지 않으면</b> 알림이 떠요.'}</span>
     <span class="spacer"></span>
@@ -1545,7 +1582,7 @@ function timecardView(){
   const now = Date.now(), list = staffForMonth(S.month);
   if (!list.length) return head + `<div class="empty">이 달에 기록된 직원이 없어요.</div>`;
   const ongoing = S.month >= ymOf(todayStr());
-  return head + `<p class="muted small" style="margin:-6px 0 14px">직원들이 손으로 계산하던 타임카드를 자동으로 정리했어요.${ongoing ? ' 이번 달은 오늘까지 기준이에요.' : ''}</p>
+  return head + otMonthWarn(S.month) + `<p class="muted small" style="margin:-6px 0 14px">직원들이 손으로 계산하던 타임카드를 자동으로 정리했어요.${ongoing ? ' 이번 달은 오늘까지 기준이에요.' : ''}</p>
   <div class="alertbar mailbar"><span>📮 월말에 세무사 사무실에 보내는 <b>급여 내역</b>은 ‘인건비·급여’ 탭에서 정리하고 보내요.</span><span class="spacer"></span><button class="btn sm pri" data-act="rpOpen">세무사 전달용 급여 내역</button></div>
   <div class="tcs">${list.map(st => {
     const o = monthSummary(st, S.month, now);
@@ -1676,7 +1713,7 @@ function payrollView(){
   const tile = (d, label) => { const s = series[d - 1]; const isA = s.actual != null; return `<div class="stat ${isA ? 'blue' : ''}"><small>${label} ${isA ? '(실제)' : '(예상)'}</small><b>${num(isA ? s.actual : s.proj)}</b><em>원</em></div>`; };
   const sums = staffForMonth(ym).map(st => monthSummary(st, ym, now));
   const totNow = sums.reduce((t, o) => t + o.gross, 0), totProj = sums.reduce((t, o) => t + o.projGross, 0);
-  return head + `
+  return head + otMonthWarn(ym) + `
   <div class="stats">
     <div class="stat blue"><small>${ym === ymOf(today) ? '오늘까지 나간 인건비' : ym < ymOf(today) ? '이 달 인건비 (확정)' : '아직 시작 전'}</small><b>${num(lastA ? lastA.actual : 0)}</b><em>원</em></div>
     ${tile(10, '10일까지')}${tile(20, '20일까지')}
@@ -1747,6 +1784,7 @@ function configForm(){
       <label>추가근무 인정 단위 (분)<input id="c-unit" type="number" min="1" value="${c.otUnit}"></label>
       <label class="check full"><input type="checkbox" id="c-early" ${c.earlyClamp ? 'checked' : ''}> 정해진 시간보다 일찍 와도 정해진 출근 시각부터 계산</label>
       <label class="check full"><input type="checkbox" id="c-prem" ${c.otPremium ? 'checked' : ''}> 추가근무 1.5배 가산 (상시 5인 이상 사업장)</label>
+      <label class="check full"><input type="checkbox" id="c-otapp" ${c.ot.on ? 'checked' : ''}> ⏱ 추가근무 승인제 — 사장님이 승인한 추가근무만 급여에 넣기. 직원은 미리 요청하거나, 퇴근할 때 이유를 남겨요${c.ot.on && c.ot.since ? ` (${fmtMD(c.ot.since)}부터 적용 중)` : ' (켠 날부터 적용, 지난 기록은 그대로)'}</label>
       <label class="check full"><input type="checkbox" id="c-hol" ${c.weeklyHoliday ? 'checked' : ''}> 주휴수당 계산 (주 15시간 이상 근무자)</label>
       <label>국민연금 (%)<input id="c-np" type="number" step="0.001" value="${c.rates.np}"></label>
       <label>건강보험 (%)<input id="c-hi" type="number" step="0.001" value="${c.rates.hi}"></label>
@@ -1795,6 +1833,7 @@ function staffView(){
         <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
         <dt>지각 기준</dt><dd>정해진 시간 + ${c.graceMin}분 넘으면 지각</dd>
         <dt>추가근무</dt><dd>${c.otUnit}분 단위 인정 · ${c.otPremium ? '1.5배 가산' : '시급 그대로'}</dd>
+        <dt>추가근무 승인제</dt><dd>${c.ot.on ? `<b style="color:var(--green)">켜짐</b> · ${fmtMD(c.ot.since)}부터 사장님이 승인한 추가근무만 급여에 들어가요` : '꺼짐 · 정해진 시간을 넘긴 근무는 모두 추가근무로 계산해요'}</dd>
         <dt>일찍 출근</dt><dd>${c.earlyClamp ? '정해진 시각부터 계산' : '실제 출근 시각부터 계산'}</dd>
         <dt>주휴수당</dt><dd>${c.weeklyHoliday ? '계산함' : '계산 안 함'}</dd>
         <dt>4대보험 요율</dt><dd class="small">연금 ${c.rates.np}% · 건강 ${c.rates.hi}% · 요양 ${c.rates.ltc}% · 고용 ${c.rates.ei}%</dd>
@@ -2478,7 +2517,8 @@ const BACT = {
       const data = {
         app:'가게 타임카드 백업', format:1, exportedAt:new Date().toISOString(), store: cfg().storeName,
         config: S.config, ownerSign: S.ownerSign || '', staff: S.staff, punches, contracts: S.contracts, reports: S.reports,
-        extra:{ tasks: S.tasks, task_reads: [...S.treads].map(([id, r]) => ({ id, ...r })), task_reports: taskReports },
+        extra:{ tasks: S.tasks, task_reads: [...S.treads].map(([id, r]) => ({ id, ...r })), task_reports: taskReports,
+          ot: [...S.ots].map(([id, r]) => ({ id, ...r })), awards: Object.entries(S.awards).map(([id, r]) => ({ id, ...r })), praise: S.praise, award_reacts: [...S.reacts].map(([id, r]) => ({ id, ...r })) },
         counts:{ staff: S.staff.length, punches: Object.values(punches).reduce((t, a) => t + a.length, 0), months: Object.keys(punches).length, contracts: S.contracts.length,
           tasks: S.tasks.length, task_reports: Object.values(taskReports).reduce((t, a) => t + a.length, 0) },
         note:'사진 파일은 포함되지 않았어요 (기록의 inPhoto/outPhoto는 사진 번호).'
@@ -3002,6 +3042,7 @@ function phoneView(){
     <div class="phead"><span class="mark">IN</span><div><b>${TV('{name}님', { name:me.name })}</b><div class="small muted">${me.position ? `${esc(me.position)} · ` : ''}${fmtDateK(ds)}</div></div><button class="linkbtn" data-act="phSwitch">${TV('다른 사람')}</button></div>
     ${pinBoard(me)}
     ${phonePunchCard(me)}
+    ${otKioskBit(me) || otStaffLine(me)}
     ${myScoreCard(me)}
     <div class="ptabs" role="tablist">
       <button role="tab" aria-selected="${P.tab === 'tasks'}" data-act="phTab" data-v="tasks">${TV('오늘 할 일')} ${todo.length ? `(${todo.length})` : ''}</button>
@@ -3456,6 +3497,199 @@ async function saveReact(st, ym, react, text){
   render(true);
 }
 
+/* ===================== 추가근무 요청·승인 (v27) ===================== */
+// ot/{staffId}_{YYYY-MM-DD} — 직원·날짜당 한 개
+//   { staffId, date, kind:'pre'(먼저 요청) | 'post'(먼저 하고 보고), status:'pending' | 'approved' | 'rejected',
+//     reqMin(요청·보고한 분), okMin(승인된 분, 먼저 받은 승인 포함), until(요청한 퇴근 시각), reason, note, noteKo(직원 한마디 한국어 번역),
+//     ownerNote, ownerNoteVi, at, decidedAt, via('tablet' | 'phone' | 'owner'), pre:{ kind, status, reqMin, okMin, at }(먼저 요청이 보고로 바뀐 경우 처음 요청) }
+// 승인제(config ot.on)를 켠 날(ot.since)부터: 정해진 시간을 넘긴 근무는 승인된 만큼만 급여에 들어가요 (dayCalc → r.ot / r.otWait 확인 대기 / r.otNo 불인정).
+//   - 먼저 요청: 직원이 언제든 요청 → 사장님 [승인] / [시간 바꿔 승인] / [거절]. 답이 없는 채로 더 일하면 퇴근할 때 '먼저 하고 보고'로 바뀜
+//   - 먼저 하고 보고: 퇴근할 때 승인으로 덮이지 않은 추가근무가 인정 단위(기본 10분) 이상이면 이유를 물어봄. 건너뛰어도 사장님께 '보고 없음'으로 보임
+//   - 확인 안 한 추가근무는 급여에 넣지 않음 (대표님 결정 2026-11-20). 근무 집계·인건비 화면에 '확인 안 한 추가근무'를 띄워 빠뜨리지 않게 함
+//   - 정해진 근무가 없는 날(휴무일 근무)은 예전처럼 전부 추가근무 (승인 대상 아님)
+const OT_REASONS = [['busy', '🍽 손님 많음'], ['close', '🧹 마감 청소'], ['prep', '🦪 재료 손질'], ['cover', '🙋 동료 대신'], ['etc', '✏️ 기타']];
+const OT_MINS = [30, 60, 90, 120];
+function otApplies(ds){ const o = cfg().ot; return !!o.on && !!o.since && ds >= o.since; }
+function otDoc(sid, ds){ return S.ots.get(`${sid}_${ds}`); }
+const otRef = (sid, ds) => S.db.collection('ot').doc(`${sid}_${ds}`);
+const otIdParts = id => [id.slice(0, -11), id.slice(-10)];   // {직원}_{YYYY-MM-DD}
+const addHM = (hm, min) => { const [h, m] = String(hm || '0:0').split(':').map(Number), t = (((h * 60 + m + min) % 1440) + 1440) % 1440; return `${pad(Math.floor(t / 60))}:${pad(t % 60)}`; };
+const otMinKo = m => m < 60 ? `${m}분` : fmtH(m);
+const otMinS = m => !isVi() ? otMinKo(m) : m < 60 ? `${m} phút` : fmtHvi(m);
+// {h}에 시간을 넣는 문구: 베트남어 줄엔 베트남어 시간, 아래 한국어 줄엔 한국어 시간
+const TH = (key, m) => BI(fillT(key, { h:otMinKo(m) }), fillT(VI[key] || key, { h: m < 60 ? `${m} phút` : fmtHvi(m) }));
+const otReasonKo = c => OT_REASONS.find(x => x[0] === c)?.[1] || '';
+// 직원이 요청할 수 있는 날: 승인제 적용 중 + 그날 정해진 근무가 있음 + 아직 퇴근 전
+function otDayFor(st, now = Date.now()){ const op = openPunch(st, now); return op ? op.date : todayStr(); }
+function otCanRequest(st, now = Date.now()){
+  const ds = otDayFor(st, now), p = getPunch(st.id, ds);
+  return otApplies(ds) && !!schedFor(st, ds, p) && !(p && p.out);
+}
+// 직원 화면: 오늘 요청·보고 상태 한 줄
+function otStaffLine(st, ds = otDayFor(st)){
+  const o = otDoc(st.id, ds);
+  if (!o || !otApplies(ds)) return '';
+  const lab = o.status === 'approved' ? (o.kind === 'pre' && o.until ? T('✅ 추가근무 승인됨 · 퇴근 {t}', { t:o.until }) : TH('✅ 추가근무 {h} 인정됐어요', o.okMin || 0))
+    : o.status === 'rejected' ? (o.kind === 'pre' ? T('❌ 추가근무 요청이 거절됐어요 · 정해진 시간에 퇴근해 주세요') : T('❌ 추가근무가 인정되지 않았어요'))
+    : o.kind === 'pre' ? T('⏳ 추가근무 요청 · 사장님 답을 기다리는 중') : T('⏳ 추가근무 보고 · 사장님 확인을 기다리는 중');
+  return `<div class="otline ${o.status}">${lab}${o.ownerNote ? `<div class="small">${TV('사장님')}: ${ownerNoteHtml(o)}</div>` : ''}</div>`;
+}
+const otReasonBtns = f => `<div class="row otreasons">${OT_REASONS.map(([c, l]) => `<button class="btn sm ${f.reason === c ? 'pri' : ''}" data-act="otWhy" data-v="${c}" aria-pressed="${f.reason === c}">${TV(l)}</button>`).join('')}</div>`;
+const otNoteField = f => `<label class="f">${T('한마디 (선택)')}<input type="text" id="otNote" maxlength="80" value="${esc(f.note || '')}" placeholder="${esc(TV('예) 단체 손님 예약 20명'))}"></label>`;
+// 태블릿·휴대폰: 먼저 요청 (step 'otreq')
+function otReqView(st, clock){
+  const f = S.otForm, sc = schedFor(st, f.ds, getPunch(st.id, f.ds)), end = sc?.end || '';
+  return clock + `<div class="kpanel otform"><h2>${TV('{name}님', { name:st.name })} · ${TV('⏱ 추가근무 요청')}</h2>
+    ${otStaffLine(st, f.ds)}
+    <p>${T('오늘 예정 퇴근 {t}', { t:end })}</p>
+    <div class="small muted">${T('얼마나 더 일해야 하나요?')}</div>
+    <div class="row otmins">${OT_MINS.map(m => `<button class="btn ${f.min === m ? 'pri' : ''}" data-act="otMin" data-v="${m}" aria-pressed="${f.min === m}">+${otMinS(m)}</button>`).join('')}</div>
+    ${f.min ? `<p><b>${T('퇴근 {a} → {b}', { a:end, b:addHM(end, f.min) })}</b></p>` : ''}
+    <div class="small muted">${T('이유를 골라 주세요')}</div>${otReasonBtns(f)}${otNoteField(f)}
+    <button class="bigbtn" data-act="otSend" ${f.min && f.reason && !f.busy ? '' : 'disabled'}>${T('사장님께 요청 보내기')}</button>
+    <button class="linkbtn" data-act="otBack">${T('돌아가기')}</button></div>`;
+}
+// 퇴근 직후: 먼저 하고 보고 (step 'ot')
+function otPostView(st, clock){
+  const f = S.otForm, res = S.kiosk.result || {};
+  return clock + `<div class="kpanel otform"><h2>${TV('{name}님', { name:st.name })}</h2>
+    <div class="stamp">${T('퇴근')}<b>${fmtT(res.t || Date.now())}</b></div>
+    <p><b>${TH('정해진 시간보다 {h} 더 일했어요.', f.extra)}</b>${f.okMin ? `<br><span class="small">${TH('그중 {h}은 이미 승인됐어요.', f.okMin)}</span>` : ''}</p>
+    <p class="small">${T('이유를 남기면 사장님이 확인하고 추가근무로 인정해요.')}</p>
+    ${otReasonBtns(f)}${otNoteField(f)}
+    <button class="bigbtn" data-act="otSend" ${f.reason && !f.busy ? '' : 'disabled'}>${T('이유 보내기')}</button>
+    <button class="linkbtn" data-act="otSkip">${T('나중에 (사장님께 ‘보고 없음’으로 보여요)')}</button></div>`;
+}
+// 태블릿 출근·퇴근 화면과 직원 휴대폰 첫 화면: 오늘 상태 + [추가근무 요청]
+function otKioskBit(st){
+  if (!otCanRequest(st)) return '';
+  const o = otDoc(st.id, otDayFor(st));
+  return `<div class="otbit">${otStaffLine(st)}<button class="btn otbtn" data-act="otOpen">${TV(o ? '⏱ 추가근무 다시 요청' : '⏱ 추가근무 요청')}</button></div>`;
+}
+const otKeepNote = () => { if (S.otForm) S.otForm.note = ($('#otNote')?.value ?? S.otForm.note ?? '').trim(); };
+async function saveOtStaff(){
+  const f = S.otForm, st = f && staffById(f.staffId);
+  if (!st || f.busy || !f.reason || (f.mode === 'pre' && !f.min)) return;
+  f.busy = true; render(true);
+  const id = `${st.id}_${f.ds}`, o = otDoc(st.id, f.ds), sc = schedFor(st, f.ds, getPunch(st.id, f.ds));
+  const noteKo = f.note && !hasHangul(f.note) ? (await tryTranslate([f.note], 'ko'))?.[0] || '' : '';   // 베트남어 한마디 → 사장님용 한국어
+  const base = { staffId:st.id, date:f.ds, reason:f.reason, note:f.note, noteKo, at:Date.now(), via: S.mode === 'phone' ? 'phone' : 'tablet', ownerNote:'', ownerNoteVi:'', decidedAt:null };
+  const doc = f.mode === 'pre'
+    ? { ...base, kind:'pre', status:'pending', reqMin:f.min, until: sc ? addHM(sc.end, f.min) : '', okMin: o?.status === 'approved' ? o.okMin || 0 : 0 }
+    : { ...base, kind:'post', status:'pending', reqMin:f.extra, until:'', okMin:f.okMin || 0, ...(o ? { pre:{ kind:o.kind, status:o.status, reqMin:o.reqMin || 0, okMin:o.okMin || 0, at:o.at || 0 } } : {}) };
+  S.ots.set(id, doc);
+  await write(() => otRef(st.id, f.ds).set(doc));
+  slackKick();   // 사장님 슬랙으로 바로
+  toast(f.mode === 'pre' ? '⏱ 사장님께 추가근무를 요청했어요' : '⏱ 추가근무 이유를 보냈어요', '', 'ok');
+  S.otForm = null; if (S.editing === 'ot') S.editing = null;
+  if (f.mode === 'post') S.kiosk.step = 'done';
+  else if (S.mode === 'phone' && f.back === 'list') resetKiosk();
+  else S.kiosk.step = f.back || 'action';
+  S.kiosk.at = Date.now(); render(true);
+}
+
+// ----- 사장님: 확인할 추가근무 -----
+// 대기 중인 요청·보고 + 실제로 더 일했는데 확인 안 된 날(보고 없음 포함, 이번 달·지난달)
+function otQueue(now = Date.now()){
+  const c = cfg().ot;
+  if (!c.on || !c.since) return [];
+  const out = new Map(), today = todayStr();
+  for (const [id, o] of S.ots) if (o.status === 'pending' && o.date >= c.since) out.set(id, { id, o });
+  for (const ym of [shiftYM(ymOf(today), -1), ymOf(today)]){
+    if (!S.monthLoaded[ym] || !S.months[ym]) continue;
+    for (const p of S.months[ym].values()){
+      if (!p.in || !p.out || p.date < c.since) continue;
+      const st = staffById(p.staffId); if (!st) continue;
+      const r = dayCalc(st, p.date, now);
+      if (r.otWait > 0){ const id = `${st.id}_${p.date}`; out.set(id, { id, o:otDoc(st.id, p.date), r }); }
+    }
+  }
+  return [...out.values()].map(it => { const [sid, ds] = otIdParts(it.id), st = staffById(sid); return { ...it, sid, ds, st, r: it.r || (st && getPunch(sid, ds)?.in ? dayCalc(st, ds, now) : null) }; })
+    .filter(it => it.st).sort((a, b) => (a.ds < b.ds ? 1 : a.ds > b.ds ? -1 : (a.o?.at || 0) - (b.o?.at || 0)));
+}
+function otRow(it){
+  const { id, o, r, st, ds } = it, sc = r?.sc || schedFor(st, ds, getPunch(st.id, ds));
+  const worked = !!(r && r.otRaw), post = worked || o?.kind === 'post';
+  const kind = !o ? ['보고 없음', 'amber'] : o.kind === 'pre' && !worked ? ['미리 요청', 'blue'] : o.kind === 'pre' ? ['미리 요청 · 답 전에 더 일함', 'amber'] : ['먼저 하고 보고', 'amber'];
+  const sug = worked ? r.otRaw : (o?.reqMin || 0);
+  const ed = S.otEdit?.id === id ? S.otEdit : null;
+  const lines = [
+    o?.kind === 'pre' || o?.pre ? `요청 +${otMinKo(o.pre?.reqMin || o.reqMin || 0)}${sc ? ` · 퇴근 ${sc.end} → ${o.kind === 'pre' ? o.until : addHM(sc.end, o.pre?.reqMin || 0)}` : ''}${o.pre?.status === 'approved' ? ' · 미리 승인함' : ''}` : '',
+    r?.running ? `지금 근무 중 · ${fmtH(r.worked)}째` : worked ? `실제 <b>${otMinKo(r.otRaw)}</b> 더 일함 (예정 퇴근 ${sc?.end || '-'} → 실제 ${fmtT(r.p.out, r.p.date)})${r.ot ? ` · 이미 승인 ${otMinKo(r.ot)}` : ''}` : '',
+    o ? `${otReasonKo(o.reason) || '이유 없음'}${o.note ? ` · “${esc(o.note)}”` : ''}${o.noteKo ? ` <span class="muted">(번역: ${esc(o.noteKo)})</span>` : ''} <span class="muted">· ${o.via === 'phone' ? '휴대폰' : o.via === 'owner' ? '사장님' : '태블릿'} ${fmtT(o.at)}</span>` : '<span class="muted">직원이 이유를 남기지 않았어요</span>',
+  ].filter(Boolean);
+  return `<div class="otq-item"><div class="row" style="gap:6px"><b>${esc(st.name)}</b><span class="small muted">${fmtMD(ds)} (${DAYS[parseDate(ds).getDay()]})</span><span class="chip ${kind[1]}">${kind[0]}</span></div>
+    ${lines.map(l => `<div class="small">${l}</div>`).join('')}
+    ${ed ? `<div class="row" style="margin-top:6px;gap:6px">
+        ${ed.mode === 'min' ? `<label class="f" style="max-width:130px">인정할 분<input type="number" id="otOwnerMin" min="${cfg().otUnit}" step="${cfg().otUnit}" value="${sug || 30}"></label>` : ''}
+        <label class="f" style="flex:1;min-width:180px">${ed.mode === 'no' ? (post ? '불인정 이유 (필수, 직원에게 보여요)' : '거절 이유 (선택, 직원에게 보여요)') : '한마디 (선택)'}<input type="text" id="otOwnerNote" maxlength="80"></label>
+        <button class="btn sm pri" data-act="otEditSave">${ed.mode === 'no' ? (post ? '불인정' : '거절') : '승인'}</button><button class="btn sm" data-act="otEditCancel">취소</button></div>`
+    : `<div class="row" style="margin-top:6px;gap:6px">${sug ? `<button class="btn sm pri" data-act="otOk" data-id="${esc(id)}" data-min="${sug}">승인 +${otMinKo(sug)}</button>` : ''}
+        <button class="btn sm" data-act="otTime" data-id="${esc(id)}">시간 바꿔 승인</button><button class="btn sm" data-act="otNo" data-id="${esc(id)}">${post ? '불인정' : '거절'}</button></div>`}
+  </div>`;
+}
+function otReminder(){
+  const q = otQueue();
+  if (!q.length) return '';
+  return `<section class="panel otq" style="margin-bottom:14px"><h3>⏱ 확인할 추가근무 <small>${q.length}건 · 승인한 시간만 급여에 들어가요</small></h3>${q.map(otRow).join('')}</section>`;
+}
+// 근무 집계·인건비: 이 달에 확인 안 한 추가근무 (급여에 안 들어가 있음)
+function otMonthWarn(ym){
+  if (!cfg().ot.on) return '';
+  const sums = staffForMonth(ym).map(st => monthSummary(st, ym)), n = sums.reduce((t, o) => t + o.otWaitDays.length, 0);
+  if (!n) return '';
+  const min = sums.reduce((t, o) => t + o.otWait, 0), who = sums.filter(o => o.otWait).map(o => `${esc(o.st.name)} ${otMinKo(o.otWait)}`).join(', ');
+  return `<div class="alertbar" style="border-color:var(--amber)"><span>⏱ <b>확인 안 한 추가근무 ${n}건 · ${otMinKo(min)}</b> — 승인하기 전에는 급여에 들어가지 않아요. (${who})</span><span class="spacer"></span><button class="btn sm pri" data-act="tab" data-v="now">확인하러 가기</button></div>`;
+}
+async function ownerOtDecide(id, status, min, note = ''){
+  const [sid, ds] = otIdParts(id), st = staffById(sid);
+  if (!st) return;
+  const o = otDoc(sid, ds), r = getPunch(sid, ds)?.in ? dayCalc(st, ds) : null, worked = !!(r && r.otRaw);
+  const vi = note ? (await tryTranslate([note], 'vi'))?.[0] || '' : '';   // 직원 화면에 베트남어로
+  const doc = { ...(o || { staffId:sid, date:ds, reqMin: r?.otRaw || 0, reason:'', note:'', noteKo:'', until:'', at:Date.now(), via:'owner' }),
+    kind: worked ? 'post' : (o?.kind || 'pre'), status,
+    okMin: status === 'approved' ? Math.max(0, Math.round(min)) : (o?.kind === 'post' ? o.okMin || 0 : 0),
+    ownerNote:note, ownerNoteVi:vi, decidedAt:Date.now() };
+  if (worked){ doc.reqMin = r.otRaw; if (o?.kind === 'pre') doc.pre = { kind:o.kind, status:o.status, reqMin:o.reqMin || 0, okMin:o.okMin || 0, at:o.at || 0 }; }
+  S.ots.set(id, doc);
+  await write(() => otRef(sid, ds).set(doc));
+  S.otEdit = null; if (S.editing === 'otEdit') S.editing = null;
+  toast(status === 'approved' ? `${st.name} 추가근무 ${otMinKo(doc.okMin)} 승인` : `${st.name} 추가근무 ${worked || o?.kind === 'post' ? '불인정' : '거절'}`, status === 'approved' ? '급여에 들어가요.' : '', 'ok');
+  render(true);
+}
+const OTACT = {
+  otOpen(){
+    const st = staffById(S.kiosk.staffId || S.phone.staffId);
+    if (!st || !otCanRequest(st)) return;
+    const back = S.kiosk.step, ds = otDayFor(st), o = otDoc(st.id, ds);
+    if (S.mode === 'phone' && back === 'list') S.kiosk.staffId = st.id;
+    S.otForm = { mode:'pre', staffId:st.id, ds, min: o?.kind === 'pre' ? o.reqMin || 0 : 0, reason:o?.reason || '', note:o?.note || '', back };
+    S.kiosk.step = 'otreq'; S.kiosk.at = Date.now(); S.editing = 'ot'; render(true);
+  },
+  otMin(d){ otKeepNote(); S.otForm.min = +d.v; S.kiosk.at = Date.now(); render(true); },
+  otWhy(d){ otKeepNote(); S.otForm.reason = d.v; S.kiosk.at = Date.now(); render(true); },
+  otBack(){ const b = S.otForm?.back; S.otForm = null; if (S.editing === 'ot') S.editing = null; if (S.mode === 'phone' && b === 'list') resetKiosk(); else S.kiosk.step = b || 'action'; render(true); },
+  async otSend(){ otKeepNote(); await saveOtStaff(); },
+  otSkip(){ S.otForm = null; if (S.editing === 'ot') S.editing = null; S.kiosk.step = 'done'; S.kiosk.at = Date.now(); render(true); },
+  // 사장님
+  async otOk(d){ await ownerOtDecide(d.id, 'approved', +d.min); },
+  otTime(d){ S.otEdit = { id:d.id, mode:'min' }; S.editing = 'otEdit'; render(true); },
+  otNo(d){ S.otEdit = { id:d.id, mode:'no' }; S.editing = 'otEdit'; render(true); },
+  otEditCancel(){ S.otEdit = null; if (S.editing === 'otEdit') S.editing = null; render(true); },
+  async otEditSave(){
+    const e = S.otEdit; if (!e) return;
+    const note = ($('#otOwnerNote')?.value || '').trim();
+    if (e.mode === 'min'){
+      const m = Math.round(+($('#otOwnerMin')?.value || 0));
+      if (!(m > 0)){ toast('인정할 분을 넣어 주세요', '', 'warn'); return; }
+      return ownerOtDecide(e.id, 'approved', m, note);
+    }
+    const [sid, ds] = otIdParts(e.id), st = staffById(sid), o = otDoc(sid, ds), worked = !!(st && getPunch(sid, ds)?.in && dayCalc(st, ds).otRaw);
+    if (!note && (worked || o?.kind === 'post')){ toast('불인정 이유를 적어 주세요', '직원에게도 보여요.', 'warn'); return; }
+    return ownerOtDecide(e.id, 'rejected', 0, note);
+  },
+};
+
 /* ===================== 동작 ===================== */
 const ACT = {
   tab(d){ S.tab = d.v; S.editing = null; store.set('tab', d.v); render(true); scrollTo(0, 0); },
@@ -3577,7 +3811,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, OTACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();
@@ -3676,6 +3910,8 @@ async function kioskPunch(kind, shot){
       await write(() => punchRef(st.id, op.date).update({ out:now, ...ph, ...(k.master ? { outBy:'master' } : {}), ...(geo ? { outGeo:geo } : {}), ...(S.mode === 'phone' ? { outVia:'phone' } : {}) }));
       const r = dayCalc(st, op.date, now);
       k.result = { kind:'out', t:now, late:false, photoErr: shot?.blob && !ph.outPhoto ? ph.outPhotoNote : '', msg:`오늘 ${fmtH(r.worked)} 근무했어요. 수고하셨어요!`, worked:r.worked };
+      const r2 = dayCalc(st, op.date, now, { ...op, out:now });   // 추가근무 승인제: 승인으로 덮이지 않은 추가근무가 있으면 이유 묻기
+      if (r2.otWait > 0){ const o = otDoc(st.id, op.date); S.otForm = { mode:'post', staffId:st.id, ds:op.date, extra:r2.otRaw, okMin:r2.ot, reason:o?.reason || '', note:o?.note || '' }; S.editing = 'ot'; k.nextStep = 'ot'; }
       mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master, geo });
     }
     k.step = k.nextStep || 'done'; k.nextStep = null; k.at = Date.now(); beep('ok');
@@ -3741,6 +3977,7 @@ async function saveConfig(){
   const doc = { storeName: $('#c-name').value.trim() || '우리 가게', ownerPin: pin, masterPin: master,
     graceMin: Math.max(0, Math.round(+$('#c-grace').value || 0)), otUnit: Math.max(1, Math.round(+$('#c-unit').value || 1)),
     earlyClamp: $('#c-early').checked, otPremium: $('#c-prem').checked, weeklyHoliday: $('#c-hol').checked,
+    ot: $('#c-otapp')?.checked ? { on:true, since: cfg().ot.on && cfg().ot.since ? cfg().ot.since : todayStr() } : { on:false, since:'' },   // 켠 날부터 적용
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
     mail: readMailForm(), photo:{ ...cfg().photo, on: $('#p-on').checked }, geo:{ ...cfg().geo, radius: Math.max(30, Math.round(+$('#c-georad').value || 200)) } };
   if (doc.mail.on && !mailAddrs(doc.mail.to).length){ toast('받을 메일 주소를 넣어 주세요', '메일 알림을 켜려면 주소가 필요해요.', 'warn'); return; }
@@ -3788,7 +4025,7 @@ function tick1(){
   if ((S.mode === 'kiosk' || S.mode === 'phone') && k.step !== 'list' && !k.busy){
     const idle = now - (k.at || now), st = staffById(k.staffId);
     if (k.step === 'done' && k.didIn && idle > 2500 && kNextStep(st)){ k.step = kNextStep(st); k.at = now; render(true); }   // 출근 도장 → 새 공지·오늘 할 일
-    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
+    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
   }
   if (todayStr() !== lastDay){
     lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();
@@ -3834,6 +4071,7 @@ async function boot(){
   db.doc('status/backup').onSnapshot(s => { S.backupStatus = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backup', e));
   db.collection('awards').onSnapshot(s => { S.awards = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('awards', e));
   db.collection('award_reacts').onSnapshot(s => { S.reacts = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('award_reacts', e));
+  db.collection('ot').onSnapshot(s => { S.ots = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('ot', e));   // 추가근무 요청·승인
   db.collection('praise').onSnapshot(s => { S.praise = s.docs.map(d => ({ id:d.id, ...d.data() })); scheduleRender(); }, e => console.warn('praise', e));
   db.doc('status/autobackup').onSnapshot(s => { S.autoBackup = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('autobackup', e));
   db.collection('backups').onSnapshot(s => { S.backups = s.docs.map(d => ({ id:d.id, ...d.data() })); if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backups', e));

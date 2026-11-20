@@ -22,7 +22,7 @@
 //       (인증은 아래 코드에서 직접 확인해요)
 
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
-import { kstDate, notyetList, notyetMessage, punchEvents, punchMessage, reportEvents, reportMessage, dueEvents, dueMessage } from "./rules.mjs";
+import { kstDate, notyetList, notyetMessage, punchEvents, punchMessage, reportEvents, reportMessage, dueEvents, dueMessage, otEvents, otMessage } from "./rules.mjs";
 import { BACKUP_BUCKET, BACKUP_HOUR, BACKUP_KEEP_DAYS, backupName, buildBackup, kstDay, kstHour, oldBackupNames } from "./backup.mjs";
 
 const CORS = {
@@ -171,7 +171,7 @@ Deno.serve(async req => {
     const backup = await runBackup(now, store).catch(e => ({ ok: false, err: e instanceof Error ? e.message : String(e) }));
     if (!config.slack || !config.slack.on) return json({ ok: true, skipped: "off", backup });
     // 알림 종류별 켜기·끄기 (사장님 화면 현황 → 슬랙 알림). 없으면 모두 켜짐
-    const ev = { notyet: true, in: true, out: true, report: true, due: true, ...(config.slack.ev || {}) };
+    const ev = { notyet: true, in: true, out: true, report: true, due: true, ot: true, ...(config.slack.ev || {}) };
 
     const ds = kstDate(now), ym = ds.slice(0, 7);
     const yds = kstDate(now - 86400000), yym = yds.slice(0, 7);   // 어제 (자정 넘은 퇴근)
@@ -216,6 +216,12 @@ Deno.serve(async req => {
       const tasks = Object.fromEntries((await listDocs("tasks")).map(d => [d.id, d.data]));
       if (ev.report) result.report = await sendOnce(reportEvents({ reports, now }), "report", f => reportMessage(store, f, { tasks, staff }), f => `업무 보고 ${f.length}건`);
       if (ev.due) result.due = await sendOnce(dueEvents({ tasks, staff, reports, now }), "due", f => dueMessage(store, f), f => `마감 지남: ${f.map(x => x.t.title).join(", ")}`);
+    }
+
+    // 5. 추가근무 요청·보고 (오늘·어제 날짜 문서: ot/{직원}_{날짜})
+    if (ev.ot) {
+      const ots = Object.fromEntries([...(await listDocs("ot", `%\\_${ds}`)), ...(yds === ds ? [] : await listDocs("ot", `%\\_${yds}`))].map(d => [d.id, d.data]));
+      result.ot = await sendOnce(otEvents({ ots, now }), "ot", f => otMessage(store, f, { staff }), f => `추가근무 ${f.length}건`);
     }
 
     if (sentText.length) await logStatus({ ok: true, kind: "events", text: sentText.join(" / ") });

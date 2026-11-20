@@ -89,7 +89,7 @@ const S = globalThis.__S, ACT = globalThis.__ACT;
   S.mode = 'owner'; S.unlocked = true; S.tab = 'now'; S.ready.staff = true; S.ready.config = true;
   render(true);
   assert.ok(/슬랙 알림 꺼짐/.test(el.innerHTML) && /시험 알림 보내기/.test(el.innerHTML), '슬랙 칸 보임');
-  assert.strictEqual((el.innerHTML.match(/name="slackEv"[^>]*checked/g) || []).length, 5, '알림 종류 5개, 처음엔 모두 켜짐');
+  assert.strictEqual((el.innerHTML.match(/name="slackEv"[^>]*checked/g) || []).length, 6, '알림 종류 6개(추가근무 포함), 처음엔 모두 켜짐');
   const keepStaff = S.staff; S.staff = []; render(true);
   assert.ok(/직원을 먼저 등록해 주세요/.test(el.innerHTML) && /시험 알림 보내기/.test(el.innerHTML), '직원이 없어도 슬랙 칸 보임');
   S.staff = keepStaff; render(true);
