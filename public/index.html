@@ -425,7 +425,8 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .pinhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pinhead b{font-size:17px;margin-right:auto}
 .pin p{margin:0;white-space:pre-wrap;font-size:15px;line-height:1.65;color:var(--ink)}
-.pin p.clamp{display:-webkit-box;-webkit-line-clamp:4;line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.tgrp{display:grid;gap:4px;margin-top:6px}
+.tgrp small{color:var(--muted);font-weight:700}
 .phone .pinboard{margin:0}
 .phone .pin p{font-size:14px}
 /* 한국어 / Tiếng Việt 병기: 베트남어 아래 작은 한국어 */
@@ -1176,7 +1177,7 @@ function atHome(){
   const k = S.kiosk, P = S.phone;
   if (k.step !== 'list') return false;
   if (S.mode === 'phone') return !P.open && P.tab === 'tasks' && !(P.pickId && !P.staffId);
-  return !S.pinOpen?.size;
+  return true;
 }
 function navBar(){
   if (atHome()) return '';
@@ -1361,7 +1362,6 @@ function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
   Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
-  S.pinOpen?.clear();   // 첫 화면 공고는 다시 접어 둠
   S.otForm = null; S.reactDraft = null;   // 쓰다 만 추가근무 요청·축하 반응은 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
   if (S.editing === 'ot' || S.editing === 'react') S.editing = null;
 }
@@ -2885,8 +2885,10 @@ function taskForm(){
       <div class="pv">${f.refPhotos.map((p, i) => `<div><img data-photo="${esc(p)}"${photoSrcAttr(p)} alt="참고 사진 ${i + 1}"><button type="button" data-act="trRefDel" data-i="${i}" aria-label="참고 사진 빼기">✕</button></div>`).join('')}${f.uploading ? `<div style="display:grid;place-items:center;font-size:12px;color:var(--muted)">올리는 중</div>` : ''}</div>
     </div>
     <div class="f"><span>담당</span>
-      <div class="opts">${opt('tgt', 'all', '전체 직원', f.target.mode === 'all')}${pos.map(p => opt('tgt', 'pos:' + p, p + ' 전체', f.target.mode === 'pos' && f.target.pos === p)).join('')}${opt('tgt', 'staff', '직원 고르기', f.target.mode === 'staff')}</div>
-      ${f.target.mode === 'staff' ? `<div class="opts" style="margin-top:8px">${activeStaff().map(s => opt('tids', s.id, `${s.name}${s.position ? ` (${s.position})` : ''}`, (f.target.ids || []).includes(s.id), 'checkbox')).join('')}</div>` : ''}
+      <div class="opts">${opt('tgt', 'all', '전체 직원', f.target.mode === 'all')}${pos.map(p => opt('tgt', 'pos:' + p, p + ' 전체', f.target.mode === 'pos' && f.target.pos === p)).join('')}</div>
+      <div class="small muted" style="margin:10px 0 2px">또는 직원 개개인에게 — 이름을 누르세요 (여러 명 골라도 돼요)</div>
+      ${[...pos, ''].map(p => [p, activeStaff().filter(s => (s.position || '') === p)]).filter(([, l]) => l.length).map(([p, l]) => `<div class="tgrp"><small>${esc(p || '담당 없음')}</small><div class="opts">${l.map(s => opt('tids', s.id, s.name, f.target.mode === 'staff' && (f.target.ids || []).includes(s.id), 'checkbox')).join('')}</div></div>`).join('')}
+      <p class="hint" style="margin:6px 0 0">→ ${f.target.mode === 'staff' && f.target.ids?.length ? `<b>${esc(assignees({ target:f.target }).map(s => s.name).join(', '))}</b> ${f.target.ids.length}명에게만 보여요` : f.target.mode === 'pos' ? `<b>${esc(f.target.pos)}</b> 직원 모두에게 보여요` : '<b>전체 직원</b>에게 보여요'}</p>
     </div>
     ${f.kind === 'task' ? `
     <div class="f"><span>반복</span>
@@ -2910,8 +2912,9 @@ function readTForm(){
   f.title = $('#trTitle')?.value ?? f.title; f.body = $('#trBody')?.value ?? f.body;
   f.pinned = f.kind === 'notice' && !!$('#trPin')?.checked;
   f.titleVi = $('#trTitleVi')?.value ?? f.titleVi; f.bodyVi = $('#trBodyVi')?.value ?? f.bodyVi;
-  const tg = val('input[name=tgt]:checked') || 'all';
-  f.target = tg === 'all' ? { mode:'all', ids:[] } : tg === 'staff' ? { mode:'staff', ids: all('input[name=tids]:checked') } : { mode:'pos', pos: tg.slice(4), ids:[] };
+  // 담당: 이름을 하나라도 고르면 그 직원들만, 아니면 전체 / 담당별 (화면에서는 한쪽을 고르면 다른 쪽이 풀림)
+  const tg = val('input[name=tgt]:checked') || 'all', ids = all('input[name=tids]:checked');
+  f.target = ids.length ? { mode:'staff', ids } : tg.startsWith('pos:') ? { mode:'pos', pos: tg.slice(4), ids:[] } : { mode:'all', ids:[] };
   if (f.kind === 'task'){
     f.repeat = val('input[name=trep]:checked') || 'daily';
     f.days = all('input[name=tdays]:checked').map(Number);
@@ -2958,13 +2961,13 @@ const pinnedNotices = st => liveTasks().filter(t => t.kind === 'notice' && t.pin
 function pinBoard(st){
   const list = pinnedNotices(st);
   if (!list.length) return '';
-  return `<section class="pinboard" aria-label="공고">${list.map(t => { const body = isVi() && t.bodyVi ? t.bodyVi : t.body; return `<article class="pin">
+  // 공고는 접지 않고 내용 전체를 바로 보여 줌 (v28, 대표님 요청). 베트남어 화면이면 베트남어 + 아래 한국어
+  return `<section class="pinboard" aria-label="공고">${list.map(t => `<article class="pin">
     <div class="pinhead"><span class="chip red">${TV('📌 공고')}</span><b>${taskTitle(t)}</b><span class="small muted">${fmtMD(ymd(new Date(t.createdAt || Date.now())))}</span></div>
-    ${body ? `<p class="${S.pinOpen?.has(t.id) ? '' : 'clamp'}">${S.pinOpen?.has(t.id) ? taskBody(t) : esc(body)}</p>` : ''}
-    ${body && (body.split('\n').length > 4 || body.length > 160 || (isVi() && t.bodyVi)) ? `<button class="linkbtn" style="justify-self:start;padding:0" data-act="pinMore" data-id="${esc(t.id)}">${S.pinOpen?.has(t.id) ? TV('접기') : TV('전체 보기')}</button>` : ''}
+    ${t.body || t.bodyVi ? `<p>${taskBody(t)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
     ${awardReactBox(t, st)}
-  </article>`; }).join('')}</section>`;
+  </article>`).join('')}</section>`;
 }
 // 직원 화면용 담당·반복·마감 (베트남어 병기). 사장님 화면은 targetText / repeatText 그대로
 const dmVi = ds => { const d = parseDate(ds); return `${d.getDate()}/${d.getMonth()+1}`; };
@@ -3161,7 +3164,6 @@ const TRACT = {
     else toast('자동 번역을 못 했어요', S.trWarn || '잠시 뒤 다시 눌러 주세요.', 'warn');
     render(true);
   },
-  pinMore(d){ S.pinOpen = S.pinOpen || new Set(); S.pinOpen.has(d.id) ? S.pinOpen.delete(d.id) : S.pinOpen.add(d.id); render(true); },
   async trPinToggle(d){ const t = taskById(d.id); if (!t) return; await write(() => S.db.collection('tasks').doc(d.id).update({ pinned: !t.pinned })); toast(t.pinned ? '첫 화면에서 내렸어요' : '첫 화면에 고정했어요', t.title, 'ok'); render(true); },
   trToday(){ S.trDate = todayStr(); render(true); },
   async trOk(d){ await write(() => trRef(d.ds, d.id).update({ status:'ok', checkedAt:Date.now() })); toast('확인했어요', '', 'ok'); render(true); },
@@ -3214,7 +3216,13 @@ document.addEventListener('change', async e => {
   const el = e.target;
   if (el.id === 'trDate'){ S.trDate = el.value || todayStr(); render(true); return; }
   if (el.id === 'trFile'){ await addRefFiles(el.files || []); return; }
-  if (el.closest?.('#trForm') && (el.type === 'radio' || el.type === 'checkbox')){ readTForm(); if (el.type === 'radio') render(true); return; }
+  if (el.closest?.('#trForm') && (el.type === 'radio' || el.type === 'checkbox')){
+    // 담당: 전체·담당별을 누르면 고른 이름은 풀고, 이름을 고르면 전체·담당별은 풂
+    const fm = $('#trForm');
+    if (el.name === 'tgt') fm.querySelectorAll('input[name=tids]').forEach(i => { i.checked = false; });
+    if (el.name === 'tids' && el.checked) fm.querySelectorAll('input[name=tgt]').forEach(i => { i.checked = false; });
+    readTForm(); if (el.type === 'radio' || el.name === 'tids') render(true); return;
+  }
   if (el.id === 'trCam' && el.files?.[0]){
     const P = S.phone, me = staffById(P.staffId), t = taskById(P.open);
     if (!me || !t) return;
