@@ -224,6 +224,12 @@ const [A, B] = S.staff;
   // 마스터 번호는 통과, 꺼져 있으면 안 뜸
   S.config.masterPin = '9999'; resetKiosk(); ACT.kPick({ id:'b' }); for (const dg of '9999') padPress('staff', dg); assert.strictEqual(S.kiosk.step, 'action', '마스터 번호는 통과');
   S.config.phoneReq.on = false; resetKiosk(); ACT.kPick({ id:'b' }); for (const dg of '2222') padPress('staff', dg); assert.strictEqual(S.kiosk.step, 'action', '꺼져 있으면 안 뜸');
+  // v39.1: 필수가 아니어도 연결 안 한 직원은 출퇴근 화면에서 직접 QR 열기
+  render(true); assert.ok(view.innerHTML.includes('data-act="phOpenQR"'), '내 휴대폰 연결하기 링크');
+  ACT.phOpenQR(); render(true);
+  assert.ok(S.kiosk.step === 'phonereq' && view.innerHTML.includes('내 휴대폰 연결하기') && view.innerHTML.includes('출퇴근 화면으로 돌아가기') && !view.innerHTML.includes('연결 기한이 지났어요'), '필수 아닐 때 안내 (돌아가기)');
+  ACT.phSkip(); assert.strictEqual(S.kiosk.step, 'action', '돌아가기');
+  S.plinks.set('b', { staffId:'b', first:1, last:1 }); render(true); assert.ok(!view.innerHTML.includes('data-act="phOpenQR"'), '연결한 직원에게는 링크 없음'); S.plinks.delete('b');
   // 사장님: 연결 현황
   S.mode = 'owner'; S.tab = 'tasks'; render(true);
   assert.ok(view.innerHTML.includes('휴대폰 연결 현황') && view.innerHTML.includes('✅ <b>성실</b>') && view.innerHTML.includes('⬜ <b>가나다</b>'), '사장님: 누가 연결했는지');

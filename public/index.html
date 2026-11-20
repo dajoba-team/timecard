@@ -725,6 +725,7 @@ const VI = {
   '예) 바쁠 때 도와줘서 고마워요':'VD: Cảm ơn đã giúp mình lúc bận', '고마워요 보내기 🙏':'Gửi lời cảm ơn 🙏',
   '🎉 새 배지를 받았어요!':'🎉 Bạn nhận được huy hiệu mới!', '🔥 연속 정시 출근 신기록!':'🔥 Kỷ lục mới đúng giờ liên tiếp!',
   '🙏 고마워요를 보냈어요':'🙏 Đã gửi lời cảm ơn', '받는 사람을 골라 주세요':'Hãy chọn người nhận',
+  '📱 내 휴대폰 연결하기 (QR)':'📱 Kết nối điện thoại của tôi (QR)',
   '⏱ 추가근무 요청':'⏱ Xin làm thêm giờ', '⏱ 추가근무 다시 요청':'⏱ Xin làm thêm lại', '사장님':'Chủ quán', '돌아가기':'Quay lại',
   '✅ 추가근무 승인됨 · 퇴근 {t}':'✅ Đã duyệt làm thêm · Tan ca {t}', '✅ 추가근무 {h} 인정됐어요':'✅ Đã công nhận làm thêm {h}',
   '❌ 추가근무 요청이 거절됐어요 · 정해진 시간에 퇴근해 주세요':'❌ Yêu cầu làm thêm bị từ chối · Vui lòng tan ca đúng giờ', '❌ 추가근무가 인정되지 않았어요':'❌ Giờ làm thêm không được công nhận',
@@ -1427,6 +1428,7 @@ function kioskView(){
       body = `<p>${sc ? T('오늘 예정 {a}–{b}', { a:sc.start, b:sc.end }) : (isRegularOff(st, today) ? T('오늘은 정기 휴무일이에요. 출근하면 ‘휴무일 근무’로 기록돼요.') : T('오늘은 정해진 근무가 없는 날이에요 (추가 근무로 기록돼요)'))}</p>
         <button class="bigbtn" data-act="kIn" ${k.busy ? 'disabled' : ''}>${T('출근하기')}</button>${otKioskBit(st)}`;
     }
+    if (S.mode === 'kiosk' && !k.master && !phoneLinked(st)) body += `<button class="linkbtn" data-act="phOpenQR">${TV('📱 내 휴대폰 연결하기 (QR)')}</button>`;   // v39.1: 필수가 아니어도 언제든
     body += `<button class="linkbtn" data-act="thOpen">${TV(thanksTodayFrom(st.id) ? '💌 오늘 보낸 고마워요' : '🙏 동료에게 고마워요 보내기')}</button>`;
     return clock + `<div class="kpanel"><h2>${TV('{name}님', { name:st.name })}</h2>${k.master ? `<p><span class="chip amber">${TV('사장님 마스터 번호로 들어왔어요 · 대리 입력으로 기록돼요')}</span></p>` : ''}${body}${mySummary(st)}<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
   }
@@ -1447,7 +1449,7 @@ function kioskView(){
         <button class="linkbtn" data-act="kNoPhoto">${T(`사진 없이 ${word}하기 (사장님께 ‘사진 없음’으로 보여요)`)}</button>` : ''}
       ${k.busy ? '' : `<button class="linkbtn" data-act="kCancel">${T('처음으로')}</button>`}</div>`;
   }
-  if (k.step === 'phonereq'){ if (!phoneNeeded(st)){ k.step = 'action'; return kioskView(); } return phoneReqView(st, clock); }   // 휴대폰 연결 안내 (연결되면 저절로 넘어감)
+  if (k.step === 'phonereq'){ if (!phoneNeeded(st) && !(k.phoneOpt && S.mode === 'kiosk' && !phoneLinked(st))){ k.step = 'action'; k.phoneOpt = false; return kioskView(); } return phoneReqView(st, clock); }   // 휴대폰 연결 안내 (연결되면 저절로 넘어감)
   if (k.step === 'thanks'){ if (!S.thForm){ k.step = 'action'; return kioskView(); } return thanksView(st, clock); }   // 동료 고마워요 (v32)
   if (k.step === 'otreq' || k.step === 'ot'){ if (!S.otForm){ k.step = k.step === 'ot' ? 'done' : 'action'; return kioskView(); } return k.step === 'ot' ? otPostView(st, clock) : otReqView(st, clock); }   // 추가근무 요청 / 퇴근 뒤 이유
   if (k.step === 'done'){
@@ -1475,7 +1477,8 @@ function resetKiosk(){
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
   Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
   S.otForm = null; S.reactDraft = null; S.thForm = null;
-  if (S.join?.err) S.join = null;   // 1회용 연결 코드를 못 받았으면 다음에 다시 시도   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
+  if (S.join?.err) S.join = null;
+  S.kiosk.phoneOpt = false;   // 1회용 연결 코드를 못 받았으면 다음에 다시 시도   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
   if (S.editing === 'ot' || S.editing === 'react' || S.editing === 'thanks') S.editing = null;
 }
 function lockView(){
@@ -3931,7 +3934,8 @@ function thanksView(st, clock){   // 태블릿·휴대폰 step 'thanks'
     <button class="linkbtn" data-act="thBack">${T('돌아가기')}</button></div>`;
 }
 const THACT = {
-  phSkip(){ const k = S.kiosk; if (phoneLate()) return; k.step = 'action'; k.at = Date.now(); render(true); },   // 휴대폰 연결 안내: 기한 전엔 오늘은 넘어가기 (v38)
+  phSkip(){ const k = S.kiosk; if (phoneLate() && phoneNeeded(staffById(k.staffId))) return; k.step = 'action'; k.phoneOpt = false; k.at = Date.now(); render(true); },
+  phOpenQR(){ const k = S.kiosk; k.phoneOpt = true; k.step = 'phonereq'; k.at = Date.now(); render(true); },   // 내 휴대폰 연결하기 (QR)   // 휴대폰 연결 안내: 기한 전엔 오늘은 넘어가기 (v38)
   async plDel(d){ await write(() => S.db.collection('phone_links').doc(d.id).delete()); S.plinks.delete(d.id); toast('휴대폰 연결 기록을 지웠어요', '다음 출근 때 다시 연결 안내가 떠요.', 'ok'); render(true); },
   async plRevoke(){   // 1회용 QR로 연결된 직원 휴대폰 모두 끊기 (공용 계정 지움) — 두 번 눌러야
     if (!S.confirmRevoke){ S.confirmRevoke = true; render(true); setTimeout(() => { S.confirmRevoke = false; scheduleRender(); }, 6000); return; }
@@ -4301,10 +4305,10 @@ function qrSvg(text){
   return '';
 }
 function phoneReqView(st, clock){
-  const late = phoneLate(), left = phoneDaysLeft(), d = cfg().phoneReq.deadline;
+  const req = phoneNeeded(st), late = req && phoneLate(), left = req ? phoneDaysLeft() : null, d = req ? cfg().phoneReq.deadline : '';
   const j = joinFor(st), direct = !!j?.code, url = direct ? joinUrl(j.code) : phoneUrl(), qr = j?.busy ? '' : qrSvg(url);   // 1회용 코드가 있으면 로그인 없이 바로 연결 (v39), 안 되면 주소 + 사장님 로그인
   return clock + `<div class="kpanel preq"><h2>${TV('{name}님', { name:st.name })}</h2>
-    <div class="preqhead">📱 <b>${BI('휴대폰 연결이 필요해요', 'Bạn cần kết nối điện thoại')}</b></div>
+    <div class="preqhead">📱 <b>${req ? BI('휴대폰 연결이 필요해요', 'Bạn cần kết nối điện thoại') : BI('내 휴대폰 연결하기', 'Kết nối điện thoại của tôi')}</b></div>
     <p>${BI(`${d ? `<b>${fmtMD(d)}</b>까지 ` : ''}모든 직원이 자기 휴대폰을 연결해요. 연결하면 휴대폰으로 업무 사진 보고·공지 확인${st.phonePunch ? '·출퇴근' : ''}을 할 수 있어요.`,
       `${d ? `Trước <b>${dmVi(d)}</b>, ` : ''}tất cả nhân viên cần kết nối điện thoại của mình. Sau khi kết nối, bạn có thể báo cáo ảnh công việc, xem thông báo${st.phonePunch ? ', chấm công' : ''} bằng điện thoại.`)}</p>
     <div class="qr" aria-label="연결 QR">${qr || `<div class="small muted">${j?.busy ? BI('내 전용 QR 만드는 중…', 'Đang tạo mã QR riêng…') : 'QR 준비 중…'}</div>`}</div>
@@ -4324,7 +4328,7 @@ function phoneReqView(st, clock){
     </ol>`}
     <p class="small muted">${BI('앱처럼 쓰려면: 아이폰은 공유 → 홈 화면에 추가, 안드로이드는 ⋮ → 홈 화면에 추가', 'Để dùng như ứng dụng: iPhone bấm Chia sẻ → Thêm vào MH chính, Android bấm ⋮ → Thêm vào màn hình chính')}</p>
     ${late ? `<p class="err">${BI('연결 기한이 지났어요. 휴대폰을 연결해야 출퇴근할 수 있어요. 어려우면 사장님께 말씀하세요.', 'Đã quá hạn kết nối. Bạn cần kết nối điện thoại mới chấm công được. Nếu khó, hãy báo chủ quán.')}</p>`
-      : `<button class="btn" data-act="phSkip">${BI(`오늘은 그냥 출퇴근하기${left != null ? ` (D-${Math.max(0, left)})` : ''}`, `Hôm nay chấm công trước${left != null ? ` (còn ${Math.max(0, left)} ngày)` : ''}`)}</button>`}
+      : `<button class="btn" data-act="phSkip">${req ? BI(`오늘은 그냥 출퇴근하기${left != null ? ` (D-${Math.max(0, left)})` : ''}`, `Hôm nay chấm công trước${left != null ? ` (còn ${Math.max(0, left)} ngày)` : ''}`) : BI('출퇴근 화면으로 돌아가기', 'Quay lại chấm công')}</button>`}
     <button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
 }
 
