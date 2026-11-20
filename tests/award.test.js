@@ -76,8 +76,19 @@ S.trSubs['2026-11'] = () => {}; S.trSubs['2026-10'] = () => {}; S.monthSubs['202
 
   // ----- 사장님 화면 -----
   S.tasks = []; S.trep['2026-11'] = new Map();   // 점수표 확인은 출퇴근만으로
+  // 달마다 켜기 (v29): 처음엔 꺼져 있어서 선발 화면·직원 점수가 없음
   S.mode = 'owner'; S.unlocked = true; S.tab = 'award'; render(true);
-  assert.ok(view.innerHTML.includes('이달의 우수직원') && view.innerHTML.includes('추천: <b>성실</b>'), '추천 표시');
+  assert.ok(view.innerHTML.includes('이 달은 우수직원 선발을 하지 않아요') && view.innerHTML.includes('data-act="awMonthToggle"') && !view.innerHTML.includes('추천:') && !view.innerHTML.includes('awDecide'), '꺼진 달: 켜기 버튼만');
+  S.mode = 'phone'; S.phone.staffId = 'a'; resetKiosk(); render(true);
+  assert.ok(!view.innerHTML.includes('이번 달 달성률') && !view.innerHTML.includes('이번 달 점수'), '꺼진 달: 직원 휴대폰에 점수 없음');
+  S.mode = 'kiosk'; Object.assign(S.kiosk, { staffId:'a', step:'action' }); render(true);
+  assert.ok(!view.innerHTML.includes('⭐ 이번 달 점수'), '꺼진 달: 태블릿 요약에 점수 없음');
+  resetKiosk(); S.mode = 'owner'; render(true);
+  await ACT.awMonthToggle();
+  assert.strictEqual(docs['config/main'].award.months['2026-11'], true, '이 달 진행하기 → 저장');
+  S.config = docs['config/main'];
+  render(true);
+  assert.ok(view.innerHTML.includes('이달의 우수직원') && view.innerHTML.includes('추천: <b>성실</b>') && view.innerHTML.includes('이 달은 안 하기'), '추천 표시');
   assert.ok(view.innerHTML.includes('100%') && view.innerHTML.includes('근무 적음'), '점수표');
   // 지난달 축하 공고가 있으면 확정할 때 내림
   docs['awards/2026-10'] = { staffId:'b', name:'가끔늦음', rate:0.9, points:300, amount:30000, noticeId:'aw202610', decidedAt:1 }; apply('awards/2026-10');

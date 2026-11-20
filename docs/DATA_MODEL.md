@@ -98,7 +98,7 @@
 | `biz` | 사업주 정보 `{name, ceo, addr, phone}` | 빈 값 |
 | `contract` | 계약서 `{on, autoOwnerSign, payDay, payMethod, special}` | 꺼짐 |
 | `tax` | 세무사 전달 `{email, auto}` | 빈 값 / 꺼짐 |
-| `award` | 이달의 우수직원 기본 포상금 `{amount}` (확정할 때 그달 금액을 바꿀 수 있음, v24) | 50,000 |
+| `award` | 이달의 우수직원 `{amount, months}` — 기본 포상금(확정할 때 그달 금액을 바꿀 수 있음, v24), `months`: 선발을 진행하는 달 `{ 'YYYY-MM': true }` (v29, 없으면 그달은 안 함. 확정한 달은 늘 진행) | 50,000 / 없음 |
 | `ot` | 추가근무 승인제 `{on, since}` — 켜면 `since`(켠 날)부터 승인한 추가근무만 급여에 (v27) | 꺼짐 |
 | `slack` | 슬랙 알림 `{on, ev:{notyet, in, out, report, due, ot}}` (슬랙 주소는 서버 secret에만 있음, ev가 없으면 모두 켜짐) | 꺼짐 |
 | `geo` | 위치 확인 `{on, lat, lng, acc, radius, setAt}` — 가게 좌표와 '가게 밖' 기준 거리(m) (v12) | 꺼짐 / 200m |
