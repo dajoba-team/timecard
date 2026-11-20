@@ -480,6 +480,8 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .thx .btn{justify-self:start}
 .teamgoal{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--amber-soft);font-size:14px;text-align:left}
 .teamgoal.ok{background:var(--green-soft)}
+.teamnow{padding:8px 10px;border-radius:10px;background:var(--amber-soft);font-size:14px;margin-bottom:8px}
+.teamnow.ok{background:var(--green-soft)}.teamnow.ended{background:var(--soft)}
 .gnews{margin:6px 0;padding:8px 10px;border-radius:10px;background:var(--amber-soft);font-weight:700}
 .evrow{border-top:1px solid var(--line);padding:8px 0;display:grid;gap:2px}
 .evrow:first-of-type{border-top:0}
@@ -3454,14 +3456,14 @@ const levelBar = lv => `<div class="lvbar" role="progressbar" aria-valuemin="0" 
 // ----- 업무태도 가중치 (v35 정리) -----
 // 직원·달마다 '한 가지 방법'으로만 정해요 (두 가지가 섞이지 않게):
 //   ⭐ 별점 (기본): 위생·청결 / 친절 / 팀워크 / 책임감을 별 1~5개 → 평균으로 자동
-//        ★3 이하 ×1.0 · ★3.5 ×1.08 · ★4 ×1.15 · ★4.5 ×1.23 · ★5 ×1.3
+//        ★1 ×0.7 · ★2 ×0.85 · ★3 ×1.0 · ★4 ×1.15 · ★5 ×1.3 (v37부터 별이 3개보다 적으면 깎여요)
 //   ✋ 직접: 사장님이 ×1.0 / ×1.1 / ×1.2 / ×1.3 중에서 바로 고름 (별점은 남아 있지만 반영 안 됨)
-// 최종 점수 = 달성률 × 100 × 가중치. 감점 없음, 직원 화면에는 안 보임.
+// 최종 점수 = 달성률 × 100 × 가중치. 기본 점수에는 감점이 없고, 가중치로만 오르내림. 직원 화면에는 안 보임.
 // 저장: config.award.att[ym][직원] = { mode:'stars'|'manual', h, k, t, r, w }
 //   (v30 숫자 1.1 → '직접 ×1.1'로, v32 별점만 있던 것 → '별점'으로 그대로 읽음)
-const ATT_LEVELS = [1, 1.1, 1.2, 1.3];
+const ATT_LEVELS = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 const ATT_CATS = [['h', '🧼', '위생·청결'], ['k', '😊', '친절'], ['t', '🤝', '팀워크'], ['r', '💪', '책임감']];
-const starW = avg => Math.round((1 + Math.max(0, avg - 3) * 0.15) * 100) / 100;
+const starW = avg => Math.round(Math.min(1.3, Math.max(0.7, 1 + (avg - 3) * 0.15)) * 100) / 100;   // ★3 = ×1.0 기준으로 별 하나에 ±0.15
 function attInfo(sid, ym){
   const v = cfg().award.att?.[ym]?.[sid];
   const o = typeof v === 'number' ? { mode:'manual', w:v } : v && typeof v === 'object' ? v : {};
@@ -3527,14 +3529,26 @@ function awardView(){
       <p class="hint" style="margin:6px 0 0">켜 둔 달만 월말에 우수직원을 뽑아요 (점수 + 사장님 판단). 직원 화면의 내 점수·레벨·연속 출근은 선발과 상관없이 늘 보여요 (본인 것만, 순위는 안 보임).</p></section>`;
   const pastPanel = pastAwards.length ? `<section class="panel"><h3>지난 우수직원</h3><div class="slist">${pastAwards.map(([k, a]) => `<div class="sitem"><div><b>${fmtYM(k)}</b> · ${esc(a.name || '')} 🏆<div class="sub">달성률 ${pct(a.rate)} · ${won(a.amount)}${a.paidAt ? ' · 지급 완료' : ' · <span style="color:var(--amber)">지급 전</span>'}</div></div></div>`).join('')}</div></section>` : '';
   // ----- 동기부여 (v32): 팀 목표 · 동료 고마워요 · 배지 · 업무태도 평가 -----
-  const tg = cfg().team, tgNow = teamGoal(ym);
-  const teamPanel = `<section class="panel"><h3>🤝 팀 목표 <small>가게 전체 정시 출근률 · 태블릿·직원 휴대폰에 보여요</small></h3>
-      <div class="form"><label class="check full"><input type="checkbox" id="tmOn" ${tg.on ? 'checked' : ''}> 이번 달 팀 목표 보여 주기</label>
-        <label>목표 정시 출근률<select id="tmTarget">${[80, 85, 90, 95, 100].map(v => `<option value="${v}" ${+tg.target === v ? 'selected' : ''}>${v}%</option>`).join('')}</select></label>
-        <label class="full">달성하면 (보상, 선택)<input id="tmReward" maxlength="30" value="${esc(tg.reward)}" placeholder="예) 회식 🍖 / 아이스크림 🍦"></label></div>
-      <div class="row" style="margin-top:8px"><button class="btn sm pri" data-act="tmSave">저장</button></div>
-      ${tgNow ? `<p class="small" style="margin:8px 0 0">${fmtYM(ym)} 지금 <b>${tgNow.rate == null ? '-' : pct(tgNow.rate)}</b> / 목표 ${tgNow.target}% ${tgNow.ok ? '🎉 달성 중' : ''}</p>` : ''}
-      <p class="hint">경쟁보다 함께 노력하는 분위기를 만들어요. 매달 1일에 새로 계산해요.</p></section>`;
+  // 🤝 팀 목표 (v37): 종류(정시 출근률 자동 / 직접 정하기)·기간(이번 달 / 이번 주 / 직접 기간)·보상을 그때그때
+  const tg = cfg().team, tgNow = teamGoal(), D = S.tmDraft || (S.tmDraft = { kind: tg.kind === 'custom' ? 'custom' : 'ontime', period: ['week', 'range'].includes(tg.period) ? tg.period : 'month' });
+  const segBtn = (act, v, label, on) => `<button type="button" data-act="${act}" data-v="${v}" class="${on ? 'on' : ''}" aria-pressed="${on}">${label}</button>`;
+  const tgStatus = tgNow ? (tgNow.kind === 'custom' ? `<b>${esc(tgNow.title)}</b> · 지금 <b>${tgNow.cur}/${tgNow.goal}${esc(tgNow.unit)}</b>` : `정시 출근 지금 <b>${tgNow.rate == null ? '-' : pct(tgNow.rate)}</b> / 목표 ${tgNow.target}%`) + ` · ${tgNow.rg.ko}${tgNow.ok ? ' 🎉 달성' : ''}` : '';
+  const teamPanel = `<section class="panel"><h3>🤝 팀 목표 <small>그때그때 바꿀 수 있어요 · 태블릿·직원 휴대폰에 보여요</small></h3>
+      ${tgNow ? `<div class="teamnow ${tgNow.ok ? 'ok' : ''} ${tgNow.ended ? 'ended' : ''}">${tgNow.ended ? `⏰ 기간이 끝났어요 (${tgNow.rg.ko}) — ${tgNow.ok ? '🎉 달성했어요!' : '아쉽게 못 했어요'} · 직원 화면에서는 내려갔어요. 아래에서 새 목표를 정해 주세요.<br>` : '지금 목표: '}${tgStatus}
+        ${tgNow.kind === 'custom' && !tgNow.ended ? `<div class="row" style="margin-top:6px;gap:6px"><button class="btn sm pri" data-act="tmAdd" data-v="1">+1 올리기</button><button class="btn sm" data-act="tmAdd" data-v="-1">−1</button></div>` : ''}</div>` : ''}
+      <div class="form">
+        <label class="check full"><input type="checkbox" id="tmOn" ${tg.on ? 'checked' : ''}> 팀 목표 보여 주기</label>
+        <div class="full"><div class="small muted" style="margin-bottom:4px">목표 종류</div><span class="attmode">${segBtn('tmKind', 'ontime', '⏰ 정시 출근률 (자동 계산)', D.kind === 'ontime')}${segBtn('tmKind', 'custom', '✏️ 직접 정하기', D.kind === 'custom')}</span></div>
+        ${D.kind === 'ontime' ? `<label>목표 정시 출근률<select id="tmTarget">${[80, 85, 90, 95, 100].map(v => `<option value="${v}" ${+tg.target === v ? 'selected' : ''}>${v}%</option>`).join('')}</select></label>`
+          : `<label class="full">목표 이름<input id="tmTitle" maxlength="40" value="${esc(D.title ?? (tg.kind === 'custom' ? tg.title || '' : ''))}" placeholder="예) 손님 리뷰 별 5개 받기 / 위생 점검 통과 / 하루 매출 OO 달성"></label>
+            <label>목표 수<input id="tmGoal" type="number" min="1" value="${esc(D.goal ?? (tg.kind === 'custom' ? tg.goal || 10 : 10))}"></label>
+            <label>단위<input id="tmUnit" maxlength="6" value="${esc(D.unit ?? (tg.kind === 'custom' ? tg.unit || '개' : '개'))}" placeholder="개 / 건 / 번"></label>
+            <label>지금까지<input id="tmCur" type="number" min="0" value="${esc(D.current ?? (tg.kind === 'custom' ? tg.current || 0 : 0))}"></label>`}
+        <div class="full"><div class="small muted" style="margin-bottom:4px">기간</div><span class="attmode">${segBtn('tmPeriod', 'month', '이번 달', D.period === 'month')}${segBtn('tmPeriod', 'week', '이번 주 (월~일)', D.period === 'week')}${segBtn('tmPeriod', 'range', '기간 직접', D.period === 'range')}</span></div>
+        ${D.period === 'range' ? `<label>시작<input id="tmFrom" type="date" value="${esc(D.from ?? (tg.from || todayStr()))}"></label><label>끝<input id="tmTo" type="date" value="${esc(D.to ?? (tg.to || addDays(todayStr(), 6)))}"></label>` : ''}
+        <label class="full">달성하면 (보상, 선택)<input id="tmReward" maxlength="30" value="${esc(D.reward ?? tg.reward)}" placeholder="예) 회식 🍖 / 아이스크림 🍦"></label></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm pri" data-act="tmSave">팀 목표 저장</button></div>
+      <p class="hint">정시 출근률은 기간 안의 출퇴근 기록으로 자동 계산, 직접 정한 목표는 [+1 올리기]로 사장님이 채워요. 목표 이름·보상은 베트남어로 자동 번역돼요. 경쟁보다 함께 노력하는 분위기를 만들어요.</p></section>`;
   const thx = [...S.thanks.values()].filter(x => (x.date || '').startsWith(ym)).sort((a, b) => b.at - a.at);
   const thxCount = Object.entries(thx.reduce((m, x) => ((m[x.to] = (m[x.to] || 0) + 1), m), {})).sort((a, b) => b[1] - a[1]);
   const thanksPanel = `<section class="panel"><h3>🙏 직원끼리 고마워요 <small>${thx.length}개 · 점수에는 안 들어가요 (사장님 참고용)</small></h3>
@@ -3550,24 +3564,24 @@ function awardView(){
       <div class="bguide">${BADGES.map(b => { const n = activeStaff().filter(s => S.badges.get(s.id)?.got?.[b.id]).length; return `<div class="bgrow"><span class="bgi">${b.icon}</span><div><b>${esc(b.ko)}</b><div class="small muted">${esc(BADGE_WHEN[b.id] || '')}</div></div><span class="small ${n ? '' : 'muted'}" style="white-space:nowrap">${n}명</span></div>`; }).join('')}</div>
       <p class="hint">기록은 출퇴근 평가 시작일(${cfg().evalStart ? fmtMD(cfg().evalStart) : '처음'})부터 세요. 직원이 태블릿·휴대폰을 열 때 자동으로 확인해서 주고, 한 번 받은 배지는 없어지지 않아요.</p></section>`;
   const lockAtt = !!aw || future;
-  const evalPanel = `<section class="panel"><h3>📝 업무태도 가중치 <small>사장님만 · 감점 없음 · 직원에게 안 보여요</small></h3>
+  const evalPanel = `<section class="panel"><h3>📝 업무태도 가중치 <small>사장님만 · 직원에게 안 보여요 · 별 3개(보통) = ×1.0</small></h3>
       <div class="attguide small">
         <div>직원마다 <b>한 가지 방법</b>으로 가중치를 정해요.</div>
-        <div><b>⭐ 별점</b> — 4가지 평균으로 자동: ★3 이하 ×1.0 · ★4 ×1.15 · ★5 ×1.3</div>
-        <div><b>✋ 직접</b> — ×1.0 / ×1.1 / ×1.2 / ×1.3 바로 고르기 (이때 별점은 반영 안 돼요)</div>
+        <div><b>⭐ 별점</b> — 4가지 평균으로 자동: ★1 ×0.7 · ★2 ×0.85 · <b>★3 ×1.0</b> · ★4 ×1.15 · ★5 ×1.3</div>
+        <div><b>✋ 직접</b> — ×0.8 / ×0.9 / ×1.0 / ×1.1 / ×1.2 / ×1.3 바로 고르기 (이때 별점은 반영 안 돼요)</div>
         <div class="muted">최종 점수 = 달성률 × 100 × 가중치</div>
       </div>
       ${lockAtt ? `<p class="small" style="color:var(--amber);margin:6px 0 0">${aw ? '확정한 달이라 바꿀 수 없어요 (확정을 취소하면 다시 바꿀 수 있어요).' : '아직 오지 않은 달이에요.'}</p>` : ''}
       ${list.length ? list.map(o => { const i = attInfo(o.st.id, ym), sid = esc(o.st.id), man = i.mode === 'manual', dis = lockAtt ? 'disabled' : '';
         return `<div class="evrow">
-          <div class="row" style="gap:6px;align-items:center"><b>${esc(o.st.name)}</b><span class="chip ${i.w > 1 ? 'ok' : 'faint'}">가중치 ×${i.w}</span><span class="spacer"></span>
+          <div class="row" style="gap:6px;align-items:center"><b>${esc(o.st.name)}</b><span class="chip ${i.w > 1 ? 'ok' : i.w < 1 ? 'red' : 'faint'}">가중치 ×${i.w}</span><span class="spacer"></span>
             <span class="attmode" role="group" aria-label="${esc(o.st.name)} 가중치 정하는 방법"><button type="button" data-act="attMode" data-sid="${sid}" data-v="stars" class="${man ? '' : 'on'}" aria-pressed="${!man}" ${dis}>⭐ 별점</button><button type="button" data-act="attMode" data-sid="${sid}" data-v="manual" class="${man ? 'on' : ''}" aria-pressed="${man}" ${dis}>✋ 직접</button></span></div>
           ${man ? `<div class="attw" role="group" aria-label="${esc(o.st.name)} 가중치 직접 고르기">${ATT_LEVELS.map(v => `<button type="button" data-act="attW" data-sid="${sid}" data-v="${v}" class="${i.manualW === v ? 'on' : ''}" aria-pressed="${i.manualW === v}" ${dis}>×${v.toFixed(1)}</button>`).join('')}</div>` : ''}
           <div class="evstars ${man ? 'off' : ''}">${ATT_CATS.map(([c, ic, l]) => `<div class="evcat"><span>${ic} ${l}</span><span class="stars">${[1, 2, 3, 4, 5].map(v => `<button type="button" data-act="attStar" data-sid="${sid}" data-c="${c}" data-v="${v}" class="${v <= i.stars[c] ? 'on' : ''}" aria-label="${esc(o.st.name)} ${l} 별 ${v}개" ${lockAtt || man ? 'disabled' : ''}>★</button>`).join('')}</span></div>`).join('')}</div>
           <div class="small muted">${man ? `✋ 직접 정한 ×${i.manualW}를 써요 · 별점(★${i.avg.toFixed(1)} → ×${i.starW})은 반영 안 됨` : `⭐ 별점 평균 ★${i.avg.toFixed(1)} → ×${i.starW}`}</div>
         </div>`; }).join('') : '<p class="muted small">이달 근무한 직원이 없어요.</p>'}
       <p class="hint">달마다 새로 정해요. 처음엔 모두 ⭐ 별점 ★3(보통) = ×1.0이에요.</p></section>`;
-  const criteriaPanel = `<section class="panel"><h3>점수 기준 <small>감점 없음</small></h3>
+  const criteriaPanel = `<section class="panel"><h3>점수 기준 <small>기본 점수는 감점 없음 (업무태도 가중치로만 오르내림)</small></h3>
         <dl class="kv small">
           <dt>정시 출근</dt><dd>+${SCORE.onTime} (근무날마다)</dd><dt>근무 완료</dt><dd>+${SCORE.done} (퇴근까지 기록)</dd>
           <dt>업무 보고</dt><dd>마감 전 +${SCORE.taskOnTime} · 늦게 +${SCORE.taskLate} · 사장님 확인 +${SCORE.taskOk}</dd><dt>공지 읽음</dt><dd>+${SCORE.read}</dd>
@@ -3587,7 +3601,8 @@ function awardView(){
     <div class="stack">${toggle}${card}
       <section class="panel"><h3>직원별 점수·순위 <small>사장님만 보여요 · 최종 점수 순 (직원끼리는 서로의 점수·순위를 몰라요)</small></h3>
         ${list.length ? `<div class="tscroll"><table class="t awt"><thead><tr><th>직원</th><th class="r">최종 점수</th><th>업무태도</th><th class="r">달성률</th><th class="r">기본 점수</th><th class="r">보너스</th><th class="r">총점</th><th>출근</th><th>업무 보고</th><th>공지</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">이달 근무한 직원이 없어요.</p>'}
-        <p class="hint"><b>최종 점수 = 달성률 × 100 × 업무태도</b>. 달성률 = 받은 기본 점수 ÷ 받을 수 있었던 기본 점수 (근무일 수가 달라도 공정하게 비교돼요). <b>업무태도</b>는 점수 항목에 없는 태도·성실함·팀워크를 사장님이 오른쪽 '업무태도 평가'에서 별로 매겨요 (×1.0 ~ ×1.3, 감점 없음). 직원 화면에는 업무태도와 순위가 보이지 않아요. 보너스는 총점에만 더해지고, 최종 점수가 같으면 총점이 높은 직원을 추천해요.</p>
+        <p class="hint" style="background:var(--soft);border-radius:8px;padding:6px 8px">📌 <b>기본 점수는 근무 '시간'이 아니라 근무 '날'마다 쌓여요.</b> 근무날 하루에 정시 출근 +${SCORE.onTime}, 퇴근까지 기록 +${SCORE.done}, 그날 사진 보고(제때 +${SCORE.taskOnTime}·늦게 +${SCORE.taskLate}, 확인 +${SCORE.taskOk}), 공지 읽음 +${SCORE.read}. 그래서 하루 4시간 일하든 11시간 일하든 하루 점수는 같고, <b>근무날이 많을수록·지각이 없을수록·보고를 제때 할수록</b> 높아요. 오늘 아직 퇴근 전인 직원은 퇴근 +${SCORE.done}이 아직 안 들어가 있어요. '기본 점수' 칸은 받은 점수 / 받을 수 있던 점수예요.</p>
+        <p class="hint"><b>최종 점수 = 달성률 × 100 × 업무태도</b>. 달성률 = 받은 기본 점수 ÷ 받을 수 있었던 기본 점수 (근무일 수가 달라도 공정하게 비교돼요). <b>업무태도</b>는 점수 항목에 없는 태도·성실함·팀워크를 사장님이 오른쪽 '업무태도 가중치'에서 정해요 (별점 ★3 = ×1.0, 높으면 최대 ×1.3, 낮으면 최소 ×0.7). 직원 화면에는 업무태도와 순위가 보이지 않아요. 보너스는 총점에만 더해지고, 최종 점수가 같으면 총점이 높은 직원을 추천해요.</p>
       </section>
       ${teamPanel}${thanksPanel}
     </div>
@@ -3672,6 +3687,11 @@ const AWACT = {
 document.addEventListener('change', e => { if (['awStaff', 'awAmount', 'awNote', 'awNotice', 'awShowAmt'].includes(e.target.id)) readAwForm(); });
 // 동기부여 탭 동작 (v32): 업무태도 별점, 팀 목표 저장
 async function putConfig(next){ S.config = next; await write(() => S.db.doc('config/main').set(next)); }
+function readTm(){   // 팀 목표 입력칸 → S.tmDraft (화면에 있는 칸만)
+  const D = S.tmDraft || (S.tmDraft = { kind:'ontime', period:'month' }), v = id => $('#' + id) ? $('#' + id).value : undefined;
+  if ($('#tmOn')) D.on = !!$('#tmOn').checked;
+  for (const [id, k] of [['tmTarget', 'target'], ['tmTitle', 'title'], ['tmGoal', 'goal'], ['tmUnit', 'unit'], ['tmCur', 'current'], ['tmFrom', 'from'], ['tmTo', 'to'], ['tmReward', 'reward']]){ const x = v(id); if (x !== undefined) D[k] = x; }
+}
 async function setAtt(sid, patch){   // 업무태도: 지금 값(방법·별점·직접 가중치)을 모두 남기고 바뀐 것만
   const ym = S.month;
   if (S.awards[ym]) return;   // 확정한 달은 바꾸지 않음
@@ -3685,11 +3705,37 @@ Object.assign(AWACT, {
   async attStar(d){ await setAtt(d.sid, { mode:'stars', [d.c]: Math.min(5, Math.max(1, +d.v || 3)) }); },
   async attMode(d){ await setAtt(d.sid, { mode: d.v === 'manual' ? 'manual' : 'stars' }); },
   async attW(d){ await setAtt(d.sid, { mode:'manual', w: ATT_LEVELS.includes(+d.v) ? +d.v : 1 }); },
+  // 팀 목표 (v37): 종류·기간 버튼은 입력 중인 값을 지키면서 다시 그림
+  tmKind(d){ readTm(); S.tmDraft.kind = d.v === 'custom' ? 'custom' : 'ontime'; render(true); },
+  tmPeriod(d){ readTm(); S.tmDraft.period = ['week', 'range'].includes(d.v) ? d.v : 'month'; render(true); },
   async tmSave(){
-    const on = !!$('#tmOn')?.checked, target = +($('#tmTarget')?.value || 90), reward = ($('#tmReward')?.value || '').trim().slice(0, 30);
-    const rewardVi = reward && reward !== cfg().team.reward ? (await tryTranslate([reward], 'vi'))?.[0] || reward : (reward ? cfg().team.rewardVi || reward : '');
-    await putConfig({ ...S.config, team:{ on, target, reward, rewardVi } });
-    toast(on ? `팀 목표 ${target}%를 보여 줘요` : '팀 목표를 숨겼어요', on && reward ? `달성하면 ${reward}` : '', 'ok'); render(true);
+    readTm();
+    const D = S.tmDraft, old = cfg().team, on = !!D.on, kind = D.kind, period = D.period;
+    const reward = (D.reward || '').trim().slice(0, 30);
+    const team = { on, kind, period, target: Math.min(100, Math.max(50, +D.target || +old.target || 90)), reward, setAt:Date.now() };
+    if (kind === 'custom'){
+      team.title = (D.title || '').trim().slice(0, 40); team.goal = Math.max(1, Math.round(+D.goal || 0)); team.unit = (D.unit || '').trim().slice(0, 6); team.current = Math.max(0, Math.round(+D.current || 0));
+      if (on && (!team.title || !(+D.goal >= 1))){ toast('목표 이름과 목표 수를 넣어 주세요', '', 'warn'); return; }
+    }
+    if (period === 'range'){
+      team.from = D.from || todayStr(); team.to = D.to || team.from;
+      if (team.to < team.from){ toast('끝 날짜가 시작보다 빨라요', '', 'warn'); return; }
+    }
+    // 목표 이름·보상은 바뀌었을 때만 베트남어로 다시 번역
+    const need = [kind === 'custom' && team.title && team.title !== old.title ? team.title : null, reward && reward !== old.reward ? reward : null];
+    const tr = need.some(Boolean) ? await tryTranslate(need.map(x => x || ''), 'vi') : null;
+    team.titleVi = kind === 'custom' ? (need[0] ? tr?.[0] || team.title : old.titleVi || team.title) : '';
+    team.rewardVi = reward ? (need[1] ? tr?.[1] || reward : old.rewardVi || reward) : '';
+    await putConfig({ ...S.config, team });
+    S.tmDraft = null;
+    toast(on ? '팀 목표를 저장했어요' : '팀 목표를 숨겼어요', on ? (kind === 'custom' ? `${team.title} ${team.goal}${team.unit}` : `정시 출근 ${team.target}%`) + ` · ${teamRange(team).ko}` : '', 'ok'); render(true);
+  },
+  async tmAdd(d){   // 직접 정한 목표: 지금까지 +1 / −1
+    const t = cfg().team; if (t.kind !== 'custom') return;
+    const current = Math.max(0, Math.round(+t.current || 0) + (+d.v || 0));
+    await putConfig({ ...S.config, team:{ ...t, current } });
+    if (current >= (+t.goal || 1) && (+t.current || 0) < (+t.goal || 1)) toast('🎉 팀 목표 달성!', `${t.title} ${current}/${t.goal}${t.unit || ''}`, 'ok');
+    render(true);
   },
 });
 document.addEventListener('input', e => { if (['awAmount', 'awNote'].includes(e.target.id)) readAwForm(); });
@@ -3809,22 +3855,49 @@ function missionLine(st){
     : m.fail ? BI('🎯 이번 주 미션은 아쉽게 놓쳤어요 — 다음 주에 다시 도전! 💪', '🎯 Tuần này lỡ nhiệm vụ rồi — tuần sau thử lại nhé! 💪')
     : BI(`🎯 이번 주 미션: 정해진 날 모두 정시 출근 · <b>${m.ok}/${m.total}일</b>`, `🎯 Nhiệm vụ tuần: đúng giờ tất cả các ngày · <b>${m.ok}/${m.total} ngày</b>`)} ${dots}</div>`;
 }
-// 🤝 팀 목표: 이번 달 가게 전체 정시 출근률 (출근했거나 결근으로 끝난 근무날 중 정시 출근)
-function teamGoal(ym = ymOf(todayStr())){
+// 🤝 팀 목표 (v37: 그때그때 정하기) — config.team
+//   { on, kind:'ontime'(정시 출근률 자동) | 'custom'(직접 정한 목표), target(정시 출근률 %), title·titleVi·goal(목표 수)·unit·current(지금까지, 사장님이 올림),
+//     period:'month' | 'week' | 'range', from, to, reward, rewardVi, setAt }
+//   기간이 끝나면 직원 화면에서는 내려가고, 사장님 화면에 결과와 '새 목표 정하기' 안내
+function teamRange(t = cfg().team){
+  const today = todayStr();
+  if (t.period === 'week'){ const mon = addDays(today, -((parseDate(today).getDay() + 6) % 7)); return { from:mon, to:addDays(mon, 6), ko:'이번 주', vi:'Tuần này' }; }
+  if (t.period === 'range' && t.from && t.to) return { from:t.from, to:t.to, ko:`${fmtMD(t.from)}~${fmtMD(t.to)}`, vi:`${dmVi(t.from)}–${dmVi(t.to)}` };
+  const ym = ymOf(today);
+  return { from:`${ym}-01`, to:`${ym}-${pad(daysIn(ym))}`, ko:'이번 달', vi:'Tháng này' };
+}
+// 기간 안에서 가게 전체 정시 출근률 (출근했거나 결근으로 끝난 근무날 중 정시 출근, 평가 시작일부터, 불러온 달만)
+function teamOntime(from, to){
+  const today = todayStr();
+  let on = 0, all = 0;
+  for (const st of activeStaff()) for (let ds = from; ds <= to && ds <= today; ds = addDays(ds, 1)){
+    if (!evalOn(ds) || !S.monthLoaded[ymOf(ds)]) continue;
+    const r = dayCalc(st, ds);
+    if (!r.sc || r.status === 'leave') continue;
+    if (r.p?.in){ all++; if (!r.late) on++; } else if (r.status === 'absent') all++;
+  }
+  return all ? on / all : null;
+}
+function teamGoal(){
   const t = cfg().team;
   if (!t.on) return null;
-  let on = 0, all = 0;
-  for (const st of staffForMonth(ym)){ const o = scoreMonth(st, ym); on += o.att.ontime; all += o.att.ontime + o.att.late + o.att.absent; }
-  const target = Math.min(100, Math.max(50, +t.target || 90)), rate = all ? on / all : null;
-  return { target, reward:t.reward || '', rewardVi:t.rewardVi || '', rate, ok: rate != null && rate * 100 >= target };
+  const rg = teamRange(t), ended = todayStr() > rg.to, base = { rg, ended, reward:t.reward || '', rewardVi:t.rewardVi || '' };
+  if (t.kind === 'custom'){
+    const goal = Math.max(1, Math.round(+t.goal || 1)), cur = Math.max(0, Math.round(+t.current || 0));
+    return { ...base, kind:'custom', title:t.title || '팀 목표', titleVi:t.titleVi || t.title || '', unit:t.unit || '', goal, cur, p: Math.min(1, cur / goal), ok: cur >= goal };
+  }
+  const target = Math.min(100, Math.max(50, +t.target || 90)), rate = teamOntime(rg.from, rg.to);
+  return { ...base, kind:'ontime', target, rate, p: rate == null ? 0 : Math.min(1, rate * 100 / target), ok: rate != null && rate * 100 >= target };
 }
 function teamBanner(){
   const g = teamGoal();
-  if (!g) return '';
-  const now = g.rate == null ? '-' : pct(g.rate), w = g.rate == null ? 0 : Math.min(100, Math.round(g.rate * 100 / g.target * 100));
+  if (!g || g.ended) return '';
   const rw = g.reward ? BI(` · 달성하면 <b>${esc(g.reward)}</b>`, ` · Đạt được sẽ có <b>${esc(g.rewardVi || g.reward)}</b>`) : '';
-  return `<div class="teamgoal ${g.ok ? 'ok' : ''}">${BI(`🤝 이번 달 팀 목표: 가게 전체 정시 출근 <b>${g.target}%</b> · 지금 <b>${now}</b>${g.ok ? ' 🎉 달성 중!' : ''}`, `🤝 Mục tiêu cả quán tháng này: đúng giờ <b>${g.target}%</b> · hiện tại <b>${now}</b>${g.ok ? ' 🎉 Đang đạt!' : ''}`)}${rw}
-    <div class="lvbar"><i style="width:${w}%"></i></div></div>`;
+  const okKo = g.ok ? ' 🎉 달성!' : '', okVi = g.ok ? ' 🎉 Đã đạt!' : '';
+  const text = g.kind === 'custom'
+    ? BI(`🤝 ${g.rg.ko} 팀 목표: <b>${esc(g.title)}</b> · <b>${g.cur}/${g.goal}${esc(g.unit)}</b>${okKo}`, `🤝 Mục tiêu cả quán (${g.rg.vi}): <b>${esc(g.titleVi)}</b> · <b>${g.cur}/${g.goal}</b>${okVi}`)
+    : BI(`🤝 ${g.rg.ko} 팀 목표: 가게 전체 정시 출근 <b>${g.target}%</b> · 지금 <b>${g.rate == null ? '-' : pct(g.rate)}</b>${okKo}`, `🤝 Mục tiêu cả quán (${g.rg.vi}): đúng giờ <b>${g.target}%</b> · hiện tại <b>${g.rate == null ? '-' : pct(g.rate)}</b>${okVi}`);
+  return `<div class="teamgoal ${g.ok ? 'ok' : ''}">${text}${rw}<div class="lvbar"><i style="width:${Math.round(g.p * 100)}%"></i></div></div>`;
 }
 // 🙏 동료 고마워요 (점수에는 안 들어가고 사장님 참고용, 하루 한 번)
 const thanksTodayFrom = sid => S.thanks.get(`${todayStr()}_${sid}`);

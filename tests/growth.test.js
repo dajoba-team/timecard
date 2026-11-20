@@ -88,12 +88,30 @@ const [A, B] = S.staff;
 
   // ----- 5. 팀 목표 -----
   S.config.team = { on:true, target:90, reward:'회식 🍖', rewardVi:'Liên hoan 🍖' };
-  const tg = teamGoal('2026-11');
-  assert.ok(tg.rate > 0.7 && tg.rate < 0.8 && !tg.ok, '가게 전체 정시 출근률 (성실 100%, 가나다 절반)');
+  const tg = teamGoal();
+  assert.ok(tg.kind === 'ontime' && tg.rate > 0.7 && tg.rate < 0.8 && !tg.ok, '가게 전체 정시 출근률 (성실 100%, 가나다 절반) — 예전 설정은 이번 달·정시 출근률로');
   S.mode = 'kiosk'; resetKiosk(); render(true);
   assert.ok(view.innerHTML.includes('이번 달 팀 목표') && view.innerHTML.includes('회식 🍖'), '태블릿 첫 화면 팀 목표');
   S.lang = 'vi'; render(true); assert.ok(view.innerHTML.includes('Liên hoan 🍖'), '보상 베트남어'); S.lang = 'ko';
-  S.config.team.target = 70; assert.ok(teamGoal('2026-11').ok, '목표 넘으면 달성');
+  S.config.team.target = 70; assert.ok(teamGoal().ok, '목표 넘으면 달성');
+  // v37: 이번 주 정시 출근률 (11/16~22): 가나다 홀수 날 지각
+  S.config.team = { on:true, kind:'ontime', target:90, period:'week' };
+  const wk = teamGoal(); assert.ok(wk.rg.from === '2026-11-16' && wk.rg.to === '2026-11-22' && wk.rate > 0.6 && wk.rate < 0.9, '이번 주 기간으로 계산');
+  render(true); assert.ok(view.innerHTML.includes('이번 주 팀 목표'), '이번 주 표시');
+  // v37: 직접 정한 목표 (사장님이 +1)
+  S.config.team = { on:true, kind:'custom', title:'손님 리뷰 별 5개', titleVi:'Đánh giá 5 sao', goal:10, unit:'개', current:3, period:'range', from:'2026-11-18', to:'2026-11-30', reward:'아이스크림', rewardVi:'Kem' };
+  const cg = teamGoal(); assert.ok(cg.kind === 'custom' && cg.p === 0.3 && !cg.ok && cg.rg.ko === '11/18~11/30', '직접 목표 진행 3/10');
+  render(true); assert.ok(view.innerHTML.includes('손님 리뷰 별 5개') && view.innerHTML.includes('3/10개'), '첫 화면에 직접 목표');
+  S.lang = 'vi'; render(true); assert.ok(view.innerHTML.includes('Đánh giá 5 sao'), '직접 목표 베트남어'); S.lang = 'ko';
+  S.mode = 'owner'; S.unlocked = true; S.tab = 'award';
+  await ACT.tmAdd({ v:'1' }); assert.strictEqual(S.config.team.current, 4, '+1 올리기');
+  for (let i = 0; i < 6; i++) await ACT.tmAdd({ v:'1' });
+  assert.ok(teamGoal().ok && toasts.some(x => x.includes('팀 목표 달성')), '목표 수에 닿으면 달성');
+  // 기간이 끝나면 직원 화면에선 내려가고 사장님 화면에 안내
+  S.config.team = { ...S.config.team, from:'2026-11-01', to:'2026-11-15' };
+  S.mode = 'kiosk'; resetKiosk(); render(true); assert.ok(!view.innerHTML.includes('팀 목표'), '기간 끝나면 직원 화면에서 내려감');
+  S.mode = 'owner'; S.tmDraft = null; render(true); assert.ok(view.innerHTML.includes('기간이 끝났어요') && view.innerHTML.includes('data-act="tmKind" data-v="custom" class="on"'), '사장님: 기간 끝 안내 + 지금 설정');
+  S.mode = 'kiosk';
   S.config.team.on = false; render(true); assert.ok(!view.innerHTML.includes('팀 목표'), '끄면 안 보임');
 
   // ----- 6. 사장님: 동기부여 탭, 평가 체크리스트 → 가중치 -----
@@ -101,7 +119,11 @@ const [A, B] = S.staff;
   S.config.award.att = { '2026-11': { a:{ h:5, k:5, t:5, r:5 }, b:{ h:4, k:4, t:4, r:4 } } };
   assert.strictEqual(attOf('a', '2026-11'), 1.3); assert.strictEqual(attOf('b', '2026-11'), 1.15);
   S.config.award.att = { '2026-11': { a:{ h:2, k:1, t:3, r:2 }, b:1.2 } };
-  assert.strictEqual(attOf('a', '2026-11'), 1, '별이 적어도 감점 없음'); assert.strictEqual(attOf('b', '2026-11'), 1.2, '예전 숫자 가중치도 읽음');
+  assert.strictEqual(attOf('a', '2026-11'), 0.85, 'v37: 별 평균 2개 → ×0.85 (깎임)'); assert.strictEqual(attOf('b', '2026-11'), 1.2, '예전 숫자 가중치도 읽음');
+  S.config.award.att = { '2026-11': { a:{ h:1, k:1, t:1, r:1 }, b:{ mode:'manual', w:0.8 } } };
+  assert.strictEqual(attOf('a', '2026-11'), 0.7, '별 1개 → 최소 ×0.7'); assert.strictEqual(attOf('b', '2026-11'), 0.8, '직접 ×0.8');
+  S.config.award.att = { '2026-11': { a:{ h:2, k:2, t:3, r:2 } } };
+  assert.strictEqual(attOf('a', '2026-11'), 0.89, '★2.25 → ×0.89');
   S.config.award.att = {};
   S.mode = 'owner'; S.unlocked = true; S.tab = 'award'; S.month = '2026-11'; render(true);
   assert.ok(view.innerHTML.includes('🎮 동기부여') && view.innerHTML.includes('업무태도 평가') && view.innerHTML.includes('직원끼리 고마워요') && view.innerHTML.includes('직원 배지') && view.innerHTML.includes('팀 목표'), '동기부여 탭');
