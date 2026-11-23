@@ -4428,6 +4428,8 @@ function seasonNow(){
   if (xm || mode === 'on') return 'xmas';
   return null;
 }
+// 크리스마스 인사말 (대표님 정함): 12/19까지 "Christmas is Coming Soon!", 12/20부터 "Merry Christmas 메리크리스마스 !" — 언어 버튼과 상관없이 그대로
+const xmasMsg = () => { const d = parseDate(todayStr()); return d.getMonth() === 11 && d.getDate() >= 20 ? 'Merry Christmas 메리크리스마스 !' : 'Christmas is Coming Soon!'; };
 const newYearOf = () => { const d = parseDate(todayStr()); return d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear(); };
 const XTREE = `<svg class="xtree" viewBox="0 0 120 165" aria-hidden="true" focusable="false">
   <polygon points="60,32 92,80 28,80" fill="#2f8f4e"/><polygon points="60,56 102,114 18,114" fill="#2a7d45"/><polygon points="60,86 114,148 6,148" fill="#236b3b"/>
@@ -4455,7 +4457,7 @@ function seasonClock(theme, inner){
   const lights = `<div class="xlights" aria-hidden="true">${Array.from({ length:22 }, (_, i) => `<i style="animation-delay:${((i % 4) * 0.35).toFixed(2)}s"></i>`).join('')}</div>`;
   const msg = theme === 'newyear'
     ? BI(`🎉 Happy New Year ${newYearOf()} · 새해 복 많이 받으세요!`, `🎉 Chúc mừng năm mới ${newYearOf()}!`)
-    : BI('🎄 Merry Christmas · 메리 크리스마스!', '🎄 Giáng sinh an lành · Merry Christmas!');
+    : xmasMsg();
   return `<div class="kclock season ${theme}">${lights}${theme === 'newyear' ? XFIRE : XTREE}${XSNOWMAN}${inner}<div class="xmsg">${msg}</div></div>`;
 }
 // 눈 내림: 화면 전체 위에 한 번만 깔아 두고(다시 그려도 끊기지 않게), 첫 화면이 아니면 치움
