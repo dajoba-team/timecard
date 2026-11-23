@@ -229,7 +229,13 @@ const [A, B] = S.staff;
   ACT.phOpenQR(); render(true);
   assert.ok(S.kiosk.step === 'phonereq' && view.innerHTML.includes('내 휴대폰 연결하기') && view.innerHTML.includes('출퇴근 화면으로 돌아가기') && !view.innerHTML.includes('연결 기한이 지났어요'), '필수 아닐 때 안내 (돌아가기)');
   ACT.phSkip(); assert.strictEqual(S.kiosk.step, 'action', '돌아가기');
-  S.plinks.set('b', { staffId:'b', first:1, last:1 }); render(true); assert.ok(!view.innerHTML.includes('data-act="phOpenQR"'), '연결한 직원에게는 링크 없음'); S.plinks.delete('b');
+  // v41.1: 연결한 직원도 '다시 연결 · 앱 연결 코드' (새 휴대폰·아이폰 홈 화면 앱용), 휴대폰이 다시 연결되면 태블릿이 넘어감
+  S.plinks.set('b', { staffId:'b', first:1, last:1 }); render(true);
+  assert.ok(view.innerHTML.includes('data-act="phOpenQR"') && view.innerHTML.includes('휴대폰 다시 연결'), '연결한 직원은 다시 연결 링크');
+  ACT.phOpenQR(); render(true); assert.ok(S.kiosk.step === 'phonereq' && view.innerHTML.includes('이미 연결된 휴대폰이 있어요'), '다시 연결 안내');
+  S.plinks.set('b', { staffId:'b', first:1, last:Date.now() + 1000 }); render(true);
+  assert.strictEqual(S.kiosk.step, 'action', '휴대폰이 새로 연결되면 태블릿이 넘어감');
+  S.plinks.delete('b');
   // 사장님: 연결 현황
   S.mode = 'owner'; S.tab = 'tasks'; render(true);
   assert.ok(view.innerHTML.includes('휴대폰 연결 현황') && view.innerHTML.includes('✅ <b>성실</b>') && view.innerHTML.includes('⬜ <b>가나다</b>'), '사장님: 누가 연결했는지');

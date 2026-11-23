@@ -76,7 +76,7 @@
       if (r.error) throw new Error("로그인하지 못했어요: " + r.error.message);
       markPhoneDevice(r.data && (r.data.user || (r.data.session && r.data.session.user)));
     }
-    try { localStorage.setItem("tc.phoneStaff", data.staffId); localStorage.setItem("tc.device", "phone"); } catch {}
+    try { localStorage.setItem("tc.phoneStaff", data.staffId); localStorage.setItem("tc.device", "phone"); localStorage.setItem("tc.justJoined", "1"); } catch {}   // justJoined: 앱이 연결 기록을 바로 남겨 태블릿이 알게 (v41.1)
   };
   const goPhone = async () => {   // 그 직원 휴대폰 화면으로 다시 열기
     window.location.replace(window.location.pathname + "#phone");
