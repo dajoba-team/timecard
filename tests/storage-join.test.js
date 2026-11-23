@@ -8,7 +8,8 @@ function setup({ invokeOk, hash = '#join=' + 'A'.repeat(24), seed = {} }){
   const calls = { invoke:[], verify:[], replace:null, reload:0, signOut:[] };
   let created = null;
   const ls = new Map(Object.entries(seed));
-  const mkEl = () => ({ style:{}, innerHTML:'', id:'', querySelector: () => ({ set onclick(f){ calls.btn = f; } }), remove(){} });
+  const els = {}; calls.els = els;   // 화면 안의 칸·버튼 (선택자마다 하나)
+  const mkEl = () => ({ style:{}, innerHTML:'', id:'', querySelector: sel => (els[sel] = els[sel] || { value:'', textContent:'', style:{} }), remove(){} });
   const client = {
     auth: {
       getSession: async () => ({ data:{ session:null } }),
@@ -45,7 +46,7 @@ function setup({ invokeOk, hash = '#join=' + 'A'.repeat(24), seed = {} }){
   window.tcStore.use('db').catch(() => {});
   await new Promise(r => setTimeout(r, 50));
   assert.ok(t.calls.verify.length === 0 && !t.ls.get('tc.phoneStaff') && t.calls.reload === 0, '실패하면 로그인·기억 안 함');
-  assert.ok(t.overlay() && t.overlay().innerHTML.includes('이미 쓴 연결 코드예요') && t.overlay().innerHTML.includes('사장님 계정으로 로그인') && t.overlay().innerHTML.includes('새 QR'), '실패 안내');
+  assert.ok(t.overlay() && t.overlay().innerHTML.includes('이미 쓴 연결 코드예요') && t.overlay().innerHTML.includes('연결 코드') && t.overlay().innerHTML.includes('새 QR'), '실패 안내 (새 QR 또는 연결 코드)');
   console.log('1회용 연결 실패 안내 통과');
 
   // 3. 공용 계정이 끊긴 휴대폰 (사장님이 [모두 끊기] → 로그인 풀림): 남은 것 지우고 다시 연결 안내
@@ -60,7 +61,30 @@ function setup({ invokeOk, hash = '#join=' + 'A'.repeat(24), seed = {} }){
   t = setup({ invokeOk:true, hash:'', seed:{ 'tc.phoneStaff':'s1', 'tc.mode':'owner' } });
   window.tcStore.use('db').catch(() => {});
   await new Promise(r => setTimeout(r, 50));
-  assert.ok(t.ls.has('tc.phoneStaff') && t.ls.has('tc.mode') && !t.calls.signOut.length && t.overlay().innerHTML.includes('사장님 계정으로 로그인해 주세요'), '사장님·태블릿 기기는 그대로, 보통 로그인 화면');
+  assert.ok(t.ls.has('tc.phoneStaff') && t.ls.has('tc.mode') && !t.calls.signOut.length && t.overlay().innerHTML.includes('사장님 로그인'), '사장님·태블릿 기기는 그대로, 보통 로그인 화면');
   console.log('끊긴 휴대폰 자동 정리 통과');
+
+  // 4. 로그인 화면에서 직원 연결 코드 입력 (v41: 앱처럼 설치한 휴대폰을 처음 열었을 때·로그인이 풀렸을 때)
+  t = setup({ invokeOk:true, hash:'' });
+  window.tcStore.use('db').catch(() => {});
+  await new Promise(r => setTimeout(r, 30));
+  assert.ok(t.overlay().innerHTML.includes('st-code-form') && t.overlay().innerHTML.includes('연결 코드 8자리') && t.overlay().innerHTML.includes('사장님 로그인'), '로그인 화면: 직원 연결 코드 + 사장님 로그인');
+  const ev = { preventDefault(){} };
+  t.overlay().querySelector('#st-code').value = '';
+  await t.overlay().querySelector('#st-code-form').onsubmit(ev);
+  assert.ok(t.overlay().querySelector('#st-cmsg').textContent.includes('연결 코드를 넣어 주세요') && !t.calls.invoke.length, '빈 코드는 안 보냄');
+  t.overlay().querySelector('#st-code').value = 'k7q2-m9xp';
+  t.overlay().querySelector('#st-code-form').onsubmit(ev);
+  await new Promise(r => setTimeout(r, 30));
+  assert.deepStrictEqual(t.calls.invoke[0], ['tc-phone-join', { action:'redeem', code:'k7q2-m9xp' }], '넣은 코드를 서버로 (맞추기는 서버가)');
+  assert.ok(t.calls.verify.length === 1 && t.ls.get('tc.phoneStaff') === 's1' && t.calls.replace === '/#phone' && t.calls.reload === 1, '연결되면 그 직원 휴대폰 화면으로');
+  // 틀린 코드: 화면에 이유
+  t = setup({ invokeOk:false, hash:'' });
+  window.tcStore.use('db').catch(() => {});
+  await new Promise(r => setTimeout(r, 30));
+  t.overlay().querySelector('#st-code').value = 'AAAA-BBBB';
+  await t.overlay().querySelector('#st-code-form').onsubmit(ev);
+  assert.ok(t.overlay().querySelector('#st-cmsg').textContent.includes('이미 쓴 연결 코드예요') && !t.calls.reload, '틀린 코드는 이유 표시');
+  console.log('연결 코드 입력 통과');
   process.exit(0);
 })().catch(e => { console.error('Error', e); process.exit(1); });

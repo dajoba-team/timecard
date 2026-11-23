@@ -7,6 +7,10 @@
 <meta name="apple-mobile-web-app-title" content="타임카드">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#F0F2F5">
+<!-- 앱처럼 설치 (v41): 홈 화면 아이콘·이름 -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>가게 타임카드</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="storage.js"></script>
@@ -480,6 +484,10 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .thx .btn{justify-self:start}
 .teamgoal{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--amber-soft);font-size:14px;text-align:left}
 .teamgoal.ok{background:var(--green-soft)}
+.installcard{background:var(--stamp-soft);border:1px solid var(--stamp);border-radius:14px;padding:12px 14px;display:grid;gap:4px;text-align:left}
+.installcard .btn{justify-self:start;margin-top:4px}
+.jcode{display:grid;gap:2px;justify-items:center;margin:2px 0 8px;font-size:13px;color:var(--muted)}
+.jcode b{font-size:30px;letter-spacing:4px;color:var(--ink);background:var(--soft);border-radius:10px;padding:4px 14px}
 .preq{max-width:460px}
 .preqhead{font-size:20px;margin:6px 0}
 .preq .qr{display:grid;place-items:center;margin:10px auto;background:#fff;border-radius:12px;padding:8px;width:fit-content;min-height:60px}
@@ -3185,6 +3193,7 @@ function phoneView(){
   if (S.noDb) return `<div class="empty"><b>기록을 불러올 수 없어요</b>인터넷 연결을 확인하고 새로고침해 주세요.</div>`;
   if (!S.ready.staff || !S.ready.tasks) return loadingNote();
   const me = P.staffId ? staffById(P.staffId) : null;
+  if (P.staffId && !S.staff.length) return `<div class="phone"><div class="empty"><b>${BI('정보를 불러오는 중이에요…', 'Đang tải thông tin…')}</b>${BI('잠시 뒤에도 그대로면 아래 버튼을 눌러 주세요.', 'Nếu vẫn vậy, hãy bấm nút bên dưới.')}<br><br><button class="btn pri" data-act="reloadApp">${BI('🔄 다시 불러오기', '🔄 Tải lại')}</button></div></div>`;   // v41: 빈 '연결' 화면 대신
   if (!me || me.active === false) return `<div class="phone">${phoneConnect()}</div>`;
   if (k.step !== 'list') return kioskView();
   if (P.open) return `<div class="phone tr">${phoneTask(me, taskById(P.open))}</div>`;
@@ -3194,7 +3203,7 @@ function phoneView(){
   return `<div class="phone tr">
     <div class="phead"><span class="mark">IN</span><div><b>${TV('{name}님', { name:me.name })}</b><div class="small muted">${me.position ? `${esc(me.position)} · ` : ''}${fmtDateK(ds)}</div></div><button class="linkbtn" data-act="phSwitch">${TV('다른 사람')}</button></div>
     ${pinBoard(me)}
-    ${(phoneHeartbeat(me), '')}${phonePunchCard(me)}
+    ${(phoneHeartbeat(me), '')}${installCard()}${phonePunchCard(me)}
     ${otKioskBit(me) || otStaffLine(me)}
     ${myScoreCard(me)}
     <div class="ptabs" role="tablist">
@@ -4312,7 +4321,8 @@ function phoneReqView(st, clock){
     <p>${BI(`${d ? `<b>${fmtMD(d)}</b>까지 ` : ''}모든 직원이 자기 휴대폰을 연결해요. 연결하면 휴대폰으로 업무 사진 보고·공지 확인${st.phonePunch ? '·출퇴근' : ''}을 할 수 있어요.`,
       `${d ? `Trước <b>${dmVi(d)}</b>, ` : ''}tất cả nhân viên cần kết nối điện thoại của mình. Sau khi kết nối, bạn có thể báo cáo ảnh công việc, xem thông báo${st.phonePunch ? ', chấm công' : ''} bằng điện thoại.`)}</p>
     <div class="qr" aria-label="연결 QR">${qr || `<div class="small muted">${j?.busy ? BI('내 전용 QR 만드는 중…', 'Đang tạo mã QR riêng…') : 'QR 준비 중…'}</div>`}</div>
-    ${direct ? `<p class="small" style="margin:0"><b>${BI(`<b>${esc(st.name)}</b>님 전용 · 10분 동안 한 번만 쓸 수 있어요`, `Riêng cho <b>${esc(st.name)}</b> · dùng một lần trong 10 phút`)}</b></p>
+    ${direct ? `<div class="jcode">${BI('앱에서 넣는 연결 코드', 'Mã kết nối (nhập trong ứng dụng)')}<b class="mono">${esc(j.code.length === 8 ? j.code.slice(0, 4) + '-' + j.code.slice(4) : j.code)}</b></div>
+    <p class="small" style="margin:0"><b>${BI(`<b>${esc(st.name)}</b>님 전용 · 10분 동안 한 번만 쓸 수 있어요`, `Riêng cho <b>${esc(st.name)}</b> · dùng một lần trong 10 phút`)}</b></p>
     <ol class="psteps">
       <li>${BI('<b>내 휴대폰</b> 카메라로 위 QR을 찍어요 (다른 사람에게 보여 주지 마세요)', 'Dùng camera <b>điện thoại của bạn</b> quét mã QR (đừng cho người khác quét)')}</li>
       <li>${BI('뜨는 주소를 열면 <b>로그인 없이 바로</b> 내 휴대폰으로 연결돼요', 'Mở địa chỉ hiện ra là <b>kết nối ngay</b>, không cần đăng nhập')}</li>
@@ -4331,6 +4341,38 @@ function phoneReqView(st, clock){
       : `<button class="btn" data-act="phSkip">${req ? BI(`오늘은 그냥 출퇴근하기${left != null ? ` (D-${Math.max(0, left)})` : ''}`, `Hôm nay chấm công trước${left != null ? ` (còn ${Math.max(0, left)} ngày)` : ''}`) : BI('출퇴근 화면으로 돌아가기', 'Quay lại chấm công')}</button>`}
     <button class="linkbtn" data-act="kCancel">${T('처음으로')}</button></div>`;
 }
+
+/* ===================== 앱처럼 설치 (v41) ===================== */
+// 직원 휴대폰 첫 화면에 '홈 화면에 앱 설치' 안내 (이미 설치한 앱으로 열었으면 안 보임).
+//   안드로이드 크롬: [📲 앱 설치하기] 한 번 (브라우저가 설치 창을 띄움) / 아이폰 사파리: 공유 → 홈 화면에 추가
+//   ⚠️ 아이폰 홈 화면 앱은 사파리와 저장 공간이 따로라, 처음 열면 로그인 화면의 '연결 코드'(태블릿 QR 아래 8자리)를 한 번 넣어요.
+let installEvt = null, installHidden = false;
+window.addEventListener?.('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; scheduleRender(); });
+window.addEventListener?.('appinstalled', () => { installEvt = null; store.set('installHide', String(Date.now() + 365 * 86400000)); scheduleRender(); });
+const isStandalone = () => { try { return !!(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone === true); } catch { return false; } };
+const isIOS = () => { try { return /iPhone|iPad|iPod/i.test(navigator.userAgent || ''); } catch { return false; } };
+const inAppBrowser = () => { try { return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent || ''); } catch { return false; } };
+function installCard(){
+  if (isStandalone() || installHidden || +(store.get('installHide') || 0) > Date.now()) return '';
+  const ios = isIOS();
+  const steps = inAppBrowser()
+    ? BI('지금은 카카오톡·네이버 같은 앱 안에서 열려 있어요. 오른쪽 위(또는 아래) <b>⋯ 메뉴 → 다른 브라우저로 열기</b>(아이폰은 Safari, 안드로이드는 Chrome)를 먼저 눌러 주세요.', 'Trang đang mở trong ứng dụng (KakaoTalk, Naver…). Bấm <b>menu ⋯ → Mở bằng trình duyệt</b> (iPhone: Safari, Android: Chrome) trước.')
+    : ios ? BI('Safari 아래쪽 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b> → <b>추가</b>를 눌러요. 그다음부터 홈 화면의 <b>타임카드</b> 아이콘으로 열어요.', 'Trong Safari bấm <b>nút Chia sẻ (□↑)</b> → <b>Thêm vào MH chính</b> → <b>Thêm</b>. Từ đó mở bằng biểu tượng <b>타임카드</b> trên màn hình chính.')
+    : installEvt ? BI('아래 버튼을 누르면 홈 화면에 앱으로 설치돼요.', 'Bấm nút bên dưới để cài như ứng dụng trên màn hình chính.')
+    : BI('Chrome 오른쪽 위 <b>⋮ 메뉴 → 앱 설치</b>(또는 <b>홈 화면에 추가</b>)를 눌러요.', 'Trong Chrome bấm <b>menu ⋮ → Cài đặt ứng dụng</b> (hoặc <b>Thêm vào màn hình chính</b>).');
+  return `<section class="installcard">
+    <div class="ttop"><b>${BI('📲 앱처럼 설치하기', '📲 Cài như ứng dụng')}</b><button class="linkbtn" style="padding:0" data-act="installHide">${BI('나중에', 'Để sau')}</button></div>
+    <p class="small" style="margin:4px 0">${BI('설치해 두면 다음부터 주소를 찾을 필요 없이 아이콘 한 번으로 바로 열려요.', 'Cài rồi thì lần sau chỉ cần chạm biểu tượng là mở ngay.')}</p>
+    <p class="small" style="margin:4px 0">${steps}</p>
+    ${ios && !inAppBrowser() ? `<p class="small" style="margin:4px 0;color:var(--amber)">${BI('⚠️ 아이폰은 홈 화면 앱을 <b>처음 열 때 연결 코드를 한 번</b> 넣어요 — 가게 태블릿에서 내 이름·번호 → [📱 내 휴대폰 연결하기] → QR 아래 8자리.', '⚠️ iPhone: lần đầu mở ứng dụng trên màn hình chính, hãy nhập <b>mã kết nối</b> một lần — trên máy tính bảng: tên + mã số → [📱 Kết nối điện thoại] → 8 ký tự dưới QR.')}</p>` : ''}
+    ${installEvt && !ios ? `<button class="btn pri" data-act="installApp">${BI('📲 앱 설치하기', '📲 Cài ứng dụng')}</button>` : ''}
+  </section>`;
+}
+const INSTALLACT = {
+  async installApp(){ const e = installEvt; if (!e) return; installEvt = null; try { e.prompt(); await e.userChoice; } catch {} render(true); },
+  installHide(){ installHidden = true; store.set('installHide', String(Date.now() + 3 * 86400000)); render(true); },   // 3일 동안 숨김 (저장이 막힌 브라우저도 이번엔 숨김)
+  reloadApp(){ location.reload(); },
+};
 
 /* ===================== 동작 ===================== */
 const ACT = {
@@ -4453,7 +4495,7 @@ const ACT = {
   },
   async clearSamples(){ if (!S.confirmClear){ S.confirmClear = true; render(true); setTimeout(() => { S.confirmClear = false; scheduleRender(); }, 5000); return; } S.confirmClear = false; await clearSamples(); }
 };
-Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, OTACT, THACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
+Object.assign(ACT, CACT, RACT, BACT, GACT, TRACT, ABACT, AWACT, RCACT, OTACT, THACT, INSTALLACT, { rpOpen(){ S.tab = 'payroll'; S.editing = null; store.set('tab', 'payroll'); render(true); $('#taxSec')?.scrollIntoView({ block:'start' }); } });
 document.addEventListener('click', e => {
   initAudio();
   S.kiosk.at = Date.now();

@@ -60,7 +60,7 @@ const put = (c, id, data) => rows.set(K(c, id), { collection:c, id, data, delete
   assert.strictEqual((await call({ action:'issue', staffId:'nobody' }, 'owner-token')).status, 404, '없는 직원');
   assert.strictEqual((await call({ action:'issue', staffId:'gone' }, 'owner-token')).status, 404, '퇴사한 직원');
   let r = await call({ action:'issue', staffId:'s1' }, 'owner-token');
-  assert.ok(r.status === 200 && /^[\w-]{20,}$/.test(r.body.code) && r.body.exp > Date.now(), '코드 발급');
+  assert.ok(r.status === 200 && /^[A-HJ-NP-Z2-9]{8}$/.test(r.body.code) && r.body.exp > Date.now(), '코드 발급 (8자리, 헷갈리는 글자 없음)');
   const code1 = r.body.code;
   assert.strictEqual(created, 1, '공용 계정 처음 한 번 만듦');
   assert.deepStrictEqual(globalThis.__lastCreate.app_metadata, { apps:['timecard'], tc_role:'phone' }, '공용 계정: 타임카드만 (장부 없음), 표시 phone');
@@ -71,7 +71,7 @@ const put = (c, id, data) => rows.set(K(c, id), { collection:c, id, data, delete
   // 2. 사용: 로그인 없이, 한 번만
   assert.strictEqual((await call({ action:'redeem', code:'x' })).status, 400, '모양이 이상한 코드');
   assert.strictEqual((await call({ action:'redeem', code:'a'.repeat(24) })).status, 404, '없는 코드');
-  r = await call({ action:'redeem', code:code1 });
+  r = await call({ action:'redeem', code:(code1.slice(0, 4) + '-' + code1.slice(4)).toLowerCase() });   // 손으로 넣은 '소문자 + 대시'도 받음
   assert.ok(r.status === 200 && r.body.token_hash === 'th1' && r.body.staffId === 's1', '코드 → 로그인 토큰 + 직원');
   assert.ok(globalThis.__lastLink.type === 'magiclink' && globalThis.__lastLink.email.includes('tc-phone@'), '공용 계정 1회용 로그인 링크');
   assert.strictEqual((await call({ action:'redeem', code:code1 })).status, 410, '한 번 쓴 코드는 다시 못 씀');

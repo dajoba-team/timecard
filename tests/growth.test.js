@@ -236,12 +236,13 @@ const [A, B] = S.staff;
   await ACT.plDel({ id:'a' }); assert.ok(!docs['phone_links/a'] && !S.plinks.has('a'), '연결 지우기 (휴대폰 바꿨을 때)');
   // v39: 태블릿 1회용 QR — 서버 함수에서 그 직원 전용 코드를 받아 로그인 없이 연결
   const invSave = window.tcStore.invoke, asked = [];
-  window.tcStore.invoke = async (fn, b) => { asked.push([fn, b]); return fn === 'tc-phone-join' && b.action === 'issue' ? { code:'C'.repeat(24), exp: Date.now() + 600000 } : fn === 'tc-phone-join' && b.action === 'revoke' ? { ok:true, removed:true } : { translations:(b.texts || []).map(x => x) }; };
+  window.tcStore.invoke = async (fn, b) => { asked.push([fn, b]); return fn === 'tc-phone-join' && b.action === 'issue' ? { code:'K7Q2M9XP', exp: Date.now() + 600000 } : fn === 'tc-phone-join' && b.action === 'revoke' ? { ok:true, removed:true } : { translations:(b.texts || []).map(x => x) }; };
   S.config.phoneReq = { on:true, deadline:'2026-11-27' }; S.join = null; S.mode = 'kiosk';
   resetKiosk(); ACT.kPick({ id:'a' }); for (const dg of '1111') padPress('staff', dg);
   render(true); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r)); render(true);
   assert.ok(asked.some(([fn, b]) => fn === 'tc-phone-join' && b.action === 'issue' && b.staffId === 'a'), '번호 확인한 직원 전용 코드 요청');
-  assert.ok(S.join.code === 'C'.repeat(24) && joinUrl(S.join.code).endsWith('/#join=' + 'C'.repeat(24)), '1회용 연결 주소');
+  assert.ok(S.join.code === 'K7Q2M9XP' && joinUrl(S.join.code).endsWith('/#join=K7Q2M9XP'), '1회용 연결 주소');
+  assert.ok(view.innerHTML.includes('K7Q2-M9XP') && view.innerHTML.includes('앱에서 넣는 연결 코드'), 'v41: QR 아래 연결 코드 (앱에서 손으로)');
   assert.ok(view.innerHTML.includes('님 전용') && view.innerHTML.includes('로그인 없이 바로') && !view.innerHTML.includes('사장님께 로그인을 부탁'), '전용 QR 안내 (사장님 로그인 필요 없음)');
   // 사장님: 모두 끊기 (두 번 눌러야)
   S.mode = 'owner'; S.tab = 'tasks'; await ACT.plRevoke(); assert.ok(!asked.some(([fn, b]) => b?.action === 'revoke'), '한 번만 누르면 확인만');
@@ -252,6 +253,13 @@ const [A, B] = S.staff;
   S.mode = 'phone'; renderTop(); assert.ok(!document.querySelector('#top').innerHTML.includes('data-act="toOwner"'), '공용 계정: 사장님 화면 버튼 없음');
   ACT.toOwner(); assert.strictEqual(S.mode, 'phone', '공용 계정: 사장님 화면으로 안 감');
   delete window.tcStore.userRole; window.tcStore.invoke = invSave;
+  // v41: 앱처럼 설치 안내 (설치한 앱으로 열면 안 보임), 나중에, 빈 화면 대신 다시 불러오기
+  S.mode = 'phone'; S.phone.staffId = 'a'; S.phone.open = null; resetKiosk(); render(true);
+  assert.ok(view.innerHTML.includes('앱처럼 설치하기') && view.innerHTML.includes('data-act="installHide"'), '휴대폰 첫 화면에 설치 안내');
+  ACT.installHide(); assert.ok(!view.innerHTML.includes('앱처럼 설치하기'), '나중에 → 숨김');
+  const staffSave = S.staff; S.staff = []; render(true);
+  assert.ok(view.innerHTML.includes('정보를 불러오는 중') && view.innerHTML.includes('data-act="reloadApp"') && !view.innerHTML.includes('아직 등록된 직원이 없어요'), '연결된 휴대폰인데 목록이 비면 다시 불러오기');
+  S.staff = staffSave;
   console.log('휴대폰 연결 필수 통과');
 
   // ----- 10. 백업 -----

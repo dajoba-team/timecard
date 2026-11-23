@@ -64,27 +64,32 @@
     } catch {}
     try { await sb.auth.signOut({ scope: "local" }); } catch {}
   };
-  const joinCode = () => { const m = /^#join=([\w-]{16,64})$/.exec((window.location && window.location.hash) || ""); return m ? m[1] : null; };
+  const joinCode = () => { const m = /^#join=([\w-]{8,64})$/.exec((window.location && window.location.hash) || ""); return m ? m[1] : null; };
+  // 연결 코드 → 직원용 공용 계정 로그인 (실패하면 throw). QR(#join=)과 로그인 화면의 '연결 코드' 입력이 함께 씀 (v41)
+  const redeemLogin = async (code, hasSession) => {
+    const { data, error } = await sb.functions.invoke("tc-phone-join", { body: { action: "redeem", code } });
+    let msg = error && error.message;
+    if (error) { try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {} throw new Error(msg || "연결하지 못했어요"); }
+    if (!hasSession) {
+      let r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "magiclink" });
+      if (r.error) r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "email" });
+      if (r.error) throw new Error("로그인하지 못했어요: " + r.error.message);
+      markPhoneDevice(r.data && (r.data.user || (r.data.session && r.data.session.user)));
+    }
+    try { localStorage.setItem("tc.phoneStaff", data.staffId); localStorage.setItem("tc.device", "phone"); } catch {}
+  };
+  const goPhone = async () => {   // 그 직원 휴대폰 화면으로 다시 열기
+    window.location.replace(window.location.pathname + "#phone");
+    window.location.reload();
+    await new Promise(() => {});
+  };
   const tryJoin = async (code, hasSession) => {
     const el = overlay('<div style="font-size:18px;font-weight:700;margin-bottom:8px">📱 휴대폰 연결 중…</div><div style="font-size:13px;color:#5E6774">Đang kết nối điện thoại…</div>');
-    try {
-      const { data, error } = await sb.functions.invoke("tc-phone-join", { body: { action: "redeem", code } });
-      let msg = error && error.message;
-      if (error) { try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {} throw new Error(msg || "연결하지 못했어요"); }
-      if (!hasSession) {
-        let r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "magiclink" });
-        if (r.error) r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: "email" });
-        if (r.error) throw new Error("로그인하지 못했어요: " + r.error.message);
-        markPhoneDevice(r.data && (r.data.user || (r.data.session && r.data.session.user)));
-      }
-      try { localStorage.setItem("tc.phoneStaff", data.staffId); localStorage.setItem("tc.device", "phone"); } catch {}
-      window.location.replace(window.location.pathname + "#phone");
-      window.location.reload();
-      await new Promise(() => {});   // 다시 열리는 중
-    } catch (e) {
+    try { await redeemLogin(code, hasSession); await goPhone(); }
+    catch (e) {
       el.innerHTML = '<div style="width:100%;max-width:360px;background:#fff;border:1px solid #DADFE7;border-radius:16px;padding:28px 24px"><div style="font-size:18px;font-weight:700;margin-bottom:8px">연결하지 못했어요 · Không kết nối được</div>' +
-        '<div style="font-size:13px;color:#5E6774;line-height:1.6;margin-bottom:16px">' + esc(e && e.message || "") + '<br>가게 태블릿에서 번호를 다시 누르고 새 QR을 찍어 주세요.<br>Hãy nhập lại mã trên máy tính bảng và quét mã QR mới.</div>' +
-        '<button id="st-join-login" style="' + btnCss + '">사장님 계정으로 로그인</button></div>';
+        '<div style="font-size:13px;color:#5E6774;line-height:1.6;margin-bottom:16px">' + esc(e && e.message || "") + '<br>가게 태블릿에서 번호를 다시 누르고 새 QR을 찍거나, 다음 화면에서 연결 코드를 넣어 주세요.<br>Hãy quét mã QR mới trên máy tính bảng, hoặc nhập mã kết nối ở màn hình tiếp theo.</div>' +
+        '<button id="st-join-login" style="' + btnCss + '">확인 · OK</button></div>';
       await new Promise(res => { el.querySelector("#st-join-login").onclick = res; });
       try { history.replaceState(null, "", window.location.pathname + "#phone"); } catch {}
     }
@@ -116,8 +121,8 @@
       if (!(data && data.session) && !jc && wasPhoneDevice()) {   // 공용 계정이 끊긴 휴대폰: 남은 것 지우고 다시 연결 안내
         await wipeDevice();
         const el = overlay('<div style="font-size:18px;font-weight:700;margin-bottom:8px">📱 휴대폰 연결이 끊겼어요<br><span style="font-size:15px">Điện thoại đã bị ngắt kết nối</span></div>' +
-          '<div style="font-size:13px;color:#5E6774;line-height:1.6;margin-bottom:16px">이 휴대폰에 남아 있던 타임카드 정보를 지웠어요. 가게 태블릿에서 번호를 누르고 새 QR을 찍어 다시 연결해 주세요.<br>Đã xóa dữ liệu chấm công trên điện thoại này. Hãy nhập mã trên máy tính bảng và quét mã QR mới để kết nối lại.</div>' +
-          '<button id="st-wiped" style="' + btnCss + '">사장님 계정으로 로그인</button>');
+          '<div style="font-size:13px;color:#5E6774;line-height:1.6;margin-bottom:16px">이 휴대폰에 남아 있던 타임카드 정보를 지웠어요. 가게 태블릿에서 새 QR을 찍거나 연결 코드를 넣어 다시 연결해 주세요.<br>Đã xóa dữ liệu chấm công trên điện thoại này. Hãy quét mã QR mới hoặc nhập mã kết nối để kết nối lại.</div>' +
+          '<button id="st-wiped" style="' + btnCss + '">확인 · OK</button>');
         await new Promise(res => { el.querySelector("#st-wiped").onclick = res; });
       }
       if (data && data.session) {
@@ -129,13 +134,29 @@
       }
       await new Promise(resolve => {
         const el = overlay(
-          '<div style="font-size:20px;font-weight:700;margin-bottom:4px">가게 타임카드</div>' +
-          '<div style="font-size:13px;color:#5E6774;margin-bottom:20px">사장님 계정으로 로그인해 주세요. 가게 태블릿은 한 번만 로그인하면 계속 유지돼요.</div>' +
+          '<div style="font-size:20px;font-weight:700;margin-bottom:14px">가게 타임카드</div>' +
+          // 직원: 연결 코드 (v41) — 앱처럼 설치한 휴대폰을 처음 열었을 때·로그인이 풀렸을 때 혼자 다시 연결
+          '<form id="st-code-form"><div style="font-size:14px;font-weight:700;margin-bottom:6px">📱 직원 · Nhân viên</div>' +
+          '<input id="st-code" autocapitalize="characters" autocomplete="one-time-code" autocorrect="off" spellcheck="false" maxlength="9" placeholder="연결 코드 8자리 · Mã kết nối" style="' + inpCss + 'letter-spacing:2px;text-transform:uppercase;font-weight:700">' +
+          '<div style="font-size:12px;color:#5E6774;line-height:1.5;margin-bottom:6px">가게 태블릿에서 내 이름·번호 → <b>[📱 내 휴대폰 연결하기]</b>를 누르면 QR 아래에 나와요.<br>Trên máy tính bảng: tên + mã số → <b>[📱 Kết nối điện thoại]</b>, mã nằm dưới QR.</div>' +
+          '<div id="st-cmsg" style="font-size:12px;color:#C4302A;min-height:18px;margin-bottom:6px"></div>' +
+          '<button type="submit" style="' + btnCss + '">연결하기 · Kết nối</button></form>' +
+          '<div style="border-top:1px solid #DADFE7;margin:18px 0 14px"></div>' +
+          '<div style="font-size:14px;font-weight:700;margin-bottom:6px">🔑 사장님 로그인</div>' +
+          '<div style="font-size:12px;color:#5E6774;margin-bottom:8px">가게 태블릿은 한 번만 로그인하면 계속 유지돼요.</div>' +
           '<form id="st-login"><input id="st-email" type="email" autocomplete="username" placeholder="이메일" style="' + inpCss + '">' +
           '<input id="st-pw" type="password" autocomplete="current-password" placeholder="비밀번호" style="' + inpCss + '">' +
           '<div id="st-msg" style="font-size:12px;color:#C4302A;min-height:18px;margin-bottom:6px"></div>' +
-          '<button type="submit" style="' + btnCss + '">로그인</button></form>'
+          '<button type="submit" style="' + btnCss + 'background:#5E6774">사장님 로그인</button></form>'
         );
+        el.querySelector("#st-code-form").onsubmit = async ev => {   // 직원 연결 코드
+          ev.preventDefault();
+          const cmsg = el.querySelector("#st-cmsg"), code = el.querySelector("#st-code").value;
+          if (!code.trim()){ cmsg.textContent = "연결 코드를 넣어 주세요 · Hãy nhập mã"; return; }
+          cmsg.style.color = "#5E6774"; cmsg.textContent = "연결 중… · Đang kết nối…";
+          try { await redeemLogin(code, false); await goPhone(); }
+          catch (e) { cmsg.style.color = "#C4302A"; cmsg.textContent = (e && e.message) || "연결하지 못했어요"; }
+        };
         el.querySelector("#st-login").onsubmit = async ev => {
           ev.preventDefault();
           const msg = el.querySelector("#st-msg");
@@ -163,7 +184,7 @@
     reloginBusy = true;
     try {
       const { data } = await sb.auth.getSession();
-      if (data && data.session) return;
+      if (data && data.session){ resyncAll(); return; }   // 로그인은 살아 있음(토큰만 새로 받음) → 실패했던 불러오기를 다시 (v41)
       loginP = null;
       await ensureLogin();
       resyncAll();
@@ -409,7 +430,7 @@
       .subscribe(status => { if (status === "SUBSCRIBED") resyncAll(); });
     setInterval(resyncAll, RESYNC_MS);
     setInterval(flush, 30000);   // 대기 중인 기록이 있으면 30초마다 다시 보내기
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") resyncAll(); });
+    document.addEventListener("visibilitychange", async () => { if (document.visibilityState === "visible") { try { await sb.auth.getSession(); } catch {} resyncAll(); } });   // 로그인 새로 받은 뒤 불러오기 (v41)
     window.addEventListener("online", resyncAll);
     sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") relogin(); });
   };

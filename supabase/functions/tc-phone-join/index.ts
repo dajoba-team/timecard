@@ -33,6 +33,11 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 
 const b64url = (buf: Uint8Array) => btoa(String.fromCharCode(...buf)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const randCode = () => b64url(crypto.getRandomValues(new Uint8Array(18)));
+// 연결 코드 (v41): 8자리 — 헷갈리는 글자(0 O 1 I L) 뺀 32글자, 32^8 ≈ 1조 가지. 휴대폰 앱에서 손으로 넣을 수 있게 짧게
+export const CODE_ABC = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const joinCodeNew = () => { const r = crypto.getRandomValues(new Uint8Array(8)); return [...r].map(b => CODE_ABC[b % CODE_ABC.length]).join(""); };
+// 넣은 코드 맞추기: 'k7q2-m9xp' → 'K7Q2M9XP' (예전 v39의 긴 코드도 그대로 받음)
+export const normCode = (c: string) => { const s = String(c || "").trim(); const short = s.toUpperCase().replace(/[\s-]/g, ""); return /^[A-Z2-9]{8}$/.test(short) ? short : /^[\w-]{16,64}$/.test(s) ? s : ""; };
 async function sha(s: string) {
   const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
   return [...d].map(b => b.toString(16).padStart(2, "0")).join("");
@@ -86,8 +91,8 @@ Deno.serve(async req => {
   try { body = await req.json(); } catch { /* 빈 본문 */ }
   try {
     if (body.action === "redeem") {
-      const code = String(body.code || "");
-      if (!/^[\w-]{16,64}$/.test(code)) return json({ error: "연결 코드가 올바르지 않아요" }, 400);
+      const code = normCode(String(body.code || ""));
+      if (!code) return json({ error: "연결 코드가 올바르지 않아요 (8자리)" }, 400);
       const id = await sha(code), d = await getDoc(COL, id) as { staffId: string; exp: number; used?: boolean } | null;
       if (!d) return json({ error: "연결 코드를 찾을 수 없어요. 태블릿에서 QR을 다시 띄워 주세요." }, 404);
       if (d.used) return json({ error: "이미 쓴 연결 코드예요. 태블릿에서 QR을 다시 띄워 주세요." }, 410);
@@ -112,7 +117,7 @@ Deno.serve(async req => {
       // 지난 코드 정리 (시간 지났거나 쓴 것)
       const { data: rows } = await sb.from(DOCS).select("id,data").eq("collection", COL);
       for (const r of rows || []) if (r.data?.used || Date.now() > (r.data?.exp || 0)) await delDocs(COL, r.id);
-      const code = randCode(), exp = Date.now() + CODE_TTL;
+      const code = joinCodeNew(), exp = Date.now() + CODE_TTL;
       await putDoc(COL, await sha(code), { staffId, exp, used: false, at: Date.now() });
       return json({ code, exp });
     }
