@@ -466,6 +466,14 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .pinhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pinhead b{font-size:17px;margin-right:auto}
 .pin p{margin:0;white-space:pre-wrap;font-size:15px;line-height:1.65;color:var(--ink)}
+.pin.short p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pinmore{justify-self:start;margin:0;padding:2px 0;font-size:14px}
+/* 근무 규정 요약 카드 (v45) */
+.rulecard{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--stamp);border-radius:12px;padding:12px 16px;text-align:left}
+.rulehead{font-size:16px;margin-bottom:6px}
+.rulecard ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:4px 18px}
+.rulecard li{font-size:14px;line-height:1.5;color:var(--ink)}
+.rulecard .kosub{font-size:12px}
 .tgrp{display:grid;gap:4px;margin-top:6px}
 .tgrp small{color:var(--muted);font-weight:700}
 .phone .pinboard{margin:0}
@@ -628,7 +636,8 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   season:'auto',   // 시즌 장식 (v40): 'auto' 크리스마스 11/20~12/25·새해 12/26~1/5 / 'on' / 'off'
   team:{ on:false, target:90, reward:'', rewardVi:'' },
   evalStart:'2026-11-17',
-  lateRule:{ since:'2026-12-01', limit:3 },   // 새 지각 규칙 (v42): since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 한 달 동안 지각 없으면 0회로. since 비우면 예전 방식
+  lateRule:{ since:'2026-12-01', limit:3 },
+  rules:{ on:true, absentLimit:2 },   // 첫 화면 근무 규정 요약 카드 (v45): 지각 규칙·무단 지각 기준은 lateRule에서, 무단결근 퇴사 기준만 여기   // 새 지각 규칙 (v42): since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 한 달 동안 지각 없으면 0회로. since 비우면 예전 방식
   phoneReq:{ on:false, deadline:'' } };   // 직원 휴대폰 연결 필수 (v38): 켜면 기한까지 모든 직원이 휴대폰 연결   // 출퇴근 평가 시작일 (v34): 이 날 전은 시험 기간이라 지각·결근·점수에서 뺌 (일한 시간은 급여에 그대로)   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
 const TABS = [['now','현황'],['tasks','업무 보고'],['award','동기부여'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
@@ -641,7 +650,7 @@ const S = {
   lockPin:'', lockErr:'', remember:false,
   kiosk:{ step:'list', staffId:null, pin:'', err:'', at:0, result:null, busy:false },
   recSub:'day', viewDate:todayStr(), month:ymOf(todayStr()), year:new Date().getFullYear(),
-  sound: store.get('sound') === '1', audio:null, confirmClear:false,
+  sound: store.get('sound') === '1', audio:null, confirmClear:false, pinOpen:new Set(),
   mailStatus:null, mailed:new Set(), mailBusy:false, alertStatus:null, slackBusy:false,
   photoUse:null, confirmPhotoClean:false, confirmLogout:false, pending:0,
   // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
@@ -656,7 +665,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) }, lateRule:{ ...DEFAULT_CONFIG.lateRule, ...(S.config.lateRule||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) }, lateRule:{ ...DEFAULT_CONFIG.lateRule, ...(S.config.lateRule||{}) }, rules:{ ...DEFAULT_CONFIG.rules, ...(S.config.rules||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -717,7 +726,7 @@ const VI = {
   // 공지·업무 보고
   '{name}님, 새 공지 {n}건':'{name}, có {n} thông báo mới',
   '읽고 [확인했어요]를 눌러 주세요. 사장님 화면에 ‘읽음’으로 남아요.':'Đọc xong hãy bấm [Đã hiểu]. Chủ quán sẽ thấy là “đã đọc”.',
-  '모두 확인했어요':'Đã đọc tất cả', '확인했어요':'Đã hiểu', '📢 {name}님, 새 지시·공지를 먼저 읽어 주세요':'📢 {name}, hãy đọc chỉ thị/thông báo mới trước', '읽고 확인했어요':'Tôi đã đọc và xác nhận', '나중에 (처음으로)':'Để sau (về màn hình đầu)', '읽음':'Đã đọc', '공지':'Thông báo', '사진 보고 업무':'Việc báo cáo ảnh', '사진 보고':'Báo cáo ảnh',
+  '모두 확인했어요':'Đã đọc tất cả', '확인했어요':'Đã hiểu', '📢 {name}님, 새 지시·공지를 먼저 읽어 주세요':'📢 {name}, hãy đọc chỉ thị/thông báo mới trước', '읽고 확인했어요':'Tôi đã đọc và xác nhận', '자세히 보기 ▼':'Xem chi tiết ▼', '접기 ▲':'Thu gọn ▲', '나중에 (처음으로)':'Để sau (về màn hình đầu)', '읽음':'Đã đọc', '공지':'Thông báo', '사진 보고 업무':'Việc báo cáo ảnh', '사진 보고':'Báo cáo ảnh',
   '📌 공고':'📌 Thông báo', '전체 보기':'Xem tất cả', '접기':'Thu gọn', '전체 직원':'Tất cả nhân viên', '{pos} 전체':'Tất cả {pos}', '담당 없음':'Chưa giao',
   '매일':'Hằng ngày', '{d}요일':'{d}', '요일 미정':'Chưa chọn thứ', '{md} 하루':'Chỉ ngày {md}', '{t}까지':'trước {t}',
   '📷 {r} 휴대폰으로 사진 보고':'📷 {r} báo cáo ảnh bằng điện thoại',
@@ -2011,6 +2020,8 @@ function configForm(){
       <p class="hint full" style="margin:0">마스터 번호는 출퇴근 화면에서 <b>어느 직원의 개인 번호 대신 넣어도 통과</b>하는 사장님용 번호예요. 직원이 번호를 잊었을 때 대신 찍어 줄 수 있어요. 마스터 번호로 찍은 기록에는 ‘사장님 대리 입력’ 표시가 남아요. 직원 개인 번호와 겹치면 안 돼요.</p>
       <label>⏰ 새 지각 규칙 시작일 <small class="muted">이 날부터 1분이라도 늦으면 지각 · 비우면 안 씀</small><input id="c-lateSince" type="date" value="${esc(c.lateRule.since || '')}"></label>
       <label>무단 지각 퇴사 기준 (회)<input id="c-lateLimit" type="number" min="1" value="${c.lateRule.limit}"></label>
+      <label>무단결근 퇴사 기준 (회) <small class="muted">근무 규정 카드에 표시</small><input id="c-absLimit" type="number" min="1" value="${c.rules.absentLimit}"></label>
+      <label class="check full"><input type="checkbox" id="c-rules" ${c.rules.on ? 'checked' : ''}> 📋 출퇴근 첫 화면 맨 위에 <b>근무 규정 요약</b> 보여 주기 — 위 지각 규칙·퇴사 기준 숫자로 자동으로 만들어져요 (한국어·베트남어)</label>
       <label>여유 시간 (분) <small class="muted">${c.lateRule.since ? '조퇴 판단·미출근 알림에만 (새 규칙 시작일 전 지각에도)' : '지각·조퇴 판단, 미출근 알림'}</small><input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
       <label>추가근무 인정 단위 (분)<input id="c-unit" type="number" min="1" value="${c.otUnit}"></label>
       <label>🎄 시즌 장식 <small class="muted">태블릿 첫 화면</small><select id="c-season">${[['auto', '자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)'], ['on', '늘 켜기'], ['off', '끄기']].map(([v, l]) => `<option value="${v}" ${(c.season || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -2067,6 +2078,7 @@ function staffView(){
         <dt>관리 번호</dt><dd>${c.ownerPin === '0000' ? '<span style="color:var(--red)">처음 번호(0000) 그대로예요 — 바꿔 주세요</span>' : '설정됨'}</dd>
         <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
         <dt>지각 기준</dt><dd>${c.lateRule.since ? `${fmtDateLong(c.lateRule.since)}부터 정해진 출근 시각을 <b>1분이라도 넘으면 지각</b>${c.lateRule.since > todayStr() ? ` (그 전까지는 정해진 시간 + ${c.graceMin}분)` : ''} · 무단 지각 <b>${c.lateRule.limit}회</b> = 퇴사 기준 · 마지막 지각 뒤 <b>한 달 동안 지각이 없으면 0회</b>로 · 타당한 이유가 있는 지각은 ‘출퇴근 기록’에서 [지각 지우기]` : `정해진 시간 + ${c.graceMin}분 넘으면 지각`}</dd>
+        <dt>근무 규정 카드</dt><dd>${c.rules.on ? `<b style="color:var(--green)">켜짐</b> · 출퇴근 첫 화면 맨 위에 지각·결근 규정 요약 (무단 지각 ${c.lateRule.limit}회 · 무단결근 ${c.rules.absentLimit}회 = 퇴사)` : '꺼짐'}${(() => { const old = c.rules.on && pinnedNotices().find(t => /규정|지각|결근/.test(t.title || '')); return old ? `<br><span class="small">예전 긴 공고 ‘${esc(old.title)}’가 아직 첫 화면에 고정돼 있어요 — 규정 카드와 겹치니 내리면 깔끔해요 (공고는 지워지지 않아요).</span> <button class="btn sm" data-act="trPinToggle" data-id="${esc(old.id)}">첫 화면에서 내리기</button>` : ''; })()}</dd>
         <dt>휴대폰 연결</dt><dd>${c.phoneReq.on ? `<b style="color:var(--green)">필수</b> · ${c.phoneReq.deadline ? `${fmtDateLong(c.phoneReq.deadline)}까지` : ''} · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명 (업무 보고 탭 → 직원 휴대폰에서 누가 했는지 볼 수 있어요)` : `선택 · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명`}</dd>
         <dt>시즌 장식</dt><dd>${{ auto:'자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)', on:'늘 켜기', off:'끄기' }[c.season || 'auto']}${seasonNow() ? ` · 지금 ${seasonNow() === 'newyear' ? '🎉 새해' : '🎄 크리스마스'} 장식 중` : ''}</dd>
         <dt>평가 시작일</dt><dd>${c.evalStart ? `${fmtDateLong(c.evalStart)}부터 지각·결근·점수·배지를 계산해요 (그 전은 시험 기간, 일한 시간은 급여에 그대로)` : '처음 기록부터 계산해요'}</dd>
@@ -2913,7 +2925,8 @@ const isRead = (t, st) => { const r = S.treads.get(`${t.id}_${st.id}`); return !
 const postedAt = t => t.repostAt || t.createdAt || 0;   // 목록 순서·첫 화면 날짜: 다시 올린 시각이 있으면 그것
 const liveTasks = () => S.tasks.filter(t => t.active !== false).sort((a, b) => postedAt(b) - postedAt(a));
 const mineAll = st => liveTasks().filter(t => assignees(t).some(a => a.id === st.id));
-const unreadFor = st => S.ready.tasks && S.ready.treads ? mineAll(st).filter(t => !isRead(t, st)) : [];
+// 안 읽은 지시·공지 = 출근할 때 팝업으로 확인받는 것. 📌 첫 화면 고정 공고는 늘 보이니 팝업·읽음 확인에서 뺌 (v45 역할 나누기)
+const unreadFor = st => S.ready.tasks && S.ready.treads ? mineAll(st).filter(t => !t.pinned && !isRead(t, st)) : [];
 const todayTasksFor = st => mineAll(st).filter(t => appliesOn(t, todayStr()));
 const unsentFor = st => todayTasksFor(st).filter(t => ['todo', 'late', 'redo'].includes(trStatus(t, st, todayStr()).s));
 function trWaiting(){
@@ -3069,7 +3082,7 @@ function taskItem(t){
     <div class="ttop"><b>${esc(t.title)}</b>${t.updatedAt ? `<span class="chip faint" title="${esc(fmtMD(ymd(new Date(t.updatedAt))))} ${esc(fmtT(t.updatedAt))} 고침">✏️ ${t.repostAt === t.updatedAt ? '고쳐서 다시 올림' : '고침'} ${esc(fmtMD(ymd(new Date(t.updatedAt))))}</span>` : ''}<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}">${t.kind === 'task' ? '사진 보고' : '공지'}</span>${t.pinned ? '<span class="chip red">📌 첫 화면 고정</span>' : ''}${t.titleVi || t.bodyVi ? '<span class="chip faint" title="베트남어 내용 있음">🇻🇳</span>' : ''}${t.active === false ? '<span class="chip">멈춤</span>' : ''}</div>
     ${t.body ? `<p>${esc(t.body)}</p>` : ''}
     ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `참고 사진 ${i + 1}`)).join('')}</div>` : ''}
-    <div class="small muted">${esc(targetText(t))} · ${t.kind === 'task' ? `${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''} · 사진 ${t.minPhotos || 1}장 이상 · ` : ''}읽음 ${list.length - unread.length}/${list.length}${unread.length ? ` (${esc(unread.map(s => s.name).join(', '))} 안 읽음)` : ''}</div>
+    <div class="small muted">${esc(targetText(t))} · ${t.kind === 'task' ? `${esc(repeatText(t))}${t.due ? ` · ${t.due}까지` : ''} · 사진 ${t.minPhotos || 1}장 이상 · ` : ''}${t.pinned ? '첫 화면에 늘 보여서 출근 팝업·읽음 확인은 안 해요 (팝업으로 확인받으려면 ‘첫 화면에서 내리기’)' : `읽음 ${list.length - unread.length}/${list.length}${unread.length ? ` (${esc(unread.map(s => s.name).join(', '))} 안 읽음)` : ''}`}</div>
     <div class="row">${del
       ? `<span class="small">이 지시를 지울까요? 받은 보고 기록은 남아요.</span><button class="btn danger sm" data-act="trDelDo" data-id="${esc(t.id)}">지우기</button><button class="btn sm" data-act="trDelNo">취소</button>`
       : `<button class="btn sm" data-act="trEdit" data-id="${esc(t.id)}">✏️ 고치기</button><button class="btn sm" data-act="trToggle" data-id="${esc(t.id)}">${t.active === false ? '다시 시작' : '멈추기'}</button>${t.kind === 'notice' ? `<button class="btn sm" data-act="trPinToggle" data-id="${esc(t.id)}">${t.pinned ? '첫 화면에서 내리기' : '📌 첫 화면에 고정'}</button>` : ''}<button class="btn sm" data-act="trDelAsk" data-id="${esc(t.id)}">지우기</button>`}</div>
@@ -3121,7 +3134,7 @@ function taskForm(){
   return `<div class="panel trform" id="trForm">
     ${f.editId ? `<div class="editbar"><b>✏️ 올린 ${f.kind === 'task' ? '지시' : '공지'} 고치기</b> <span class="small muted">받은 보고·사진 기록은 그대로 남아요</span></div>` : ''}
     <div class="opts" role="radiogroup" aria-label="종류">${opt('tkind', 'task', '사진 보고 업무', f.kind === 'task')}${opt('tkind', 'notice', '공지만 (읽기)', f.kind === 'notice')}</div>
-    ${f.kind === 'notice' ? `<label class="check"><input type="checkbox" id="trPin" ${f.pinned ? 'checked' : ''}> 📌 출퇴근 첫 화면에 고정 (공고) — 가게 태블릿과 직원 휴대폰 첫 화면에 늘 보여요</label>
+    ${f.kind === 'notice' ? `<label class="check"><input type="checkbox" id="trPin" ${f.pinned ? 'checked' : ''}> 📌 출퇴근 첫 화면에 고정 (공고) — 가게 태블릿과 직원 휴대폰 첫 화면에 늘 보여요. 고정하지 않은 공지는 직원이 이름을 누를 때 팝업으로 떠서 [읽고 확인]을 받아요</label>
     <div class="row small muted">예시 문구: <button type="button" class="btn sm" data-act="trTpl" data-v="attendance">지각·결근 규정</button></div>` : ''}
     <label class="f" for="trTitle">제목<input type="text" id="trTitle" value="${esc(f.title)}" placeholder="예) 그린홍합 손질 확인" maxlength="60"></label>
     <label class="f" for="trBody">내용<textarea id="trBody" placeholder="예) 앞으로 그린홍합을 깨끗이 씻고 촉수를 제거해서 사진으로 보내 주세요.">${esc(f.body)}</textarea></label>
@@ -3228,16 +3241,33 @@ async function addRefFiles(files){
 // ----- 첫 화면 공고 (공지 + 📌 첫 화면 고정) -----
 // 가게 태블릿 첫 화면(이름 카드 위)과 직원 휴대폰 첫 화면에 늘 보여요. 직원별 '읽음'은 출근 뒤 공지 확인 단계에서 남아요.
 const pinnedNotices = st => liveTasks().filter(t => t.kind === 'notice' && t.pinned && (!st || assignees(t).some(a => a.id === st.id)));
+// 근무 규정 요약 카드 (v45): 가게 설정의 숫자(지각 규칙·무단 지각·무단결근 기준)로 자동으로 만들어서, 설정을 바꾸면 카드도 같이 바뀜
+function ruleCard(){
+  const c = cfg(), R = c.lateRule, rc = c.rules;
+  if (!rc.on) return '';
+  const d = R.since ? parseDate(R.since) : null, soon = R.since && todayStr() < R.since;
+  const lines = [
+    R.since ? [`⏰ 출근 시각을 <b>1분이라도 넘으면 지각</b>${soon ? ` (${d.getMonth() + 1}월 ${d.getDate()}일부터)` : ''}`, `⏰ Quá giờ vào ca <b>dù 1 phút là đi muộn</b>${soon ? ` (từ ${d.getDate()}/${d.getMonth() + 1})` : ''}`]
+      : [`⏰ 출근 시각 + ${num(+c.graceMin || 0)}분이 지나면 지각`, `⏰ Quá giờ vào ca ${num(+c.graceMin || 0)} phút là đi muộn`],
+    [`⚠️ 무단 지각 <b>${R.limit}회</b> · 무단결근 <b>${rc.absentLimit}회</b> = 퇴사`, `⚠️ Đi muộn không phép <b>${R.limit} lần</b> · Nghỉ không phép <b>${rc.absentLimit} lần</b> = cho nghỉ việc`],
+    R.since ? ['🔄 마지막 지각 뒤 <b>한 달 동안 지각이 없으면</b> 지각 횟수 <b>0회</b>로', '🔄 <b>1 tháng không đi muộn</b> kể từ lần cuối thì số lần về <b>0</b>'] : null,
+    R.since ? ['✅ 타당한 이유가 있는 지각은 사장님이 확인한 뒤 <b>기록에서 지워 줌</b>', '✅ Đi muộn có lý do chính đáng: chủ quán kiểm tra rồi <b>xóa khỏi ghi chép</b>'] : null,
+    ['📞 늦거나 못 오면 <b>출근 시각 전에</b> 사장님께 연락 (미리 연락·허락 = 무단 아님)', '📞 Đến muộn/nghỉ: <b>báo chủ quán trước giờ vào ca</b> (báo trước & được đồng ý = không tính)'],
+  ].filter(Boolean);
+  return `<article class="rulecard" aria-label="근무 규정"><div class="rulehead">${BI('📋 <b>근무 규정</b>', '📋 <b>Quy định làm việc</b>')}</div>
+    <ul>${lines.map(([k, v]) => `<li>${BI(k, v)}</li>`).join('')}</ul></article>`;
+}
 function pinBoard(st){
-  const list = pinnedNotices(st);
-  if (!list.length) return '';
-  // 공고는 접지 않고 내용 전체를 바로 보여 줌 (v28, 대표님 요청). 베트남어 화면이면 베트남어 + 아래 한국어
-  return `<section class="pinboard" aria-label="공고">${list.map(t => `<article class="pin">
+  const list = pinnedNotices(st), rules = ruleCard();
+  if (!list.length && !rules) return '';
+  // 📌 공고는 두 줄만 보이고 [자세히]로 펼침 (v45, 예전 v28은 전체 펼침). 우수직원 축하 공고(반응 단추)는 그대로 펼침
+  return `<section class="pinboard" aria-label="공고">${rules}${list.map(t => { const react = awardReactBox(t, st), open = !!react || S.pinOpen.has(t.id), long = (t.body || t.bodyVi || (t.refPhotos || []).length);
+    return `<article class="pin ${open ? '' : 'short'}">
     <div class="pinhead"><span class="chip red">${TV('📌 공고')}</span><b>${taskTitle(t)}</b><span class="small muted">${fmtMD(ymd(new Date(postedAt(t) || Date.now())))}${t.repostAt ? ' ✏️' : ''}</span></div>
     ${t.body || t.bodyVi ? `<p>${taskBody(t)}</p>` : ''}
-    ${(t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
-    ${awardReactBox(t, st)}
-  </article>`).join('')}</section>`;
+    ${open && (t.refPhotos || []).length ? `<div class="refs">${t.refPhotos.map((p, i) => trImg(p, `공고 사진 ${i + 1}`)).join('')}</div>` : ''}
+    ${react}${!react && long ? `<button class="linkbtn pinmore" data-act="pinMore" data-id="${esc(t.id)}">${open ? TV('접기 ▲') : TV('자세히 보기 ▼')}</button>` : ''}
+  </article>`; }).join('')}</section>`;
 }
 // 직원 화면용 담당·반복·마감 (베트남어 병기). 사장님 화면은 targetText / repeatText 그대로
 const dmVi = ds => { const d = parseDate(ds); return `${d.getDate()}/${d.getMonth()+1}`; };
@@ -3468,6 +3498,7 @@ const TRACT = {
     else toast('자동 번역을 못 했어요', S.trWarn || '잠시 뒤 다시 눌러 주세요.', 'warn');
     render(true);
   },
+  pinMore(d){ S.pinOpen.has(d.id) ? S.pinOpen.delete(d.id) : S.pinOpen.add(d.id); if (S.kiosk) S.kiosk.at = Date.now(); render(true); },   // 첫 화면 공고 자세히/접기 (v45)
   async trPinToggle(d){ const t = taskById(d.id); if (!t) return; await write(() => S.db.collection('tasks').doc(d.id).update({ pinned: !t.pinned })); toast(t.pinned ? '첫 화면에서 내렸어요' : '첫 화면에 고정했어요', t.title, 'ok'); render(true); },
   trToday(){ S.trDate = todayStr(); render(true); },
   async trOk(d){ await write(() => trRef(d.ds, d.id).update({ status:'ok', checkedAt:Date.now() })); toast('확인했어요', '', 'ok'); render(true); },
@@ -4887,6 +4918,7 @@ async function saveConfig(){
     ot: $('#c-otapp')?.checked ? { on:true, since: cfg().ot.on && cfg().ot.since ? cfg().ot.since : todayStr() } : { on:false, since:'' },   // 켠 날부터 적용
     evalStart: $('#c-evalStart') ? ($('#c-evalStart').value || '') : cfg().evalStart,
     lateRule: $('#c-lateSince') ? { since: $('#c-lateSince').value || '', limit: Math.max(1, Math.round(+$('#c-lateLimit').value || 3)) } : cfg().lateRule,   // 새 지각 규칙 (v42)
+    rules: $('#c-rules') ? { on: !!$('#c-rules').checked, absentLimit: Math.max(1, Math.round(+$('#c-absLimit').value || 2)) } : cfg().rules,   // 근무 규정 카드 (v45)
     season: $('#c-season') ? ($('#c-season').value || 'auto') : cfg().season,   // 시즌 장식 (v40)   // 출퇴근 평가 시작일 (v34, 비우면 처음부터)
     phoneReq: $('#c-phoneReq') ? { on: !!$('#c-phoneReq').checked, deadline: $('#c-phoneDeadline')?.value || addDays(todayStr(), 7) } : cfg().phoneReq,   // 직원 휴대폰 연결 필수 (v38)
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },

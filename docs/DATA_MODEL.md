@@ -98,6 +98,7 @@
 | `phoneReq` | 직원 휴대폰 연결 필수 `{on, deadline}` — 켜면 연결 안 한 직원에게 태블릿에서 안내, 기한 뒤엔 연결해야 출퇴근 (v38) | 꺼짐 |
 | `evalStart` | 출퇴근 평가 시작일 `YYYY-MM-DD` — 이 날 전은 지각·조퇴·결근·점수·배지에서 뺌, 일한 시간은 그대로 (v34, 비우면 처음부터) | 2026-11-17 |
 | `lateRule` | 새 지각 규칙 `{ since, limit }` — since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 마지막 지각 뒤 한 달 동안 지각 없으면 0회로 (v43, since 비우면 예전 방식) | `{ since:'2026-12-01', limit:3 }` |
+| `rules` | 첫 화면 근무 규정 요약 카드 `{ on, absentLimit }` — 지각 규칙·무단 지각 기준은 `lateRule`에서 가져와 자동으로 만듦, absentLimit = 무단결근 퇴사 기준 (v45) | `{ on:true, absentLimit:2 }` |
 | `otUnit` | 추가근무 인정 단위(분) | 10 |
 | `earlyClamp` | 일찍 와도 정해진 시각부터 계산 | true |
 | `otPremium` | 추가근무 1.5배 (5인 이상) | false |

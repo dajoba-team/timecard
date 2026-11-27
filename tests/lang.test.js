@@ -18,6 +18,7 @@ S.staff = W.filter(w => w.collection === 'staff').map(w => ({ id:w.doc_id, ...w.
 S.months[ymOf(todayStr())] = new Map(); S.monthLoaded[ymOf(todayStr())] = true; S.ready.staff = true; S.ready.tasks = true; S.ready.treads = true;
 const [A] = S.staff;
 S.tasks = [{ id:'n1', kind:'notice', title:'지각·결근 규정 안내', body:'무단 지각이 3회가 되면 퇴사 처리될 수 있습니다.', titleVi:NOTICE_TEMPLATES.attendance.titleVi, bodyVi:NOTICE_TEMPLATES.attendance.bodyVi, pinned:true, target:{ mode:'all' }, active:true, createdAt:Date.now() },
+  { id:'n2', kind:'notice', title:'재료 반출 안내', body:'허락 없이 가져가지 마세요.', titleVi:'Thông báo mang đồ', bodyVi:NOTICE_TEMPLATES.attendance.bodyVi, target:{ mode:'all' }, active:true, createdAt:Date.now() },
   { id:'t1', kind:'task', title:'그린홍합 손질', target:{ mode:'all' }, repeat:'daily', due:'23:59', minPhotos:1, active:true, start:todayStr(), createdAt:Date.now() }];
 (async () => {
   // 1. 처음엔 베트남어(병기)가 먼저, 버튼도 Tiếng Việt가 앞
