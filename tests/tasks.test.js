@@ -149,6 +149,8 @@ needMonth(ym); bootTasks(S.db);
   ACT.pinMore({ id: pin.id }); assert.ok(view.innerHTML.includes(esc(pin.body)) && !view.innerHTML.includes('class="pin short"') && view.innerHTML.includes('접기'), '자세히 보기 → 펼침');
   ACT.pinMore({ id: pin.id }); assert.ok(view.innerHTML.includes('class="pin short"'), '접기');
   assert.ok(view.innerHTML.includes('class="rulecard"') && view.innerHTML.indexOf('rulecard') < view.innerHTML.indexOf('📌 공고'), '근무 규정 카드가 공고보다 위 (v45)');
+  assert.ok(view.innerHTML.includes('5분 일찍 와서 옷 갈아입고 업무 준비합니다!'), '1분 지각 옆에 5분 일찍 문구 (v45.1)');
+  S.lang = 'vi'; assert.ok(ruleCard().includes('Đến sớm 5 phút') && ruleCard().includes('5분 일찍'), '베트남어 화면은 베트남어 + 한국어'); S.lang = 'ko';
   S.mode = 'phone'; S.phone.staffId = B.id; S.phone.open = null; S.editing = null; resetKiosk(); render(true);
   assert.ok(view.innerHTML.includes('지각·결근 규정 안내') && view.innerHTML.includes('class="rulecard"'), '직원 휴대폰 첫 화면에도');
   assert.ok(!unreadFor(B).some(t => t.id === pin.id), '고정 공고는 출근 팝업·읽음 확인에서 빠짐 (v45 역할 나누기)');

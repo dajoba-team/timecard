@@ -474,6 +474,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .rulecard ul{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:4px 18px}
 .rulecard li{font-size:14px;line-height:1.5;color:var(--ink)}
 .rulecard .kosub{font-size:12px}
+.rulenote{color:var(--stamp);font-weight:700}
 .tgrp{display:grid;gap:4px;margin-top:6px}
 .tgrp small{color:var(--muted);font-weight:700}
 .phone .pinboard{margin:0}
@@ -3247,7 +3248,7 @@ function ruleCard(){
   if (!rc.on) return '';
   const d = R.since ? parseDate(R.since) : null, soon = R.since && todayStr() < R.since;
   const lines = [
-    R.since ? [`⏰ 출근 시각을 <b>1분이라도 넘으면 지각</b>${soon ? ` (${d.getMonth() + 1}월 ${d.getDate()}일부터)` : ''}`, `⏰ Quá giờ vào ca <b>dù 1 phút là đi muộn</b>${soon ? ` (từ ${d.getDate()}/${d.getMonth() + 1})` : ''}`]
+    R.since ? [`⏰ 출근 시각을 <b>1분이라도 넘으면 지각</b>${soon ? ` (${d.getMonth() + 1}월 ${d.getDate()}일부터)` : ''} <span class="rulenote">(5분 일찍 와서 옷 갈아입고 업무 준비합니다!)</span>`, `⏰ Quá giờ vào ca <b>dù 1 phút là đi muộn</b>${soon ? ` (từ ${d.getDate()}/${d.getMonth() + 1})` : ''} <span class="rulenote">(Đến sớm 5 phút để thay đồ và chuẩn bị công việc!)</span>`]
       : [`⏰ 출근 시각 + ${num(+c.graceMin || 0)}분이 지나면 지각`, `⏰ Quá giờ vào ca ${num(+c.graceMin || 0)} phút là đi muộn`],
     [`⚠️ 무단 지각 <b>${R.limit}회</b> · 무단결근 <b>${rc.absentLimit}회</b> = 퇴사`, `⚠️ Đi muộn không phép <b>${R.limit} lần</b> · Nghỉ không phép <b>${rc.absentLimit} lần</b> = cho nghỉ việc`],
     R.since ? ['🔄 마지막 지각 뒤 <b>한 달 동안 지각이 없으면</b> 지각 횟수 <b>0회</b>로', '🔄 <b>1 tháng không đi muộn</b> kể từ lần cuối thì số lần về <b>0</b>'] : null,
