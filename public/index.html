@@ -475,6 +475,23 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .rulecard li{font-size:14px;line-height:1.5;color:var(--ink)}
 .rulecard .kosub{font-size:12px}
 .rulenote{color:var(--stamp);font-weight:700}
+/* 지각 경고 팝업·휴대폰 알림 켜기 (v46) */
+.lwarn{border-top:8px solid var(--amber);text-align:center}
+.lwarn.strong,.lwarn.over{border-top-color:var(--red)}
+.lwarn-head{font-size:21px;font-weight:800}
+.lwarn.strong .lwarn-head,.lwarn.over .lwarn-head{color:var(--red)}
+.lwarn.weak .lwarn-head{color:var(--amber)}
+.lwarn p{margin:0;font-size:16px;line-height:1.6}
+.lwarn-meter{display:flex;align-items:center;justify-content:center;gap:8px}
+.lwarn-meter i{width:34px;height:12px;border-radius:6px;background:var(--line)}
+.lwarn-meter i.on{background:var(--amber)}
+.lwarn.strong .lwarn-meter i.on,.lwarn.over .lwarn-meter i.on{background:var(--red)}
+.lwarn-meter b{font-size:15px;margin-left:4px}
+.lwarn.strong .bigbtn,.lwarn.over .bigbtn{background:var(--red);border-color:var(--red);color:#fff}
+.pushcard{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--stamp);border-radius:12px;padding:12px 14px;margin:0 0 10px}
+.pushcard>div{flex:1;min-width:200px}
+.pushcard.muted{border-left-color:var(--line)}
+.pushok{margin:0 0 8px;color:var(--muted)}
 .tgrp{display:grid;gap:4px;margin-top:6px}
 .tgrp small{color:var(--muted);font-weight:700}
 .phone .pinboard{margin:0}
@@ -638,7 +655,8 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   team:{ on:false, target:90, reward:'', rewardVi:'' },
   evalStart:'2026-11-17',
   lateRule:{ since:'2026-12-01', limit:3 },
-  rules:{ on:true, absentLimit:2 },   // 첫 화면 근무 규정 요약 카드 (v45): 지각 규칙·무단 지각 기준은 lateRule에서, 무단결근 퇴사 기준만 여기   // 새 지각 규칙 (v42): since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 한 달 동안 지각 없으면 0회로. since 비우면 예전 방식
+  rules:{ on:true, absentLimit:2 },
+  push:{ on:true, pre:true, before:60 },   // 직원 휴대폰 알림 (v46): 지각 경고(1회 약한·한 번 남으면 강한) + 지각 1회 이상인 직원에게 출근 before분 전 알림   // 첫 화면 근무 규정 요약 카드 (v45): 지각 규칙·무단 지각 기준은 lateRule에서, 무단결근 퇴사 기준만 여기   // 새 지각 규칙 (v42): since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 한 달 동안 지각 없으면 0회로. since 비우면 예전 방식
   phoneReq:{ on:false, deadline:'' } };   // 직원 휴대폰 연결 필수 (v38): 켜면 기한까지 모든 직원이 휴대폰 연결   // 출퇴근 평가 시작일 (v34): 이 날 전은 시험 기간이라 지각·결근·점수에서 뺌 (일한 시간은 급여에 그대로)   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
 const TABS = [['now','현황'],['tasks','업무 보고'],['award','동기부여'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
@@ -657,6 +675,7 @@ const S = {
   // 업무 지시·사진 보고: tasks 지시·공지 / treads 읽음 / trep[YYYY-MM] 그달 보고 (아래 '업무 지시·사진 보고' 참고)
   ots:new Map(), otForm:null, otEdit:null,
   badges:new Map(), thanks:new Map(), growthNews:{}, thForm:null,
+  strikes:new Map(), pushSubs:[],   // 무단 지각 요약 strikes/{직원} (서버 알림·경고 확인용), 직원 휴대폰 알림 구독 push_subs/ (v46)
   plinks:new Map(),   // 직원 휴대폰 연결 기록 phone_links/{직원} (v38)   // 동기부여(v32): 배지·신기록, 동료 고마워요, 방금 받은 배지, 고마워요 입력   // 추가근무 요청·승인: ot/{직원}_{날짜}, 직원 요청 입력, 사장님 '시간 바꿔 승인' 입력
   awards:{}, praise:[], awForm:null, reacts:new Map(), reactDraft:null,   // 이달의 우수직원: awards/{YYYY-MM} 확정 기록, praise 칭찬 점수
   tasks:[], treads:new Map(), trep:{}, trSubs:{}, trLoaded:{}, trPrimed:{}, trDate:todayStr(), tform:null, redoFor:null, confirmTDel:null,
@@ -666,7 +685,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) }, lateRule:{ ...DEFAULT_CONFIG.lateRule, ...(S.config.lateRule||{}) }, rules:{ ...DEFAULT_CONFIG.rules, ...(S.config.rules||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) }, lateRule:{ ...DEFAULT_CONFIG.lateRule, ...(S.config.lateRule||{}) }, rules:{ ...DEFAULT_CONFIG.rules, ...(S.config.rules||{}) }, push:{ ...DEFAULT_CONFIG.push, ...(S.config.push||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -891,7 +910,91 @@ function strikeOwnerLine(st){   // 사장님 직원 목록·현황용 한 줄
   if (!lateRuleLive() || st.active === false) return '';
   const ls = lateStrikes(st);
   if (!ls.count) return `무단 지각 <b>0/${ls.limit}회</b>${ls.lastReset ? ` · ${fmtMD(ls.lastReset)}에 0회로 돌아감` : ''}`;
-  return `<b style="color:var(--red)">무단 지각 ${ls.count}/${ls.limit}회</b> (${ls.lates.map(x => fmtMD(x.ds)).join(', ')}) · ${fmtMD(ls.resetOn)}까지 지각 없으면 0회로${ls.count >= ls.limit ? ' · <b style="color:var(--red)">⚠ 퇴사 처리 기준</b>' : ''}`;
+  const ack = S.strikes.get(st.id)?.ack, key = `${ls.count}|${ls.lates[ls.lates.length - 1].ds}`;
+  return `<b style="color:var(--red)">무단 지각 ${ls.count}/${ls.limit}회</b> (${ls.lates.map(x => fmtMD(x.ds)).join(', ')}) · ${fmtMD(ls.resetOn)}까지 지각 없으면 0회로${ls.count >= ls.limit ? ' · <b style="color:var(--red)">⚠ 퇴사 처리 기준</b>' : ''} · ${ack && ack.key === key ? `✅ ${({ weak:'약한', strong:'강한', over:'기준' })[ack.level] || ''} 경고 확인함 ${fmtMD(ymd(new Date(ack.at)))}` : '경고 아직 확인 안 함'}`;
+}
+// ----- 지각 경고 (v46): 1회 = 약한 경고(한 번 더 하면 2회), 한 번 더 하면 퇴사 기준 = 강한 경고 -----
+// 지각이 생기면 (1) 태블릿·휴대폰에 경고 팝업 [확인했어요] (2) 서버가 직원 휴대폰으로 알림. 확인 기록은 strikes/{직원}.ack
+const warnLevelOf = ls => ls.count >= ls.limit ? 'over' : ls.count + 1 >= ls.limit ? 'strong' : 'weak';
+function strikesReady(st){   // 새 규칙 시작일부터 이번 달까지 출퇴근 기록을 다 불러왔는지 (덜 불러온 채로 횟수를 적지 않게)
+  const s = cfg().lateRule.since; if (!s) return false;
+  for (let ym = ymOf(s > (st.hireDate || '') ? s : st.hireDate); ym <= ymOf(todayStr()); ym = shiftYM(ym, 1)) if (!S.monthLoaded[ym]) return false;
+  return true;
+}
+async function syncStrikes(st){   // 서버 알림용 무단 지각 요약 저장 (바뀌었을 때만)
+  if (!S.db || !st || !lateRuleLive() || !strikesReady(st)) return;
+  const ls = lateStrikes(st), old = S.strikes.get(st.id) || null, last = ls.lates.length ? ls.lates[ls.lates.length - 1].ds : '';
+  if (!old && !ls.count) return;
+  if (old && +old.count === ls.count && (old.lastLate || '') === last && (old.resetOn || '') === ls.resetOn && +old.limit === ls.limit) return;
+  const doc = { staffId:st.id, name:st.name, count:ls.count, limit:ls.limit, lates:ls.lates.map(x => x.ds), lastLate:last, resetOn:ls.resetOn, at:Date.now(), ack: old?.ack || null };
+  S.strikes.set(st.id, doc);
+  await S.db.doc('strikes/' + st.id).set(doc).catch(e => console.warn('strikes', e));
+}
+function warnPending(st){   // 아직 [확인했어요]를 안 누른 지각 경고
+  if (!st || !lateRuleLive() || !S.ready.strikes || !strikesReady(st)) return null;
+  const ls = lateStrikes(st);
+  if (!ls.count) return null;
+  const key = `${ls.count}|${ls.lates[ls.lates.length - 1].ds}`;
+  return S.strikes.get(st.id)?.ack?.key === key ? null : { ls, key, level: warnLevelOf(ls) };
+}
+function warnPopup(w){
+  const { ls, level } = w, n = ls.count, lim = ls.limit, d = parseDate(ls.resetOn), rk = `${d.getMonth() + 1}월 ${d.getDate()}일`, rv = `${d.getDate()}/${d.getMonth() + 1}`;
+  const t = level === 'weak' ? [`⚠️ 지각 주의 (${n}회)`, `⚠️ Chú ý đi muộn (${n} lần)`] : level === 'strong' ? [`🚨 지각 경고 (${n}회)`, `🚨 Cảnh báo đi muộn (${n} lần)`] : [`🚨 무단 지각 ${n}회 — 퇴사 처리 기준`, `🚨 Đi muộn ${n} lần — mức cho nghỉ việc`];
+  const b = level === 'weak' ? [`지각이 <b>${n}회</b> 기록됐어요. 한 번 더 지각하면 <b>${n + 1}회</b>예요 — 주의해 주세요!`, `Bạn đã đi muộn <b>${n} lần</b>. Thêm 1 lần nữa là <b>${n + 1} lần</b> — hãy chú ý!`]
+    : level === 'strong' ? [`지각이 <b>${n}회</b>예요. 한 번 더 지각하면 <b>${lim}회 = 퇴사 기준</b>이에요!`, `Bạn đã đi muộn <b>${n} lần</b>. Thêm 1 lần nữa là <b>${lim} lần = cho nghỉ việc</b>!`]
+    : ['규정상 <b>퇴사 처리 기준</b>에 닿았어요. 사장님과 꼭 이야기해 주세요.', 'Đã đến <b>mức cho nghỉ việc</b> theo quy định. Hãy nói chuyện với chủ quán.'];
+  const tip = level === 'over' ? ['타당한 이유가 있던 지각은 사장님이 확인한 뒤 지워 줄 수 있어요.', 'Đi muộn có lý do chính đáng có thể được chủ quán kiểm tra và xóa.']
+    : [`⏰ 5분 일찍 와서 준비해 주세요. <b>${rk}</b>까지 지각이 없으면 0회로 돌아가요.`, `⏰ Hãy đến sớm 5 phút. Không đi muộn đến <b>${rv}</b> thì về 0 lần.`];
+  return `<div class="npop" role="alertdialog" aria-modal="true"><div class="npop-card lwarn ${level}">
+    <div class="lwarn-head">${BI(t[0], t[1])}</div>
+    <div class="lwarn-meter" aria-hidden="true">${Array.from({ length:lim }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}<b>${n}/${lim}</b></div>
+    <p>${BI(b[0], b[1])}</p><p class="small">${BI(tip[0], tip[1])}</p>
+    <button class="bigbtn" data-act="lwarnOk">${BI('확인했어요', 'Tôi đã hiểu')}</button></div></div>`;
+}
+function lwarnNext(){   // 경고 확인 뒤 원래 가던 곳으로
+  const k = S.kiosk, st = staffById(k.staffId), nx = k.afterWarn || 'next';
+  k.afterWarn = null; k.at = Date.now();
+  if (k.step !== 'lwarn') return;   // 휴대폰 첫 화면 팝업
+  if (nx !== 'next'){ k.step = nx; return; }
+  const n2 = kNextStep(st);
+  if (n2) k.step = n2; else resetKiosk();
+}
+// ----- 직원 휴대폰 알림 받기 (v46): 서비스 워커(sw.js) + 웹 푸시 구독 → push_subs/{직원}_{기기} -----
+const VAPID_PUBLIC = 'BLtf_yQ_o7vncs5Liwj0zK2Np0tQpU7eB_91q1OztDTZRfBM44n02pXrI1JvqyMHEEMbXNAtjnoTVVUkwzDzPxc';
+const b64uBytes = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'), b = atob(t + '==='.slice((t.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+const hashStr = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
+const pushSupport = () => typeof navigator !== 'undefined' && !!navigator.serviceWorker && typeof window.PushManager !== 'undefined' && typeof Notification !== 'undefined';
+const pushSubsOf = sid => S.pushSubs.filter(s => s.staffId === sid);
+const myPushSub = me => { const id = store.get('pushId'); return id ? S.pushSubs.find(s => s.id === id && s.staffId === me.id) : null; };
+function regSW(){ try { if (typeof navigator === 'undefined' || !navigator.serviceWorker || location.protocol !== 'https:') return; navigator.serviceWorker.register('/sw.js').catch(e => console.warn('sw', e)); } catch {} }
+async function pushOn(){
+  const me = staffById(S.phone.staffId);
+  if (!me || !S.db) return;
+  if (!pushSupport()){ toast('알림을 켜지 못했어요', isIOS() ? '아이폰은 홈 화면에 설치한 앱에서 켤 수 있어요 · iPhone: hãy mở ứng dụng trên màn hình chính' : '이 브라우저는 알림을 지원하지 않아요', 'warn'); return; }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted'){ toast('알림이 막혀 있어요', '휴대폰 설정에서 허용해 주세요 · Hãy cho phép trong cài đặt', 'warn'); render(true); return; }
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: b64uBytes(VAPID_PUBLIC) });
+    const j = sub.toJSON(), id = `${me.id}_${hashStr(j.endpoint)}`, old = store.get('pushId');
+    if (old && old !== id) S.db.doc('push_subs/' + old).delete().catch(() => {});
+    await write(() => S.db.doc('push_subs/' + id).set({ staffId:me.id, name:me.name, sub:{ endpoint:j.endpoint, keys:j.keys }, at:Date.now(), ua:(navigator.userAgent || '').slice(0, 120) }));
+    store.set('pushId', id);
+    toast('🔔 알림을 켰어요', '지각이 생기면 경고·출근 전 알림이 와요 · Sẽ có cảnh báo khi đi muộn', 'ok');
+  } catch (e){ console.warn('push', e); toast('알림을 켜지 못했어요', '잠시 뒤 다시 눌러 주세요 · Hãy thử lại sau', 'warn'); }
+  render(true);
+}
+async function pushTestSend(sid){
+  try { const r = await window.tcStore.invoke('tc-notyet-check', { pushTest: sid }); toast(r?.sent ? '시험 알림을 보냈어요' : '시험 알림을 보내지 못했어요', r?.sent ? `${r.sent}대 · ${r.sent} máy` : '알림을 다시 켜 주세요 · Hãy bật lại thông báo', r?.sent ? 'ok' : 'warn'); }
+  catch { toast('시험 알림을 보내지 못했어요', '잠시 뒤 다시 해 주세요', 'warn'); }
+}
+function pushCard(me){
+  if (!cfg().push.on) return '';
+  if (!pushSupport()) return isIOS() && !isStandalone() ? `<div class="pushcard muted"><span class="small">${BI('🔔 아이폰은 <b>홈 화면에 설치한 타임카드 앱</b>에서 알림을 켤 수 있어요 (공유 → 홈 화면에 추가)', '🔔 iPhone: bật thông báo trong <b>ứng dụng đã thêm vào màn hình chính</b> (Chia sẻ → Thêm vào MH chính)')}</span></div>` : '';
+  if (Notification.permission === 'denied') return `<div class="pushcard muted"><span class="small">${BI('🔕 알림이 막혀 있어요 — 휴대폰 설정에서 이 앱의 알림을 허용해 주세요', '🔕 Thông báo đang bị chặn — hãy cho phép trong cài đặt điện thoại')}</span></div>`;
+  if (Notification.permission === 'granted' && myPushSub(me)) return `<div class="pushok small">${BI('🔔 알림 받는 중', '🔔 Đang nhận thông báo')} <button class="linkbtn" data-act="pushTest">${BI('시험 알림', 'Thử')}</button></div>`;
+  return `<div class="pushcard"><div>${BI('🔔 <b>알림 켜기</b> — 지각이 생기면 경고와 출근 전 알림이 휴대폰으로 와요', '🔔 <b>Bật thông báo</b> — nhận cảnh báo đi muộn & nhắc giờ vào ca')}</div><button class="btn pri" data-act="pushOn">${BI('알림 켜기', 'Bật thông báo')}</button></div>`;
 }
 function strikeMine(st){   // 직원 화면 (한국어·베트남어)
   const R = cfg().lateRule;
@@ -1515,6 +1618,11 @@ function kioskView(){
   }
   const st = staffById(k.staffId);
   if (!st){ resetKiosk(); return kioskView(); }
+  if (k.step === 'lwarn'){   // 지각 경고 팝업 (v46)
+    const w = warnPending(st);
+    if (w) return clock + warnPopup(w);
+    lwarnNext(); return kioskView();
+  }
   if (k.step === 'prenotice'){
     if (preNoticeList(st).length) return clock + preNoticePopup(st);
     if (preAdvance(st) === 'phonein'){ setTimeout(() => phoneStart('in', true), 0); return clock; }   // 그사이 공지가 내려갔으면 바로 다음 단계
@@ -1570,7 +1678,7 @@ function kioskView(){
       ${res.kind === 'out' && res.worked != null ? `<p class="plus">${TV('+{n}점', { n:SCORE.done })} · ${(() => { const lv = levelOf(scoreMonth(st, ymOf(todayStr())).total); return `${lv.icon} Lv.${lv.n}`; })()}</p>` : ''}
       <p class="${res.late ? 'err' : ''}">${res.msgArgs ? T(...res.msgArgs) : res.kind === 'out' && res.worked != null ? BI(esc(res.msg), fillT(VI['오늘 {h} 근무했어요. 수고하셨어요!'], { h:fmtHvi(res.worked) })) : res.msg && res.msg in VI ? T(res.msg) : (res.msg || '')}</p>
       ${k.photoUrl ? `<img class="kphoto" src="${k.photoUrl}" alt="방금 찍은 ${res.kind === 'in' ? '출근' : '퇴근'} 사진">` : ''}${pe ? `<p class="err">${BI(fillT('사진: {e} — 기록은 저장됐어요.', { e:pe }), fillT(VI['사진: {e} — 기록은 저장됐어요.'], { e: VI[pe] || pe }))}</p>` : ''}${res.kind === 'in' && earlyBird({ sid:st.id, in:res.t })?.sid === st.id ? `<div class="ebcele"><span class="claps big" aria-hidden="true"><span>👏</span><span>🎉</span><span>👏</span><span>✨</span><span>👏</span><span>🎊</span></span><b>${T('🌅 지금 오늘 가장 일찍 출근했어요!')}</b><div class="small">${T('첫 화면 이름 카드에 👏 표시가 붙어요')}</div></div>` : ''}${growthNews(st)}${mySummary(st)}
-      ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${unreadFor(st).length ? T('새 공지 {n}건 확인하기', { n:unreadFor(st).length }) : T('오늘 할 일 보기')}</button><p class="hint">${T('잠시 뒤 자동으로 넘어가요.')}</p>` : `<button class="linkbtn" data-act="kCancel">${T('확인')}</button>`}</div>`;
+      ${k.didIn && kNextStep(st) ? `<button class="bigbtn" data-act="kNext">${kNextStep(st) === 'lwarn' ? BI('⚠️ 지각 안내 확인하기', '⚠️ Xem cảnh báo đi muộn') : unreadFor(st).length ? T('새 공지 {n}건 확인하기', { n:unreadFor(st).length }) : T('오늘 할 일 보기')}</button><p class="hint">${T('잠시 뒤 자동으로 넘어가요.')}</p>` : `<button class="linkbtn" data-act="kCancel">${T('확인')}</button>`}</div>`;
   }
   return clock;
 }
@@ -1585,7 +1693,7 @@ function pinPad(title, sub, val, ctx, err){
 function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
-  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false, preOk:[], afterNotice:null });
+  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false, preOk:[], afterNotice:null, afterWarn:null });
   S.otForm = null; S.reactDraft = null; S.thForm = null;
   if (S.join?.err) S.join = null;
   S.kiosk.phoneOpt = false;   // 1회용 연결 코드를 못 받았으면 다음에 다시 시도   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
@@ -1630,7 +1738,7 @@ function slackBar(){   // 현황 탭의 슬랙 알림 칸 (직원이 없을 때�
 // 출퇴근을 찍거나 업무 보고를 보낸 직후 서버에 '지금 확인해 줘' (5분 기다리지 않게). 실패해도 5분 뒤 예약 실행이 보냄
 let slackKickT = null;
 function slackKick(){
-  if (!cfg().slack.on || !window.tcStore?.invoke) return;
+  if ((!cfg().slack.on && !cfg().push.on) || !window.tcStore?.invoke) return;   // 직원 휴대폰 알림(지각 경고)도 같은 서버 함수가 바로 보냄 (v46)
   clearTimeout(slackKickT);
   slackKickT = setTimeout(() => { window.tcStore.invoke('tc-notyet-check', { kick:true }).catch(e => console.warn('slack kick', e)); }, 1500);
 }
@@ -2021,6 +2129,9 @@ function configForm(){
       <p class="hint full" style="margin:0">마스터 번호는 출퇴근 화면에서 <b>어느 직원의 개인 번호 대신 넣어도 통과</b>하는 사장님용 번호예요. 직원이 번호를 잊었을 때 대신 찍어 줄 수 있어요. 마스터 번호로 찍은 기록에는 ‘사장님 대리 입력’ 표시가 남아요. 직원 개인 번호와 겹치면 안 돼요.</p>
       <label>⏰ 새 지각 규칙 시작일 <small class="muted">이 날부터 1분이라도 늦으면 지각 · 비우면 안 씀</small><input id="c-lateSince" type="date" value="${esc(c.lateRule.since || '')}"></label>
       <label>무단 지각 퇴사 기준 (회)<input id="c-lateLimit" type="number" min="1" value="${c.lateRule.limit}"></label>
+      <label class="check full"><input type="checkbox" id="c-push" ${c.push.on ? 'checked' : ''}> 🔔 지각 경고를 직원 휴대폰 알림으로 — 1회 지각 = 약한 경고, 한 번 더 하면 퇴사 기준 = 강한 경고 (태블릿 경고 팝업은 늘 떠요)</label>
+      <label class="check"><input type="checkbox" id="c-pushPre" ${c.push.pre ? 'checked' : ''}> ⏰ 지각 1회 이상인 직원에게 출근 전 알림</label>
+      <label>출근 몇 분 전에 알릴까요<input id="c-pushBefore" type="number" min="5" step="5" value="${c.push.before}"></label>
       <label>무단결근 퇴사 기준 (회) <small class="muted">근무 규정 카드에 표시</small><input id="c-absLimit" type="number" min="1" value="${c.rules.absentLimit}"></label>
       <label class="check full"><input type="checkbox" id="c-rules" ${c.rules.on ? 'checked' : ''}> 📋 출퇴근 첫 화면 맨 위에 <b>근무 규정 요약</b> 보여 주기 — 위 지각 규칙·퇴사 기준 숫자로 자동으로 만들어져요 (한국어·베트남어)</label>
       <label>여유 시간 (분) <small class="muted">${c.lateRule.since ? '조퇴 판단·미출근 알림에만 (새 규칙 시작일 전 지각에도)' : '지각·조퇴 판단, 미출근 알림'}</small><input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
@@ -2068,7 +2179,7 @@ function staffView(){
       ${list.length ? `<div class="slist">${list.map(st => { const wk = weeklySchedMin(st); return `<div class="sitem ${st.active === false ? 'off' : ''}"><div>
         <b>${esc(st.name)}</b> <span class="small muted">${esc(st.position || '')}${st.sample ? ' · 예시' : ''}${st.active === false ? ' · 퇴사' : ''}</span>
         <div class="sub">${isMonthly(st) ? `월급 ${num(st.monthly)}원` : `시급 ${num(st.wage)}원`} · ${schedSummary(st.sched)} · 주 ${fmtH(wk)}${wk >= 900 ? ' (주휴 대상)' : ''}</div>
-        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${st.phonePunch ? ' · 휴대폰 출퇴근' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div>${(() => { const l = strikeOwnerLine(st); return l ? `<div class="sub">⏰ ${l}</div>` : ''; })()}</div>
+        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${st.phonePunch ? ' · 휴대폰 출퇴근' : ''}${pushSubsOf(st.id).length ? ' · 🔔 알림 받음' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div>${(() => { const l = strikeOwnerLine(st); return l ? `<div class="sub">⏰ ${l}</div>` : ''; })()}</div>
         <button class="btn sm" data-act="editStaff" data-id="${st.id}">고치기</button></div>`; }).join('')}</div>` : '<p class="muted">아직 직원이 없어요. ‘+ 직원 추가’를 눌러 시작하세요.</p>'}
       ${samples.length ? `<div class="alertbar" style="margin:14px 0 0;background:var(--amber-soft)"><span>지금 보이는 <b style="color:var(--amber)">예시 직원 ${samples.length}명</b>과 그 기록은 둘러보기용이에요.</span><span class="spacer"></span>
         <button class="btn sm danger" data-act="clearSamples">${S.confirmClear ? '정말 지울까요? 한 번 더 누르기' : '예시 데이터 모두 지우기'}</button></div>` : ''}
@@ -2079,6 +2190,7 @@ function staffView(){
         <dt>관리 번호</dt><dd>${c.ownerPin === '0000' ? '<span style="color:var(--red)">처음 번호(0000) 그대로예요 — 바꿔 주세요</span>' : '설정됨'}</dd>
         <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
         <dt>지각 기준</dt><dd>${c.lateRule.since ? `${fmtDateLong(c.lateRule.since)}부터 정해진 출근 시각을 <b>1분이라도 넘으면 지각</b>${c.lateRule.since > todayStr() ? ` (그 전까지는 정해진 시간 + ${c.graceMin}분)` : ''} · 무단 지각 <b>${c.lateRule.limit}회</b> = 퇴사 기준 · 마지막 지각 뒤 <b>한 달 동안 지각이 없으면 0회</b>로 · 타당한 이유가 있는 지각은 ‘출퇴근 기록’에서 [지각 지우기]` : `정해진 시간 + ${c.graceMin}분 넘으면 지각`}</dd>
+        <dt>휴대폰 알림</dt><dd>${c.push.on ? `<b style="color:var(--green)">켜짐</b> · 지각이 생기면 경고 알림 (1회 = 약한 경고, 한 번 더 하면 퇴사 기준 = 강한 경고)${c.push.pre ? ` + 지각 1회 이상인 직원에게 출근 ${c.push.before}분 전 알림` : ''} · 알림 받는 직원 ${activeStaff().filter(s => pushSubsOf(s.id).length).length}/${activeStaff().length}명 (직원이 자기 휴대폰 앱에서 [알림 켜기])` : '꺼짐'}</dd>
         <dt>근무 규정 카드</dt><dd>${c.rules.on ? `<b style="color:var(--green)">켜짐</b> · 출퇴근 첫 화면 맨 위에 지각·결근 규정 요약 (무단 지각 ${c.lateRule.limit}회 · 무단결근 ${c.rules.absentLimit}회 = 퇴사)` : '꺼짐'}${(() => { const old = c.rules.on && pinnedNotices().find(t => /규정|지각|결근/.test(t.title || '')); return old ? `<br><span class="small">예전 긴 공고 ‘${esc(old.title)}’가 아직 첫 화면에 고정돼 있어요 — 규정 카드와 겹치니 내리면 깔끔해요 (공고는 지워지지 않아요).</span> <button class="btn sm" data-act="trPinToggle" data-id="${esc(old.id)}">첫 화면에서 내리기</button>` : ''; })()}</dd>
         <dt>휴대폰 연결</dt><dd>${c.phoneReq.on ? `<b style="color:var(--green)">필수</b> · ${c.phoneReq.deadline ? `${fmtDateLong(c.phoneReq.deadline)}까지` : ''} · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명 (업무 보고 탭 → 직원 휴대폰에서 누가 했는지 볼 수 있어요)` : `선택 · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명`}</dd>
         <dt>시즌 장식</dt><dd>${{ auto:'자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)', on:'늘 켜기', off:'끄기' }[c.season || 'auto']}${seasonNow() ? ` · 지금 ${seasonNow() === 'newyear' ? '🎉 새해' : '🎄 크리스마스'} 장식 중` : ''}</dd>
@@ -3283,7 +3395,7 @@ const kindChip = t => `<span class="chip ${t.kind === 'task' ? 'blue' : 'faint'}
 
 // ----- 태블릿·휴대폰 출퇴근 흐름에 끼워 넣기 -----
 // 출근 도장 → (2.5초 뒤) 안 읽은 공지 → 오늘 휴대폰으로 보낼 사진 보고 → 처음 / 퇴근: 안 보낸 보고 안내(막지 않음) → 퇴근
-function kNextStep(st){ return !st ? null : unreadFor(st).length ? 'notices' : todayTasksFor(st).length ? 'remind' : null; }
+function kNextStep(st){ return !st ? null : (S.kiosk.master ? null : warnPending(st)) ? 'lwarn' : unreadFor(st).length ? 'notices' : todayTasksFor(st).length ? 'remind' : null; }   // 지각한 출근이면 지각 경고 먼저 (v46, 마스터 번호면 안 띄움)
 function noticeCard(t, st){
   const list = assignees(t), read = list.filter(s => isRead(t, s)).length;
   return `<article class="ncard">
@@ -3368,7 +3480,8 @@ function phoneView(){
   return `<div class="phone tr">
     <div class="phead"><span class="mark">IN</span><div><b>${TV('{name}님', { name:me.name })}</b><div class="small muted">${me.position ? `${esc(me.position)} · ` : ''}${fmtDateK(ds)}</div></div><button class="linkbtn" data-act="phSwitch">${TV('다른 사람')}</button></div>
     ${pinBoard(me)}
-    ${(phoneHeartbeat(me), '')}${installCard()}${phonePunchCard(me)}
+    ${(phoneHeartbeat(me), '')}${installCard()}${pushCard(me)}${phonePunchCard(me)}
+    ${(() => { const w = warnPending(me); return w ? warnPopup(w) : ''; })()}
     ${otKioskBit(me) || otStaffLine(me)}
     ${myScoreCard(me)}
     <div class="ptabs" role="tablist">
@@ -3541,7 +3654,20 @@ const TRACT = {
   // 휴대폰
   phPick(d){ Object.assign(S.phone, { pickId:d.id, pin:'', err:'' }); render(true); },
   phPickBack(){ Object.assign(S.phone, { pickId:null, pin:'', err:'' }); render(true); },
-  phSwitch(){ clearShots(); Object.assign(S.phone, { staffId:null, pickId:null, open:null, pin:'', err:'', step:'' }); store.del('phoneStaff'); S.editing = null; resetKiosk(); render(true); },
+  async lwarnOk(){   // 지각 경고 [확인했어요] (v46) → 사장님 화면에 '경고 확인함'
+    const k = S.kiosk, st = staffById(k.staffId || S.phone.staffId), w = warnPending(st);
+    if (st && w){
+      await syncStrikes(st);
+      const doc = { ...(S.strikes.get(st.id) || { staffId:st.id, name:st.name }), ack:{ key:w.key, at:Date.now(), level:w.level, where: S.mode === 'phone' ? 'phone' : 'tablet' } };
+      S.strikes.set(st.id, doc);
+      S.db?.doc('strikes/' + st.id).set(doc).catch(e => console.warn('strikes', e));
+    }
+    lwarnNext(); render(true); scrollTo(0, 0);
+  },
+  pushOn(){ return pushOn(); },
+  pushTest(){ return pushTestSend(S.phone.staffId); },
+  phSwitch(){ const pid = store.get('pushId'); if (pid){ S.db?.doc('push_subs/' + pid).delete().catch(() => {}); store.del('pushId'); }   // 다른 사람으로 바꾸면 이 휴대폰 알림도 끊음 (v46)
+    clearShots(); Object.assign(S.phone, { staffId:null, pickId:null, open:null, pin:'', err:'', step:'' }); store.del('phoneStaff'); S.editing = null; resetKiosk(); render(true); },
   phTab(d){ S.phone.tab = d.v; render(true); },
   phOpen(d){
     const me = staffById(S.phone.staffId), t = taskById(d.id);
@@ -4654,11 +4780,13 @@ const ACT = {
     if (!reason){ toast('지운 사유를 적어 주세요', '예: 미리 연락함 · 병원 진료', 'warn'); return; }
     await write(() => punchRef(sid, ds).update({ lateOk:{ at:Date.now(), reason } }));
     toast('지각을 지웠어요', `${st?.name || ''} · ${fmtMD(ds)} — 지각 횟수에서 빠져요`, 'ok'); S.editing = null; render(true);
+    if (st) syncStrikes(st).catch(() => {});
   },
   async lateUndo(){
     const [sid, ds] = S.editing.slice(6).split('|'), st = staffById(sid);
     await write(() => punchRef(sid, ds).update({ lateOk:null }));
     toast('지각을 되살렸어요', `${st?.name || ''} · ${fmtMD(ds)}`, 'ok'); S.editing = null; render(true);
+    if (st) syncStrikes(st).catch(() => {});
   },
   cancelEdit(){ S.editing = null; render(true); },
   async saveEdit(){ await savePunchEdit('work'); },
@@ -4804,7 +4932,7 @@ function padPress(ctx, v){
   if (k.pin.length === 4){
     const st = staffById(k.staffId);
     const master = String(cfg().masterPin || '');
-    if (st && k.pin === String(st.pin)){ k.step = phoneNeeded(st) ? 'phonereq' : 'action'; k.pin = ''; k.master = false; startGeo(); preReadSave(st); }   // 휴대폰 연결 안 했으면 안내부터 (v38) · 팝업에서 확인한 공지는 본인 번호가 맞았을 때 읽음 저장 (v44)
+    if (st && k.pin === String(st.pin)){ const nx = phoneNeeded(st) ? 'phonereq' : 'action'; if (warnPending(st)){ k.step = 'lwarn'; k.afterWarn = nx; } else k.step = nx; k.pin = ''; k.master = false; startGeo(); preReadSave(st); }   // 확인 안 한 지각 경고가 있으면 먼저 (v46)   // 휴대폰 연결 안 했으면 안내부터 (v38) · 팝업에서 확인한 공지는 본인 번호가 맞았을 때 읽음 저장 (v44)
     else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; k.preOk = []; startGeo(); }   // 사장님 마스터 번호: 어느 직원이든 통과 (공지 읽음은 남기지 않음)
     else { k.err = '번호가 맞지 않아요. 다시 입력해 주세요'; k.pin = ''; }
   }
@@ -4854,6 +4982,7 @@ async function kioskPunch(kind, shot){
       mailPunch(st, 'out', now, { worked:r.worked, blob: shot?.blob, master: k.master, geo });
     }
     k.step = k.nextStep || 'done'; k.nextStep = null; k.at = Date.now(); beep('ok');
+    if (kind === 'in') await syncStrikes(st).catch(() => {});   // 무단 지각 요약 → 서버가 지각 경고 알림 (v46)
     slackKick();   // 슬랙 출근·퇴근 알림 바로
   } catch { if (k.step === 'photo') resetKiosk(); }
   k.busy = false; render(true);
@@ -4879,6 +5008,7 @@ async function savePunchEdit(kind){
   await write(() => punchRef(sid, ds).set(doc));
   toast('기록을 고쳤어요', `${st.name} · ${fmtMD(ds)}`, 'ok');
   S.editing = null; render(true);
+  syncStrikes(st).catch(() => {});   // 무단 지각 요약 다시 (v46)
 }
 async function saveStaff(){
   const id0 = S.editing === 'staff:new' ? null : S.editing.slice(6);
@@ -4919,7 +5049,8 @@ async function saveConfig(){
     ot: $('#c-otapp')?.checked ? { on:true, since: cfg().ot.on && cfg().ot.since ? cfg().ot.since : todayStr() } : { on:false, since:'' },   // 켠 날부터 적용
     evalStart: $('#c-evalStart') ? ($('#c-evalStart').value || '') : cfg().evalStart,
     lateRule: $('#c-lateSince') ? { since: $('#c-lateSince').value || '', limit: Math.max(1, Math.round(+$('#c-lateLimit').value || 3)) } : cfg().lateRule,   // 새 지각 규칙 (v42)
-    rules: $('#c-rules') ? { on: !!$('#c-rules').checked, absentLimit: Math.max(1, Math.round(+$('#c-absLimit').value || 2)) } : cfg().rules,   // 근무 규정 카드 (v45)
+    push: $('#c-push') ? { on: !!$('#c-push').checked, pre: !!$('#c-pushPre')?.checked, before: Math.max(5, Math.round(+$('#c-pushBefore')?.value || 60)) } : cfg().push,   // 직원 휴대폰 알림 (v46)
+    rules: $('#c-rules') ?{ on: !!$('#c-rules').checked, absentLimit: Math.max(1, Math.round(+$('#c-absLimit').value || 2)) } : cfg().rules,   // 근무 규정 카드 (v45)
     season: $('#c-season') ? ($('#c-season').value || 'auto') : cfg().season,   // 시즌 장식 (v40)   // 출퇴근 평가 시작일 (v34, 비우면 처음부터)
     phoneReq: $('#c-phoneReq') ? { on: !!$('#c-phoneReq').checked, deadline: $('#c-phoneDeadline')?.value || addDays(todayStr(), 7) } : cfg().phoneReq,   // 직원 휴대폰 연결 필수 (v38)
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
@@ -4969,7 +5100,7 @@ function tick1(){
   if ((S.mode === 'kiosk' || S.mode === 'phone') && k.step !== 'list' && !k.busy){
     const idle = now - (k.at || now), st = staffById(k.staffId);
     if (k.step === 'done' && k.didIn && idle > 2500 && kNextStep(st)){ k.step = kNextStep(st); k.at = now; render(true); }   // 출근 도장 → 새 공지·오늘 할 일
-    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : k.step === 'prenotice' ? 180000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks', 'phonereq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
+    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : k.step === 'prenotice' ? 180000 : ['lwarn', 'notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks', 'phonereq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
   }
   if (todayStr() !== lastDay){
     lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();
@@ -5020,6 +5151,9 @@ async function boot(){
   db.collection('badges').onSnapshot(s => { S.badges = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('badges', e));   // 동기부여 (v32)
   db.collection('thanks').onSnapshot(s => { S.thanks = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('thanks', e));
   db.collection('ot').onSnapshot(s => { S.ots = new Map(s.docs.map(d => [d.id, d.data()])); scheduleRender(); }, e => console.warn('ot', e));   // 추가근무 요청·승인
+  db.collection('strikes').onSnapshot(s => { S.strikes = new Map(s.docs.map(d => [d.id, d.data()])); S.ready.strikes = true; scheduleRender(); }, e => { S.ready.strikes = true; console.warn('strikes', e); });   // 무단 지각 요약·경고 확인 (v46)
+  db.collection('push_subs').onSnapshot(s => { S.pushSubs = s.docs.map(d => ({ id:d.id, ...d.data() })); scheduleRender(); }, e => console.warn('push_subs', e));   // 직원 휴대폰 알림 구독 (v46)
+  regSW();
   db.collection('praise').onSnapshot(s => { S.praise = s.docs.map(d => ({ id:d.id, ...d.data() })); scheduleRender(); }, e => console.warn('praise', e));
   db.doc('status/autobackup').onSnapshot(s => { S.autoBackup = s.exists ? s.data() : null; if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('autobackup', e));
   db.collection('backups').onSnapshot(s => { S.backups = s.docs.map(d => ({ id:d.id, ...d.data() })); if (S.mode === 'owner' && S.tab === 'staff') scheduleRender(); }, e => console.warn('backups', e));

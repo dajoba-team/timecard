@@ -23,6 +23,8 @@
 | `months/{YYYY-MM}/punches/{staffId}_{YYYY-MM-DD}` | 하루 출퇴근 기록 (직원·날짜당 1개) |
 | `months/{YYYY-MM}/mails/{staffId}_{YYYY-MM-DD}` | 미출근 메일 중복 방지 표시 |
 | `contracts/{staffId}_v{n}` | 근로계약서 (버전별) |
+| `strikes/{staffId}` | 무단 지각 요약 (v46) `{ count, limit, lates, lastLate, resetOn, ack:{ key, at, level, where } }` — 앱이 출근·지각 지우기 때 적고, 서버가 휴대폰 알림에 씀. ack = 경고 팝업 [확인했어요] |
+| `push_subs/{staffId}_{기기}` | 직원 휴대폰 알림 구독 (v46) `{ staffId, name, sub:{ endpoint, keys }, at, ua }` — 알림을 끈 휴대폰은 서버가 지움 |
 | `reports/{YYYY-MM}` | 세무사 전달 내역 (고친 금액·보낸 기록) |
 | `status/mail` | 마지막 메일 발송 결과 |
 | `status/backup` | 마지막 백업 시각 |
@@ -99,6 +101,7 @@
 | `evalStart` | 출퇴근 평가 시작일 `YYYY-MM-DD` — 이 날 전은 지각·조퇴·결근·점수·배지에서 뺌, 일한 시간은 그대로 (v34, 비우면 처음부터) | 2026-11-17 |
 | `lateRule` | 새 지각 규칙 `{ since, limit }` — since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 마지막 지각 뒤 한 달 동안 지각 없으면 0회로 (v43, since 비우면 예전 방식) | `{ since:'2026-12-01', limit:3 }` |
 | `rules` | 첫 화면 근무 규정 요약 카드 `{ on, absentLimit }` — 지각 규칙·무단 지각 기준은 `lateRule`에서 가져와 자동으로 만듦, absentLimit = 무단결근 퇴사 기준 (v45) | `{ on:true, absentLimit:2 }` |
+| `push` | 직원 휴대폰 알림 `{ on, pre, before }` — 지각 경고 알림, 지각 1회 이상인 직원에게 출근 before분 전 알림 (v46) | `{ on:true, pre:true, before:60 }` |
 | `otUnit` | 추가근무 인정 단위(분) | 10 |
 | `earlyClamp` | 일찍 와도 정해진 시각부터 계산 | true |
 | `otPremium` | 추가근무 1.5배 (5인 이상) | false |

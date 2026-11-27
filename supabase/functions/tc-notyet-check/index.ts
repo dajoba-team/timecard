@@ -24,6 +24,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import { kstDate, notyetList, notyetMessage, punchEvents, punchMessage, reportEvents, reportMessage, dueEvents, dueMessage, otEvents, otMessage } from "./rules.mjs";
 import { BACKUP_BUCKET, BACKUP_HOUR, BACKUP_KEEP_DAYS, backupName, buildBackup, kstDay, kstHour, oldBackupNames } from "./backup.mjs";
+import { sendPush } from "./webpush.mjs";
+import { pushCfg, pushPayload, preShiftEvents, warnPushEvents } from "./pushrules.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -135,6 +137,48 @@ async function backupLink(ds: string) {
   return { url: data.signedUrl };
 }
 
+// ===== 직원 휴대폰 알림 (v46, webpush.mjs · pushrules.mjs) =====
+// 슬랙을 꺼 둬도 돌아요. 가게 설정 push.on으로 켜기·끄기. 직원 휴대폰 구독은 push_subs/{직원}_{기기}
+// secret: TC_VAPID_PUBLIC (앱 VAPID_PUBLIC과 같은 값), TC_VAPID_PRIVATE (JWK JSON)
+const vapidKeys = () => {
+  const pub = Deno.env.get("TC_VAPID_PUBLIC"), priv = Deno.env.get("TC_VAPID_PRIVATE");
+  return pub && priv ? { publicKey: pub, privateJwk: JSON.parse(priv) } : null;
+};
+type Sub = { id: string; data: { staffId: string; sub: { endpoint: string; keys: { p256dh: string; auth: string } } } };
+async function pushTo(subs: Sub[], staffId: string, payload: Record<string, unknown>, vapid: NonNullable<ReturnType<typeof vapidKeys>>) {
+  let sent = 0;
+  for (const s of subs.filter(x => x.data.staffId === staffId && x.data.sub?.endpoint)) {
+    try {
+      const r = await sendPush(s.data.sub, payload, vapid);
+      if (r.ok) sent++;
+      else if (r.gone) await sb.from(DOCS).update({ deleted_at: new Date().toISOString() }).eq("collection", "push_subs").eq("id", s.id);   // 알림을 끈 휴대폰
+      else console.warn("push", r.status, s.id);
+    } catch (e) { console.warn("push", s.id, e instanceof Error ? e.message : e); }
+  }
+  return sent;
+}
+async function runPush(config: Record<string, unknown>, now: number) {
+  if (!pushCfg(config).on) return { skipped: "off" };
+  const vapid = vapidKeys();
+  if (!vapid) return { skipped: "no-keys" };
+  const strikes = Object.fromEntries((await listDocs("strikes")).map(d => [d.id, d.data]));
+  if (!Object.keys(strikes).length) return { sent: 0 };
+  const subs = await listDocs("push_subs") as unknown as Sub[];
+  if (!subs.length) return { sent: 0, subs: 0 };
+  const ds = kstDate(now), ym = ds.slice(0, 7), alertsCol = `months/${ym}/alerts`;
+  const staff = (await listDocs("staff")).map(d => ({ id: d.id, ...d.data }));
+  const punches = Object.fromEntries((await listDocs(`months/${ym}/punches`, `%\\_${ds}`)).map(d => [d.id, d.data]));
+  const evs = [...warnPushEvents({ config, strikes, staff, now }), ...preShiftEvents({ config, strikes, staff, punches, now })]
+    .filter(e => subs.some(s => s.data.staffId === e.st.id));   // 알림을 켠 직원에게만
+  let sent = 0;
+  for (const ev of evs) {
+    const { error } = await sb.from(DOCS).insert({ collection: alertsCol, id: ev.key, data: { at: now, kind: ev.kind, ch: "push", level: ev.level, staffId: ev.st.id } });
+    if (error) { if (error.code === "23505") continue; throw new Error(error.message); }   // 이미 보냄
+    sent += await pushTo(subs, ev.st.id, pushPayload(ev, config), vapid);
+  }
+  return { sent, events: evs.length };
+}
+
 async function authorized(req: Request) {
   const secret = Deno.env.get("TC_CRON_SECRET");
   if (secret && req.headers.get("x-cron-secret") === secret) return "cron";
@@ -150,8 +194,18 @@ Deno.serve(async req => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   const who = await authorized(req);
   if (!who) return json({ error: "unauthorized" }, 401);
-  let body: { test?: boolean; backupUrl?: string; backupNow?: boolean } = {};
+  let body: { test?: boolean; backupUrl?: string; backupNow?: boolean; pushTest?: string } = {};
   try { body = await req.json(); } catch { /* 빈 본문 */ }
+  // 직원 휴대폰 '시험 알림' (직원 휴대폰·사장님 화면에서, 로그인한 타임카드 계정만)
+  if (body.pushTest) {
+    if (who !== "user") return json({ error: "unauthorized" }, 401);
+    const vapid = vapidKeys();
+    if (!vapid) return json({ error: "알림 열쇠(TC_VAPID_*)가 설정되지 않았어요" }, 500);
+    const subs = await listDocs("push_subs") as unknown as Sub[];
+    const sid = String(body.pushTest), mine = subs.filter(s => s.data.staffId === sid);
+    const sent = await pushTo(mine, sid, { title: "🔔 Thử thông báo · 시험 알림", body: "Thông báo đã sẵn sàng!\n알림이 잘 와요!", tag: "tc-test", url: "/" }, vapid);
+    return json({ ok: sent > 0, sent, subs: mine.length });
+  }
   // 백업 내려받기·지금 백업은 사장님 화면에서만 (예약 작업 비밀값으로는 안 됨)
   if ((body.backupUrl || body.backupNow) && who !== "user") return json({ error: "사장님 계정으로만 할 수 있어요" }, 403);
   if (body.backupUrl) { const r = await backupLink(String(body.backupUrl)); return json(r, r.error ? 404 : 200); }
@@ -169,7 +223,9 @@ Deno.serve(async req => {
     if (body.backupNow) { const r = await runBackup(now, store, true); return json(r, r && r.ok ? 200 : 500); }
     // 매일 자동 백업: 슬랙을 꺼 둬도 돌아요. 실패해도 알림은 계속 보냄
     const backup = await runBackup(now, store).catch(e => ({ ok: false, err: e instanceof Error ? e.message : String(e) }));
-    if (!config.slack || !config.slack.on) return json({ ok: true, skipped: "off", backup });
+    // 직원 휴대폰 알림 (지각 경고·출근 전): 슬랙을 꺼 둬도 돌아요. 실패해도 슬랙 알림은 계속
+    const push = await runPush(config, now).catch(e => { console.error("push", e); return { ok: false, err: e instanceof Error ? e.message : String(e) }; });
+    if (!config.slack || !config.slack.on) return json({ ok: true, skipped: "off", backup, push });
     // 알림 종류별 켜기·끄기 (사장님 화면 현황 → 슬랙 알림). 없으면 모두 켜짐
     const ev = { notyet: true, in: true, out: true, report: true, due: true, ot: true, ...(config.slack.ev || {}) };
 
@@ -177,7 +233,7 @@ Deno.serve(async req => {
     const yds = kstDate(now - 86400000), yym = yds.slice(0, 7);   // 어제 (자정 넘은 퇴근)
     const staff = (await listDocs("staff")).map(d => ({ id: d.id, ...d.data }));
     const punches = Object.fromEntries((await listDocs(`months/${ym}/punches`, `%\\_${ds}`)).map(d => [d.id, d.data]));
-    const result: Record<string, unknown> = { ok: true, backup };
+    const result: Record<string, unknown> = { ok: true, backup, push };
     const sentText: string[] = [];
 
     // 중복 방지: 표시를 먼저 '추가'로 만들어서, 이미 있으면(다른 실행이 보냈으면) 건너뜀.
