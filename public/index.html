@@ -621,6 +621,7 @@ const DEFAULT_CONFIG = { storeName:'우리 가게', ownerPin:'0000', masterPin:'
   season:'auto',   // 시즌 장식 (v40): 'auto' 크리스마스 11/20~12/25·새해 12/26~1/5 / 'on' / 'off'
   team:{ on:false, target:90, reward:'', rewardVi:'' },
   evalStart:'2026-11-17',
+  lateRule:{ since:'2026-12-01', limit:3 },   // 새 지각 규칙 (v42): since부터 정해진 출근 시각을 1분이라도 넘으면 지각(봐주는 시간 없음), 무단 지각 limit회 = 퇴사 기준, 한 달 동안 지각 없으면 0회로. since 비우면 예전 방식
   phoneReq:{ on:false, deadline:'' } };   // 직원 휴대폰 연결 필수 (v38): 켜면 기한까지 모든 직원이 휴대폰 연결   // 출퇴근 평가 시작일 (v34): 이 날 전은 시험 기간이라 지각·결근·점수에서 뺌 (일한 시간은 급여에 그대로)   // 팀 목표 (v32): 가게 전체 정시 출근률   // 추가근무 승인제 (v27): 켜면 since 날짜부터 승인된 추가근무만 급여에 넣음
 const TABS = [['now','현황'],['tasks','업무 보고'],['award','동기부여'],['records','출퇴근 기록'],['timecard','근무 집계'],['contract','근로계약'],['staff','직원·설정'],['payroll','인건비·급여']];
 const S = {
@@ -648,7 +649,7 @@ const S = {
 const cfg = () => ({ ...DEFAULT_CONFIG, ...S.config, rates:{ ...DEFAULT_CONFIG.rates, ...(S.config.rates||{}) },
   mail:{ ...DEFAULT_CONFIG.mail, ...(S.config.mail||{}), ev:{ ...DEFAULT_CONFIG.mail.ev, ...(S.config.mail?.ev||{}) } },
   photo:{ ...DEFAULT_CONFIG.photo, ...(S.config.photo||{}) }, slack:{ ...DEFAULT_CONFIG.slack, ...(S.config.slack||{}) },
-  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) } });
+  biz:{ ...DEFAULT_CONFIG.biz, ...(S.config.biz||{}) }, contract:{ ...DEFAULT_CONFIG.contract, ...(S.config.contract||{}) }, tax:{ ...DEFAULT_CONFIG.tax, ...(S.config.tax||{}) }, geo:{ ...DEFAULT_CONFIG.geo, ...(S.config.geo||{}) }, award:{ ...DEFAULT_CONFIG.award, ...(S.config.award||{}) }, ot:{ ...DEFAULT_CONFIG.ot, ...(S.config.ot||{}) }, team:{ ...DEFAULT_CONFIG.team, ...(S.config.team||{}) }, phoneReq:{ ...DEFAULT_CONFIG.phoneReq, ...(S.config.phoneReq||{}) }, lateRule:{ ...DEFAULT_CONFIG.lateRule, ...(S.config.lateRule||{}) } });
 const staffById = id => S.staff.find(s => s.id === id);
 const activeStaff = () => S.staff.filter(s => s.active !== false);
 
@@ -843,6 +844,48 @@ function weeklySchedMin(st){ return (st.sched||[]).reduce((t, s) => t + (s && s.
 
 // 출퇴근 평가 시작일 (v34): 이 날부터 지각·조퇴·결근·점수를 계산. 비우면 처음부터
 const evalOn = ds => ds >= (cfg().evalStart || '');
+// 새 지각 규칙 (v42): 시작일부터는 정해진 출근 시각을 1분이라도 넘으면 지각 (09:00 출근이면 09:01부터). 그 전 날짜는 예전처럼 '봐주는 시간' 뒤부터
+const lateStrict = ds => { const s = cfg().lateRule.since; return !!s && ds >= s; };
+function lateOf(ds, sStart, inMs){
+  if (lateStrict(ds)){ const m = Math.floor((inMs - sStart) / 60000); return m >= 1 ? m : 0; }
+  return inMs > sStart + (+cfg().graceMin || 0) * 60000 ? Math.round((inMs - sStart) / 60000) : 0;
+}
+const addMonths = (ds, n) => { const d = parseDate(ds), day = d.getDate(), t = new Date(d.getFullYear(), d.getMonth() + n, 1); t.setDate(Math.min(day, new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate())); return ymd(t); };
+// 무단 지각 횟수 (v42): 새 규칙 시작일부터, 사장님이 지우지 않은 지각만. 마지막 지각 뒤 한 달 동안 지각이 없으면 0회로 돌아감 (출퇴근 기록은 급여 때문에 그대로 남김)
+function lateStrikes(st, upto = todayStr(), now = Date.now()){
+  const R = cfg().lateRule, out = { on: !!R.since, limit: Math.max(1, +R.limit || 3), count:0, lates:[], resetOn:'', resets:0, lastReset:'' };
+  if (!R.since || upto < R.since) return out;
+  let ds = st.hireDate && st.hireDate > R.since ? st.hireDate : R.since, last = '';
+  for (let ym = ymOf(ds); ym <= ymOf(upto); ym = shiftYM(ym, 1)) ensureMonth(ym);   // 지난 달 기록도 불러오기
+  for (; ds <= upto; ds = addDays(ds, 1)){
+    if (st.endDate && ds > st.endDate) break;
+    const r = dayCalc(st, ds, now);
+    if (!r.late) continue;
+    if (last && addMonths(last, 1) <= ds){ out.resets++; out.lastReset = addMonths(last, 1); out.lates = []; }
+    out.lates.push({ ds, min:r.late }); last = ds;
+  }
+  if (last && addMonths(last, 1) <= upto){ out.resets++; out.lastReset = addMonths(last, 1); out.lates = []; }
+  out.count = out.lates.length;
+  out.resetOn = out.count ? addMonths(last, 1) : '';
+  return out;
+}
+const lateRuleLive = () => { const s = cfg().lateRule.since; return !!s && todayStr() >= s; };
+function strikeOwnerLine(st){   // 사장님 직원 목록·현황용 한 줄
+  if (!lateRuleLive() || st.active === false) return '';
+  const ls = lateStrikes(st);
+  if (!ls.count) return `무단 지각 <b>0/${ls.limit}회</b>${ls.lastReset ? ` · ${fmtMD(ls.lastReset)}에 0회로 돌아감` : ''}`;
+  return `<b style="color:var(--red)">무단 지각 ${ls.count}/${ls.limit}회</b> (${ls.lates.map(x => fmtMD(x.ds)).join(', ')}) · ${fmtMD(ls.resetOn)}까지 지각 없으면 0회로${ls.count >= ls.limit ? ' · <b style="color:var(--red)">⚠ 퇴사 처리 기준</b>' : ''}`;
+}
+function strikeMine(st){   // 직원 화면 (한국어·베트남어)
+  const R = cfg().lateRule;
+  if (!R.since) return '';
+  const md = ds => { const d = parseDate(ds); return [`${d.getMonth() + 1}월 ${d.getDate()}일`, `${d.getDate()}/${d.getMonth() + 1}`]; };
+  if (!lateRuleLive()){ const [k, v] = md(R.since); return BI(`📢 <b>${k}</b>부터 새 지각 규칙: 출근 시각을 <b>1분이라도 넘으면 지각</b> · 한 달 동안 지각 없으면 0회로`, `📢 Từ <b>${v}</b>: quá giờ vào ca <b>dù 1 phút cũng là đi muộn</b> · 1 tháng không đi muộn thì về 0 lần`); }
+  const ls = lateStrikes(st);
+  if (!ls.count) return BI(`⏰ 무단 지각 <b>0/${ls.limit}회</b> 👍`, `⏰ Đi muộn không phép <b>0/${ls.limit} lần</b> 👍`);
+  const [k, v] = md(ls.resetOn);
+  return BI(`⏰ 무단 지각 <b style="color:var(--red)">${ls.count}/${ls.limit}회</b> · <b>${k}</b>까지 지각 없으면 0회로 돌아가요!`, `⏰ Đi muộn không phép <b style="color:var(--red)">${ls.count}/${ls.limit} lần</b> · Không đi muộn đến <b>${v}</b> thì về 0 lần!`);
+}
 function dayCalc(st, ds, now = Date.now(), pOver){   // pOver: 저장 전 기록으로 미리 계산 (퇴근 직후 추가근무 확인)
   const C = cfg(), p = pOver || getPunch(st.id, ds), sc = schedFor(st, ds, p), pre = !evalOn(ds);
   const r = { ds, p, sc, status:'off', worked:0, paid:0, ot:0, late:0, early:0, running:false, schedMin:0, regOff: !sc && isRegularOff(st, ds), preEval:pre };
@@ -854,7 +897,8 @@ function dayCalc(st, ds, now = Date.now(), pOver){   // pOver: 저장 전 기록
   }
   if (p && p.kind === 'leave'){ r.status = 'leave'; return r; }
   if (p && p.in){
-    if (sc && !pre && p.in > r.sStart + grace) r.late = Math.round((p.in - r.sStart)/60000);   // 평가 시작 전은 지각 아님
+    if (sc && !pre) r.late = lateOf(ds, r.sStart, p.in);   // 평가 시작 전은 지각 아님
+    if (r.late && p.lateOk){ r.lateOk = r.late; r.late = 0; }   // 사장님이 지운 지각 (타당한 이유): 지각·점수·무단 지각 횟수에서 모두 빠짐 (v42)
     let out = p.out;
     if (!out){
       if (now - p.in < 20*3600000){ out = now; r.running = true; }
@@ -1365,6 +1409,7 @@ function statusChips(r){
   const c = [];
   const m = { done:['정상','ok'], working:['근무 중','blue'], extra:[r.regOff ? '휴무일 근무' : '추가 근무','blue'], absent:['결근','red'], notyet:['미출근','amber'], leave:['휴무 처리',''], noout:['퇴근 누락','amber'], upcoming:['예정','faint'], off: r.regOff ? ['정기 휴무',''] : r.preEval && r.sc ? ['평가 시작 전','faint'] : ['근무 기간 아님','faint'] }[r.status];
   if (r.late) c.push(`<span class="chip red">지각 ${r.late}분</span>`);
+  if (r.lateOk) c.push(`<span class="chip faint" title="${esc(r.p?.lateOk?.reason || '사장님이 지운 지각')}">지각 지움 (${r.lateOk}분)</span>`);
   if (r.status !== 'done' || !r.late) c.push(`<span class="chip ${m[1]}">${m[0]}</span>`);
   if (r.early) c.push(`<span class="chip amber">조퇴 ${r.early}분</span>`);
   if (r.ot && r.status === 'done') c.push(`<span class="chip blue">추가 ${fmtHM(r.ot)}${r.otDoc ? ' 승인' : ''}</span>`);
@@ -1402,7 +1447,7 @@ function earlyBird(extra){
 function kioskStatus(st, now){
   const today = todayStr(), op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
   // 이름 카드의 좁은 줄이라 베트남어 한 줄만 (TV)
-  if (op) return { cls: op.lateMin ? 'late' : 'working', text: TV('출근 {t} · 근무 중', { t:fmtT(op.in) }) };
+  if (op) return { cls: op.lateMin && !op.lateOk ? 'late' : 'working', text: TV('출근 {t} · 근무 중', { t:fmtT(op.in) }) };
   if (tp && tp.out) return { cls:'done', text: tp.in ? TV('출근 {a} · 퇴근 {b}', { a:fmtT(tp.in), b:fmtT(tp.out) }) : TV('퇴근 {t}', { t:fmtT(tp.out) }) };   // 오늘 출근 시각은 모두에게 (v33)
   if (tp && tp.kind === 'leave') return { cls:'', text: TV('오늘 휴무') };
   if (sc) return { cls: now > at(today, sc.start) + cfg().graceMin*60000 ? 'wait' : '', text: TV('오늘 {a}–{b}', { a:sc.start, b:sc.end }) };
@@ -1433,7 +1478,7 @@ function mySummary(st){
   const sc = scoreMonth(st, ymOf(todayStr())), lv = levelOf(sc.total);
   const ko2 = `⭐ 이번 달 점수 <b>${num(sc.total)}점</b> · ${lv.icon} <b>Lv.${lv.n} ${lv.ko}</b> · 달성률 <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak}일</b> 연속 정시 출근` : ''}`;
   const vi2 = `⭐ Điểm tháng này <b>${num(sc.total)}</b> · ${lv.icon} <b>Lv.${lv.n} ${lv.vi}</b> · Tỷ lệ <b>${pct(sc.rate)}</b> ${badgeOf(sc.rate)}${sc.streak >= 2 ? ` · 🔥 <b>${sc.streak} ngày</b> liên tiếp đúng giờ` : ''}`;
-  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}<div style="margin-top:6px">${BI(ko2, vi2)}</div>${levelBar(lv)}${missionLine(st)}${badgeShelf(st, false)}</div>`;
+  return `<div class="mysum"><div class="muted" style="margin-bottom:4px">${T('이번 달 내 근무 (자동 계산)')}</div>${BI(ko, vi)}${(() => { const s = strikeMine(st); return s ? `<div style="margin-top:6px">${s}</div>` : ''; })()}<div style="margin-top:6px">${BI(ko2, vi2)}</div>${levelBar(lv)}${missionLine(st)}${badgeShelf(st, false)}</div>`;
 }
 function kioskView(){
   const k = S.kiosk, now = Date.now(), today = todayStr();
@@ -1573,6 +1618,13 @@ document.addEventListener('change', async e => {
   await write(() => S.db.doc('config/main').set({ ...S.config, slack:{ ...cfg().slack, ev } }));
   toast(`슬랙 ${SLACK_EV.find(x => x[0] === e.target.value)?.[1]} 알림을 ${e.target.checked ? '켰어요' : '껐어요'}`, '', 'ok');
 });
+function strikeReminder(){   // 무단 지각이 기준에 닿았거나 한 번 남은 직원 (v42)
+  if (!lateRuleLive()) return '';
+  const list = activeStaff().map(st => ({ st, ls: lateStrikes(st) })).filter(x => x.ls.count >= x.ls.limit - 1 && x.ls.count);
+  if (!list.length) return '';
+  const over = list.filter(x => x.ls.count >= x.ls.limit), near = list.filter(x => x.ls.count < x.ls.limit);
+  return `<div class="alertbar" style="border-color:var(--red)"><span>⏰ ${over.length ? `<b style="color:var(--red)">무단 지각 ${over[0].ls.limit}회 이상: ${over.map(x => esc(x.st.name)).join(', ')}</b> — 규정상 퇴사 처리 기준이에요. ` : ''}${near.length ? `<b>한 번만 더 지각하면 기준: ${near.map(x => `${esc(x.st.name)}(${x.ls.count}회)`).join(', ')}</b>. ` : ''}타당한 이유가 있던 지각은 ‘출퇴근 기록’에서 지울 수 있어요.</span><span class="spacer"></span><button class="btn sm" data-act="tab" data-v="staff">직원별 보기</button></div>`;
+}
 function nowView(){
   const now = Date.now(), today = todayStr();
   if (!S.ready.staff) return loadingNote();
@@ -1590,6 +1642,7 @@ function nowView(){
   return `
   ${reportReminder()}
   ${otReminder()}
+  ${strikeReminder()}
   <div class="alertbar">
     <span>${S.sound ? '🔔 <b>소리 알림 켜짐</b>' : '이 화면을 켜 두면 직원이 출근·퇴근할 때, 그리고 <b>정해진 시간이 지나도 출근하지 않으면</b> 알림이 떠요.'}</span>
     <span class="spacer"></span>
@@ -1665,6 +1718,10 @@ function dayTable(ds){
           <label style="flex:1;min-width:160px">메모 (수정 사유)<input id="ed-note" value="${esc(p.note || '')}" placeholder="예: 퇴근 버튼 누르는 걸 잊음"></label>
         </div>
         <p class="hint">퇴근이 출근보다 이른 시각이면 다음 날 퇴근으로 계산해요. 결근이 아니라 쉬기로 한 날이면 ‘휴무로 처리’를 누르세요.</p>
+        ${r.late || r.lateOk ? `<div class="inl lateok" style="margin-top:10px;padding:10px;border-radius:10px;background:${r.lateOk ? 'var(--green-soft, #e8f6ee)' : 'var(--red-soft, #fdecec)'}">${r.lateOk
+          ? `<span style="flex:1;min-width:180px">✅ <b>지운 지각 ${r.lateOk}분</b>${p.lateOk?.reason ? ` — 사유: ${esc(p.lateOk.reason)}` : ''}</span><button class="btn sm" data-act="lateUndo">지각 되살리기</button>`
+          : `<label style="flex:1;min-width:180px">⏰ 지각 ${r.late}분 — 타당한 이유가 있으면 사유를 적고 지워 주세요<input id="ed-lateWhy" placeholder="예: 미리 연락함 · 병원 진료 · 대중교통 사고"></label><button class="btn sm pri" data-act="lateOk">지각 지우기</button>`}</div>
+        <p class="hint">지운 지각은 지각 횟수·무단 지각(${cfg().lateRule.limit}회 기준)·점수에서 빠져요. 출퇴근 시각과 일한 시간은 그대로예요.</p>` : ''}
         <div class="row" style="margin-top:8px"><button class="btn pri sm" data-act="saveEdit">저장</button><button class="btn sm" data-act="leaveEdit">휴무로 처리</button>${r.p ? '<button class="btn danger sm" data-act="delEdit">기록 삭제</button>' : ''}<button class="btn sm" data-act="cancelEdit">취소</button></div>
       </td></tr>`;
     }
@@ -1674,7 +1731,7 @@ function dayTable(ds){
       <td class="mono">${r.p?.out ? fmtT(r.p.out, ds) : r.running ? '근무 중' : '—'}${photoBits(r.p, 'out')}</td>
       <td class="mono r">${WORKED.has(r.status) ? fmtHM(r.paid) : '—'}</td>
       <td>${statusChips(r)}</td>
-      <td class="r"><button class="btn sm" data-act="editPunch" data-id="${st.id}" data-ds="${ds}">수정</button></td></tr>`;
+      <td class="r">${r.late ? `<button class="btn sm" data-act="editPunch" data-id="${st.id}" data-ds="${ds}" title="타당한 이유가 있는 지각이면 사유를 적고 지울 수 있어요">지각 지우기</button> ` : ''}<button class="btn sm" data-act="editPunch" data-id="${st.id}" data-ds="${ds}">수정</button></td></tr>`;
   }).join('');
   return `<section class="panel"><h3>${fmtDateLong(ds)}</h3><div class="tscroll"><table class="t">
     <thead><tr><th>직원</th><th>예정</th><th>출근</th><th>퇴근</th><th class="r">인정 시간</th><th>상태</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -1940,7 +1997,9 @@ function configForm(){
       <label>사장님 관리 번호 4자리<input id="c-pin" value="${esc(c.ownerPin)}" inputmode="numeric" maxlength="4"></label>
       <label>마스터 번호 4자리 (비우면 안 씀)<input id="c-master" value="${esc(c.masterPin)}" inputmode="numeric" maxlength="4" placeholder="예: 9999"></label>
       <p class="hint full" style="margin:0">마스터 번호는 출퇴근 화면에서 <b>어느 직원의 개인 번호 대신 넣어도 통과</b>하는 사장님용 번호예요. 직원이 번호를 잊었을 때 대신 찍어 줄 수 있어요. 마스터 번호로 찍은 기록에는 ‘사장님 대리 입력’ 표시가 남아요. 직원 개인 번호와 겹치면 안 돼요.</p>
-      <label>지각 봐주는 시간 (분)<input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
+      <label>⏰ 새 지각 규칙 시작일 <small class="muted">이 날부터 1분이라도 늦으면 지각 · 비우면 안 씀</small><input id="c-lateSince" type="date" value="${esc(c.lateRule.since || '')}"></label>
+      <label>무단 지각 퇴사 기준 (회)<input id="c-lateLimit" type="number" min="1" value="${c.lateRule.limit}"></label>
+      <label>여유 시간 (분) <small class="muted">${c.lateRule.since ? '조퇴 판단·미출근 알림에만 (새 규칙 시작일 전 지각에도)' : '지각·조퇴 판단, 미출근 알림'}</small><input id="c-grace" type="number" min="0" value="${c.graceMin}"></label>
       <label>추가근무 인정 단위 (분)<input id="c-unit" type="number" min="1" value="${c.otUnit}"></label>
       <label>🎄 시즌 장식 <small class="muted">태블릿 첫 화면</small><select id="c-season">${[['auto', '자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)'], ['on', '늘 켜기'], ['off', '끄기']].map(([v, l]) => `<option value="${v}" ${(c.season || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>출퇴근 평가 시작일 <small class="muted">이 날부터 지각·결근·점수 계산</small><input id="c-evalStart" type="date" value="${esc(c.evalStart || '')}"></label>
@@ -1985,7 +2044,7 @@ function staffView(){
       ${list.length ? `<div class="slist">${list.map(st => { const wk = weeklySchedMin(st); return `<div class="sitem ${st.active === false ? 'off' : ''}"><div>
         <b>${esc(st.name)}</b> <span class="small muted">${esc(st.position || '')}${st.sample ? ' · 예시' : ''}${st.active === false ? ' · 퇴사' : ''}</span>
         <div class="sub">${isMonthly(st) ? `월급 ${num(st.monthly)}원` : `시급 ${num(st.wage)}원`} · ${schedSummary(st.sched)} · 주 ${fmtH(wk)}${wk >= 900 ? ' (주휴 대상)' : ''}</div>
-        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${st.phonePunch ? ' · 휴대폰 출퇴근' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div></div>
+        <div class="sub">개인 번호 ${st.pin ? '설정됨' : '<span style="color:var(--red)">없음</span>'} · ${({ none:'공제 없음', biz:'3.3% 공제', ins:'4대보험' })[st.deduct || 'none']}${!isMonthly(st) && (+st.wage || 0) < MIN_WAGE ? ' · <span style="color:var(--red)">최저시급(10,320원) 미만</span>' : ''}${st.rrn ? ' · 주민번호 등록됨' : ''}${st.geoExempt ? ' · 외근 직원' : ''}${st.phonePunch ? ' · 휴대폰 출퇴근' : ''}${S.ready.contracts && (cfg().contract.on || S.contracts.length) ? ` · 근로계약서 ${cLabel(currentContract(st.id))[0]}` : ''}</div>${(() => { const l = strikeOwnerLine(st); return l ? `<div class="sub">⏰ ${l}</div>` : ''; })()}</div>
         <button class="btn sm" data-act="editStaff" data-id="${st.id}">고치기</button></div>`; }).join('')}</div>` : '<p class="muted">아직 직원이 없어요. ‘+ 직원 추가’를 눌러 시작하세요.</p>'}
       ${samples.length ? `<div class="alertbar" style="margin:14px 0 0;background:var(--amber-soft)"><span>지금 보이는 <b style="color:var(--amber)">예시 직원 ${samples.length}명</b>과 그 기록은 둘러보기용이에요.</span><span class="spacer"></span>
         <button class="btn sm danger" data-act="clearSamples">${S.confirmClear ? '정말 지울까요? 한 번 더 누르기' : '예시 데이터 모두 지우기'}</button></div>` : ''}
@@ -1995,7 +2054,7 @@ function staffView(){
         <dt>가게 이름</dt><dd>${esc(c.storeName)}</dd>
         <dt>관리 번호</dt><dd>${c.ownerPin === '0000' ? '<span style="color:var(--red)">처음 번호(0000) 그대로예요 — 바꿔 주세요</span>' : '설정됨'}</dd>
         <dt>마스터 번호</dt><dd>${c.masterPin ? '설정됨 · 출퇴근 화면에서 모든 직원 번호 대신 쓸 수 있어요' : '안 씀 · ‘고치기’에서 정할 수 있어요'}</dd>
-        <dt>지각 기준</dt><dd>정해진 시간 + ${c.graceMin}분 넘으면 지각</dd>
+        <dt>지각 기준</dt><dd>${c.lateRule.since ? `${fmtDateLong(c.lateRule.since)}부터 정해진 출근 시각을 <b>1분이라도 넘으면 지각</b>${c.lateRule.since > todayStr() ? ` (그 전까지는 정해진 시간 + ${c.graceMin}분)` : ''} · 무단 지각 <b>${c.lateRule.limit}회</b> = 퇴사 기준 · 마지막 지각 뒤 <b>한 달 동안 지각이 없으면 0회</b>로 · 타당한 이유가 있는 지각은 ‘출퇴근 기록’에서 [지각 지우기]` : `정해진 시간 + ${c.graceMin}분 넘으면 지각`}</dd>
         <dt>휴대폰 연결</dt><dd>${c.phoneReq.on ? `<b style="color:var(--green)">필수</b> · ${c.phoneReq.deadline ? `${fmtDateLong(c.phoneReq.deadline)}까지` : ''} · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명 (업무 보고 탭 → 직원 휴대폰에서 누가 했는지 볼 수 있어요)` : `선택 · 연결 ${activeStaff().filter(phoneLinked).length}/${activeStaff().length}명`}</dd>
         <dt>시즌 장식</dt><dd>${{ auto:'자동 (크리스마스 11/20~12/25, 새해 12/26~1/5)', on:'늘 켜기', off:'끄기' }[c.season || 'auto']}${seasonNow() ? ` · 지금 ${seasonNow() === 'newyear' ? '🎉 새해' : '🎄 크리스마스'} 장식 중` : ''}</dd>
         <dt>평가 시작일</dt><dd>${c.evalStart ? `${fmtDateLong(c.evalStart)}부터 지각·결근·점수·배지를 계산해요 (그 전은 시험 기간, 일한 시간은 급여에 그대로)` : '처음 기록부터 계산해요'}</dd>
@@ -2712,8 +2771,8 @@ const BACT = {
       const name = id => staffById(id)?.name;
       const rows = Object.values(punches).flat().sort((a, b) => (a.date + (name(a.staffId) || a.name)).localeCompare(b.date + (name(b.staffId) || b.name), 'ko'));
       const lines = rows.map(p => [p.date, DAYS[parseDate(p.date).getDay()], name(p.staffId) || p.name || '', p.kind === 'leave' ? '휴무 처리' : '근무',
-        p.in ? fmtT(p.in) : '', p.out ? fmtT(p.out, p.date).replace('⁺¹', ' (다음 날)') : '', p.sched ? `${p.sched.start}-${p.sched.end}` : '', p.lateMin || 0,
-        p.inBy === 'master' || p.outBy === 'master' ? '사장님 대리' : '', p.edited ? '수정됨' : '', p.inPhoto ? '있음' : p.inPhoto === null ? '없음' : '', geoCsv(p.inGeo), geoCsv(p.outGeo), p.note || ''].map(q).join(','));
+        p.in ? fmtT(p.in) : '', p.out ? fmtT(p.out, p.date).replace('⁺¹', ' (다음 날)') : '', p.sched ? `${p.sched.start}-${p.sched.end}` : '', p.lateOk ? 0 : (p.lateMin || 0),
+        p.inBy === 'master' || p.outBy === 'master' ? '사장님 대리' : '', p.edited ? '수정됨' : '', p.inPhoto ? '있음' : p.inPhoto === null ? '없음' : '', geoCsv(p.inGeo), geoCsv(p.outGeo), [p.note, p.lateOk && `지각 지움 ${p.lateMin || 0}분${p.lateOk.reason ? `: ${p.lateOk.reason}` : ''}`].filter(Boolean).join(' / ')].map(q).join(','));
       const csv = '﻿' + ['날짜,요일,직원,구분,출근,퇴근,정해진 시간,지각(분),대리 입력,수정,출근 사진,출근 위치,퇴근 위치,메모', ...lines].join('\r\n');
       if (await saveFile(`출퇴근기록_전체_${backupStamp()}.csv`, csv)) await backupMark('csv');
     } catch (e){ toast('기록을 모으지 못했어요', '인터넷 연결을 확인하고 다시 눌러 주세요.', 'warn'); console.warn(e); }
@@ -3011,8 +3070,10 @@ const NOTICE_TEMPLATES = {
 `직원 여러분, 서로 믿고 일할 수 있도록 근무 규정을 안내합니다.
 
 1. 무단 지각
- - 미리 연락 없이 정해진 출근 시각보다 늦게 오는 것을 무단 지각으로 봅니다.
+ - 정해진 출근 시각을 1분이라도 넘기면 지각입니다. (예: 09:00 출근이면 09:01부터 지각)
+ - 미리 연락 없이 늦게 오는 것을 무단 지각으로 봅니다. 타당한 이유가 있는 지각은 사장님이 확인한 뒤 기록에서 지워 드립니다.
  - 무단 지각이 3회가 되면 퇴사 처리될 수 있습니다.
+ - 마지막 지각 뒤 한 달 동안 지각 없이 출근하면 무단 지각 횟수는 0회로 돌아갑니다.
 
 2. 무단결근
  - 미리 연락 없이 출근하지 않는 것을 무단결근으로 봅니다.
@@ -3027,8 +3088,10 @@ const NOTICE_TEMPLATES = {
 `Gửi các bạn nhân viên, để mọi người cùng làm việc trong sự tin tưởng, quán xin thông báo quy định làm việc như sau.
 
 1. Đi muộn không báo trước
- - Đến muộn hơn giờ vào ca đã định mà không báo trước được xem là đi muộn không phép.
+ - Quá giờ vào ca dù chỉ 1 phút cũng tính là đi muộn. (Ví dụ: vào ca 09:00 thì từ 09:01 là đi muộn)
+ - Đến muộn mà không báo trước được xem là đi muộn không phép. Nếu có lý do chính đáng, chủ quán sẽ kiểm tra và xóa khỏi ghi chép.
  - Nếu đi muộn không phép 3 lần, bạn có thể bị cho nghỉ việc.
+ - Nếu đi làm 1 tháng liền không đi muộn kể từ lần đi muộn cuối cùng, số lần đi muộn không phép sẽ trở về 0.
 
 2. Nghỉ làm không báo trước
  - Không đến làm mà không báo trước được xem là nghỉ không phép.
@@ -4505,6 +4568,17 @@ const ACT = {
   yearShift(d){ S.year += +d.v; render(true); },
   gotoDay(d){ S.viewDate = d.ds; S.recSub = 'day'; render(true); },
   editPunch(d){ S.editing = `punch:${d.id}|${d.ds}`; render(true); },
+  async lateOk(){   // 타당한 이유가 있는 지각 지우기 (v42): 기록은 그대로, lateOk만 붙임
+    const [sid, ds] = S.editing.slice(6).split('|'), st = staffById(sid), reason = $('#ed-lateWhy')?.value.trim() || '';
+    if (!reason){ toast('지운 사유를 적어 주세요', '예: 미리 연락함 · 병원 진료', 'warn'); return; }
+    await write(() => punchRef(sid, ds).update({ lateOk:{ at:Date.now(), reason } }));
+    toast('지각을 지웠어요', `${st?.name || ''} · ${fmtMD(ds)} — 지각 횟수에서 빠져요`, 'ok'); S.editing = null; render(true);
+  },
+  async lateUndo(){
+    const [sid, ds] = S.editing.slice(6).split('|'), st = staffById(sid);
+    await write(() => punchRef(sid, ds).update({ lateOk:null }));
+    toast('지각을 되살렸어요', `${st?.name || ''} · ${fmtMD(ds)}`, 'ok'); S.editing = null; render(true);
+  },
   cancelEdit(){ S.editing = null; render(true); },
   async saveEdit(){ await savePunchEdit('work'); },
   async leaveEdit(){ await savePunchEdit('leave'); },
@@ -4678,7 +4752,7 @@ async function kioskPunch(kind, shot){
   try {
     if (kind === 'in'){
       const sc = schedFor(st, today, null);
-      const late = sc && now > at(today, sc.start) + cfg().graceMin*60000 ? Math.round((now - at(today, sc.start))/60000) : 0;
+      const late = sc && evalOn(today) ? lateOf(today, at(today, sc.start), now) : 0;
       const ph = await photoFields('in', shot);
       await write(() => punchRef(st.id, today).set({ staffId:st.id, name:st.name, date:today, kind:'work', in:now, out:null, sched:sc, lateMin:late, edited:false, note:'', ...ph, ...(k.master ? { inBy:'master' } : {}), ...(geo ? { inGeo:geo } : {}), ...(S.mode === 'phone' ? { inVia:'phone' } : {}) }));
       k.didIn = true;   // 출근 도장 다음에 새 공지·오늘 할 일로 넘어감
@@ -4709,7 +4783,7 @@ async function savePunchEdit(kind){
   if (!st) return;
   const sc = p && p.sched !== undefined ? p.sched : schedFor(st, ds, null);
   const note = $('#ed-note')?.value.trim() || '';
-  const keep = p ? Object.fromEntries(['inPhoto', 'inPhotoNote', 'outPhoto', 'outPhotoNote', 'inBy', 'outBy', 'inGeo', 'outGeo'].filter(f => p[f] !== undefined).map(f => [f, p[f]])) : {};   // 고쳐도 사진은 그대로
+  const keep = p ? Object.fromEntries(['inPhoto', 'inPhotoNote', 'outPhoto', 'outPhotoNote', 'inBy', 'outBy', 'inGeo', 'outGeo', 'lateOk'].filter(f => p[f] !== undefined).map(f => [f, p[f]])) : {};   // 고쳐도 사진은 그대로
   let doc;
   if (kind === 'leave') doc = { ...keep, staffId:sid, name:st.name, date:ds, kind:'leave', in:null, out:null, sched:sc, lateMin:0, edited:true, note: note || '휴무 처리' };
   else {
@@ -4718,7 +4792,7 @@ async function savePunchEdit(kind){
     const inMs = at(ds, tin);
     let outMs = tout ? at(ds, tout) : null;
     if (outMs !== null && outMs <= inMs) outMs += 86400000;
-    const late = sc && inMs > at(ds, sc.start) + cfg().graceMin*60000 ? Math.round((inMs - at(ds, sc.start))/60000) : 0;
+    const late = sc && evalOn(ds) ? lateOf(ds, at(ds, sc.start), inMs) : 0;
     doc = { ...keep, staffId:sid, name:st.name, date:ds, kind:'work', in:inMs, out:outMs, sched:sc, lateMin:late, edited:true, note };
   }
   await write(() => punchRef(sid, ds).set(doc));
@@ -4763,6 +4837,7 @@ async function saveConfig(){
     earlyClamp: $('#c-early').checked, otPremium: $('#c-prem').checked, weeklyHoliday: $('#c-hol').checked,
     ot: $('#c-otapp')?.checked ? { on:true, since: cfg().ot.on && cfg().ot.since ? cfg().ot.since : todayStr() } : { on:false, since:'' },   // 켠 날부터 적용
     evalStart: $('#c-evalStart') ? ($('#c-evalStart').value || '') : cfg().evalStart,
+    lateRule: $('#c-lateSince') ? { since: $('#c-lateSince').value || '', limit: Math.max(1, Math.round(+$('#c-lateLimit').value || 3)) } : cfg().lateRule,   // 새 지각 규칙 (v42)
     season: $('#c-season') ? ($('#c-season').value || 'auto') : cfg().season,   // 시즌 장식 (v40)   // 출퇴근 평가 시작일 (v34, 비우면 처음부터)
     phoneReq: $('#c-phoneReq') ? { on: !!$('#c-phoneReq').checked, deadline: $('#c-phoneDeadline')?.value || addDays(todayStr(), 7) } : cfg().phoneReq,   // 직원 휴대폰 연결 필수 (v38)
     rates:{ np:+$('#c-np').value || 0, hi:+$('#c-hi').value || 0, ltc:+$('#c-ltc').value || 0, ei:+$('#c-ei').value || 0 },
