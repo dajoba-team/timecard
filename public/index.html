@@ -422,6 +422,13 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .pv button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(10,14,20,.6);color:#fff;font-size:13px;line-height:22px;padding:0}
 .ncard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:10px;align-content:start;min-width:0;text-align:left}
 .ncard h3{font-size:18px;margin:0}
+/* 이름을 누르면 안 읽은 지시·공지 팝업 (v44) */
+.npop{position:fixed;inset:0;z-index:60;background:rgba(10,14,20,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.npop-card{width:100%;max-width:640px;max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border-radius:18px;padding:18px;display:grid;gap:12px;box-shadow:0 18px 50px rgba(0,0,0,.35);text-align:left}
+.npop-head{display:flex;align-items:center;gap:8px;font-size:17px}
+.npop-head .chip{margin-left:auto;flex:none}
+.npop .ncard{border:0;padding:0}
+.npop .bigbtn{margin-top:4px}
 .ncard p{margin:0;white-space:pre-wrap;color:var(--ink)}
 .ncard .ref{border:0;padding:0;background:none;cursor:zoom-in;border-radius:10px;overflow:hidden;max-width:100%;position:relative}
 .ncard .ref img{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
@@ -710,7 +717,7 @@ const VI = {
   // 공지·업무 보고
   '{name}님, 새 공지 {n}건':'{name}, có {n} thông báo mới',
   '읽고 [확인했어요]를 눌러 주세요. 사장님 화면에 ‘읽음’으로 남아요.':'Đọc xong hãy bấm [Đã hiểu]. Chủ quán sẽ thấy là “đã đọc”.',
-  '모두 확인했어요':'Đã đọc tất cả', '확인했어요':'Đã hiểu', '읽음':'Đã đọc', '공지':'Thông báo', '사진 보고 업무':'Việc báo cáo ảnh', '사진 보고':'Báo cáo ảnh',
+  '모두 확인했어요':'Đã đọc tất cả', '확인했어요':'Đã hiểu', '📢 {name}님, 새 지시·공지를 먼저 읽어 주세요':'📢 {name}, hãy đọc chỉ thị/thông báo mới trước', '읽고 확인했어요':'Tôi đã đọc và xác nhận', '나중에 (처음으로)':'Để sau (về màn hình đầu)', '읽음':'Đã đọc', '공지':'Thông báo', '사진 보고 업무':'Việc báo cáo ảnh', '사진 보고':'Báo cáo ảnh',
   '📌 공고':'📌 Thông báo', '전체 보기':'Xem tất cả', '접기':'Thu gọn', '전체 직원':'Tất cả nhân viên', '{pos} 전체':'Tất cả {pos}', '담당 없음':'Chưa giao',
   '매일':'Hằng ngày', '{d}요일':'{d}', '요일 미정':'Chưa chọn thứ', '{md} 하루':'Chỉ ngày {md}', '{t}까지':'trước {t}',
   '📷 {r} 휴대폰으로 사진 보고':'📷 {r} báo cáo ảnh bằng điện thoại',
@@ -1498,6 +1505,11 @@ function kioskView(){
   }
   const st = staffById(k.staffId);
   if (!st){ resetKiosk(); return kioskView(); }
+  if (k.step === 'prenotice'){
+    if (preNoticeList(st).length) return clock + preNoticePopup(st);
+    if (preAdvance(st) === 'phonein'){ setTimeout(() => phoneStart('in', true), 0); return clock; }   // 그사이 공지가 내려갔으면 바로 다음 단계
+    return kioskView();
+  }
   if (k.step === 'pin') return clock + `<div class="kpanel ${k.err ? 'shake' : ''}">${pinPad(TV('{name}님', { name:st.name }), T('개인 번호 4자리를 입력하세요'), k.pin, 'staff', k.err)}</div>`;
   if (k.step === 'action'){
     const op = openPunch(st, now), tp = getPunch(st.id, today), sc = schedFor(st, today, tp);
@@ -1563,7 +1575,7 @@ function pinPad(title, sub, val, ctx, err){
 function resetKiosk(){
   stopCam();
   if (S.kiosk.photoUrl) URL.revokeObjectURL(S.kiosk.photoUrl);
-  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false });
+  Object.assign(S.kiosk, { step:'list', staffId:null, pin:'', err:'', result:null, busy:false, kind:null, cam:'', camErr:'', photoUrl:null, master:false, contractId:null, nextStep:null, geoP:null, didIn:false, preOk:[], afterNotice:null });
   S.otForm = null; S.reactDraft = null; S.thForm = null;
   if (S.join?.err) S.join = null;
   S.kiosk.phoneOpt = false;   // 1회용 연결 코드를 못 받았으면 다음에 다시 시도   // 쓰다 만 추가근무 요청·축하 반응·고마워요는 버림 (잠시 뒤 처음 화면으로 돌아갈 때 포함)
@@ -3252,6 +3264,28 @@ function noticeCard(t, st){
     <footer>${t.kind === 'task' ? `<span class="chip amber">${BI(esc(`📷 ${repeatText(t)}${t.due ? ` ${t.due}까지` : ''} 휴대폰으로 사진 보고`), esc(`📷 ${repeatVi(t)}${t.due ? ` trước ${t.due}` : ''} báo cáo ảnh bằng điện thoại`))}</span>` : ''}${st ? (isRead(t, st) ? `<span class="chip ok" style="margin-left:auto">${TV('읽음')}</span>` : `<button class="btn okb" data-act="trReadOne" data-id="${esc(t.id)}" style="margin-left:auto">${T('확인했어요')}</button>`) : `<span style="margin-left:auto">${TV('읽음')} ${read}/${list.length}</span>`}</footer>
   </article>`;
 }
+// 이름을 누르면(휴대폰은 [출근]을 누르면) 안 읽은 지시·공지가 팝업으로 한 건씩 → [읽고 확인했어요] (v44)
+// 읽음 기록은 본인 번호가 맞았을 때 저장 (다른 사람이 대신 누르는 것 막기). 마스터 번호로 들어가면 저장 안 함
+const preNoticeList = st => unreadFor(st).filter(t => !(S.kiosk.preOk || []).includes(t.id));
+function preNoticePopup(st){
+  const k = S.kiosk, left = preNoticeList(st), done = (k.preOk || []).length, t = left[0];
+  if (!t) return '';
+  return `<div class="npop" role="dialog" aria-modal="true" aria-label="${esc(st.name)}"><div class="npop-card">
+    <div class="npop-head"><b>${T('📢 {name}님, 새 지시·공지를 먼저 읽어 주세요', { name:st.name })}</b><span class="chip faint">${done + 1}/${done + left.length}</span></div>
+    <article class="ncard"><div class="row">${kindChip(t)}</div><h3>${taskTitle(t)}</h3>${t.body || t.bodyVi ? `<p>${taskBody(t)}</p>` : ''}
+      ${(t.refPhotos || []).map((p, i) => trImg(p, `참고 사진 ${i + 1}`, 'ref')).join('')}${awardReactBox(t, st)}</article>
+    <button class="bigbtn" data-act="preOk" data-id="${esc(t.id)}">✅ ${T('읽고 확인했어요')}</button>
+    <button class="linkbtn" data-act="kCancel">${T('나중에 (처음으로)')}</button></div></div>`;
+}
+function preReadSave(st){ const ids = S.kiosk.preOk || []; S.kiosk.preOk = []; for (const id of ids) markRead(id, st.id).catch(() => {}); }
+function preAdvance(st){   // 팝업을 다 읽었으면 다음 단계: 번호 입력 / (번호 없는 직원) 출퇴근 단추 / (휴대폰) 출근 도장
+  const k = S.kiosk, nx = k.afterNotice || 'action';
+  k.afterNotice = null; k.at = Date.now();
+  if (nx === 'pin'){ k.step = 'pin'; return 'pin'; }
+  preReadSave(st);   // 번호 없는 직원·휴대폰(이미 본인 확인됨)은 바로 읽음 저장
+  if (nx === 'phonein'){ k.step = 'list'; return 'phonein'; }
+  k.step = 'action'; return 'action';
+}
 function trCards(st, list, act){
   return `<div class="pcards">${list.map(t => { const x = trStatus(t, st, todayStr()), [cls, label] = TR_STATUS[x.s];
     const tag = act ? 'button' : 'div', n = t.minPhotos || 1;
@@ -3368,10 +3402,14 @@ function phoneTask(me, t){
   return head + state + sent + capture;
 }
 function clearShots(){ S.phone.shots.forEach(s => URL.revokeObjectURL(s.url)); S.phone.shots = []; }
-function phoneStart(kind){
+function phoneStart(kind, noticed){
   const me = staffById(S.phone.staffId);
   if (S.mode !== 'phone' || !phoneCanPunch(me)) return;
   resetKiosk();
+  if (kind === 'in' && !noticed && unreadFor(me).length){   // 출근 전에 안 읽은 지시·공지 팝업 (v44)
+    Object.assign(S.kiosk, { staffId:me.id, step:'prenotice', afterNotice:'phonein', preOk:[], at:Date.now() });
+    render(true); scrollTo(0, 0); return;
+  }
   Object.assign(S.kiosk, { staffId:me.id, step:'action', at:Date.now() });
   startGeo();
   return kind === 'in' ? ACT.kIn() : ACT.kOut();
@@ -3459,6 +3497,13 @@ const TRACT = {
     const st = staffById(S.kiosk.staffId); if (!st) return;
     for (const t of unreadFor(st)) await markRead(t.id, st.id);
     S.kiosk.step = todayTasksFor(st).length ? 'remind' : 'end'; S.kiosk.at = Date.now(); render(true);
+  },
+  preOk(d){   // 팝업 [읽고 확인했어요] (v44)
+    const k = S.kiosk, st = staffById(k.staffId); if (!st) return;
+    if (!(k.preOk || []).includes(d.id)) k.preOk = [...(k.preOk || []), d.id];
+    k.at = Date.now();
+    if (!preNoticeList(st).length && preAdvance(st) === 'phonein') return phoneStart('in', true);
+    render(true); scrollTo(0, 0);
   },
   kNext(){ const k = S.kiosk, st = staffById(k.staffId), nx = kNextStep(st); if (nx){ k.step = nx; k.at = Date.now(); render(true); } else { resetKiosk(); render(true); } },
   // 휴대폰
@@ -4549,7 +4594,11 @@ const ACT = {
   toPhone(){ store.set('device', 'phone'); ACT.toKiosk(); },
   toTablet(){ if (isPhoneAcct()) return; store.set('device', 'kiosk'); ACT.toKiosk(); },
   sound(){ initAudio(); S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); if (S.sound){ beep('ok'); toast('소리 알림을 켰어요', '이 화면을 열어 두면 출퇴근·지각 때 소리가 나요.', 'ok'); } render(true); },
-  kPick(d){ const st = staffById(d.id); Object.assign(S.kiosk, { staffId:d.id, pin:'', err:'', step: st && st.pin ? 'pin' : 'action' }); requestWake(); render(true); },
+  kPick(d){   // 이름 누름 → (안 읽은 지시·공지가 있으면 팝업 먼저, v44) → 번호
+    const st = staffById(d.id), after = st && st.pin ? 'pin' : 'action', un = st ? unreadFor(st).length : 0;
+    Object.assign(S.kiosk, { staffId:d.id, pin:'', err:'', step: un ? 'prenotice' : after, afterNotice: un ? after : null, preOk:[], at:Date.now() });
+    requestWake(); render(true);
+  },
   kCancel(){ resetKiosk(); render(true); },
   pad(d){ padPress(d.ctx, d.v); },
   async kIn(){ if (cfg().photo.on) kPhoto('in'); else await kioskPunch('in'); },
@@ -4723,8 +4772,8 @@ function padPress(ctx, v){
   if (k.pin.length === 4){
     const st = staffById(k.staffId);
     const master = String(cfg().masterPin || '');
-    if (st && k.pin === String(st.pin)){ k.step = phoneNeeded(st) ? 'phonereq' : 'action'; k.pin = ''; k.master = false; startGeo(); }   // 휴대폰 연결 안 했으면 안내부터 (v38)
-    else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; startGeo(); }   // 사장님 마스터 번호: 어느 직원이든 통과
+    if (st && k.pin === String(st.pin)){ k.step = phoneNeeded(st) ? 'phonereq' : 'action'; k.pin = ''; k.master = false; startGeo(); preReadSave(st); }   // 휴대폰 연결 안 했으면 안내부터 (v38) · 팝업에서 확인한 공지는 본인 번호가 맞았을 때 읽음 저장 (v44)
+    else if (st && master && k.pin === master){ k.step = 'action'; k.pin = ''; k.master = true; k.preOk = []; startGeo(); }   // 사장님 마스터 번호: 어느 직원이든 통과 (공지 읽음은 남기지 않음)
     else { k.err = '번호가 맞지 않아요. 다시 입력해 주세요'; k.pin = ''; }
   }
   render(true);
@@ -4887,7 +4936,7 @@ function tick1(){
   if ((S.mode === 'kiosk' || S.mode === 'phone') && k.step !== 'list' && !k.busy){
     const idle = now - (k.at || now), st = staffById(k.staffId);
     if (k.step === 'done' && k.didIn && idle > 2500 && kNextStep(st)){ k.step = kNextStep(st); k.at = now; render(true); }   // 출근 도장 → 새 공지·오늘 할 일
-    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks', 'phonereq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
+    else if ((k.step === 'done' && idle > 6000) || idle > (k.step === 'contract' ? 300000 : k.step === 'prenotice' ? 180000 : ['notices', 'remind', 'outwarn', 'ot', 'otreq', 'thanks', 'phonereq'].includes(k.step) ? 120000 : 30000)){ resetKiosk(); render(true); }
   }
   if (todayStr() !== lastDay){
     lastDay = todayStr(); S.notified = new Set(); S.mailed = new Set();

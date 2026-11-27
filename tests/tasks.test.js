@@ -60,10 +60,11 @@ needMonth(ym); bootTasks(S.db);
 
   // ----- 가게 태블릿: 출근 → 공지 → 오늘 할 일 -----
   S.mode = 'kiosk'; resetKiosk();
-  ACT.kPick({ id:A.id }); for (const d of String(A.pin)) padPress('staff', d);
   render(true);
-  assert.ok(/새 공지/.test((() => { resetKiosk(); render(true); return view.innerHTML; })()), '이름 카드에 새 공지 표시');
-  ACT.kPick({ id:A.id }); for (const d of String(A.pin)) padPress('staff', d);
+  assert.ok(/새 공지/.test(view.innerHTML), '이름 카드에 새 공지 표시');
+  ACT.kPick({ id:A.id }); assert.strictEqual(S.kiosk.step, 'prenotice', '이름 누르면 공지 팝업 (자세한 건 notice-popup.test.js)');
+  ACT.kCancel();
+  Object.assign(S.kiosk, { staffId:A.id, step:'action' });   // 팝업을 건너뛴 경우(마스터 번호 등): 예전처럼 출근 뒤 공지 단계
   await ACT.kIn();
   assert.strictEqual(S.kiosk.step, 'done'); assert.ok(S.kiosk.didIn);
   assert.ok(getPunch(A.id, today).in, '출근 시각 먼저 저장 (공지 안 읽어도)');

@@ -38,14 +38,21 @@ S.tasks = [{ id:'n1', kind:'notice', title:'지각·결근 규정 안내', body:
   assert.ok(view.innerHTML.includes('📌 Thông báo') && view.innerHTML.includes('Thông báo quy định đi muộn'), '첫 화면 공고도 베트남어 제목');
   assert.ok(/Thông báo mới \\d/.test(view.innerHTML), '새 공지 뱃지');
   ACT.kPick({ id:A.id }); render(true);
-  assert.ok(view.innerHTML.includes('Nhập mã cá nhân 4 số') && view.innerHTML.includes('>Xóa<'), '번호판');
+  assert.strictEqual(S.kiosk.step, 'prenotice', '이름 누르면 안 읽은 공지 팝업 먼저 (v44)');
+  assert.ok(view.innerHTML.includes('class="npop"') && view.innerHTML.includes('hãy đọc chỉ thị/thông báo mới trước') && view.innerHTML.includes('Tôi đã đọc và xác nhận'), '팝업 베트남어');
+  assert.ok(view.innerHTML.includes('quán xin thông báo quy định') && view.innerHTML.includes('kobody'), '팝업 공지 본문: 베트남어 + 한국어');
+  while (S.kiosk.step === 'prenotice'){ ACT.preOk({ id: preNoticeList(A)[0].id }); render(true); }
+  assert.ok(view.innerHTML.includes('Nhập mã cá nhân 4 số') && view.innerHTML.includes('>Xóa<'), '팝업 다음 번호판');
   for (const d of String(A.pin)) padPress('staff', d);
+  for (let i = 0; i < 5; i++) await null;
+  assert.deepStrictEqual(S.kiosk.preOk, [], '번호가 맞으면 읽음 저장 (이 시험의 가짜 저장소는 읽음을 안 남김 — 저장은 notice-popup.test.js)');
   assert.ok(view.innerHTML.includes('Vào ca<span class="kosub">출근하기</span>'), '출근 단추 병기');
   assert.ok(view.innerHTML.includes('Công việc tháng này của tôi') && view.innerHTML.includes('Giờ làm'), '이번 달 요약');
   await ACT.kIn();
   assert.strictEqual(S.kiosk.step, 'done');
   assert.ok(view.innerHTML.includes('VÀO CA<span class="kosub">출근</span>'), '출근 도장 병기');
   assert.ok(/Dự kiến tan ca|Đã ghi là làm thêm|Bạn đến muộn/.test(view.innerHTML), '도장 아래 안내 베트남어');
+  // 출근 뒤 공지 단계(마스터 번호로 들어온 경우 등)도 베트남어
   ACT.kNext(); render(true);
   assert.strictEqual(S.kiosk.step, 'notices');
   assert.ok(view.innerHTML.includes('có 2 thông báo mới') || view.innerHTML.includes('có 1 thông báo mới'), '공지 확인 제목');
